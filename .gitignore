@@ -2,3 +2,5 @@
 .vscode
 
 supabase/seeds/
+
+.DS_Store
