@@ -1,0 +1,27 @@
+# Include syntax requires Docker compose > 2.20.3
+# https://docs.docker.com/compose/release-notes/#2203
+include:
+  # Creates the internal MongoDB replica set
+  - path: ./services/mongo.yaml
+
+services:
+  # Extend PowerSync with Mongo healthchecks
+  powersync:
+    extends:
+      file: ./services/powersync.yaml
+      service: powersync
+    depends_on:
+      mongo-rs-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./config/supabase:/config
+    networks:
+      - default
+      - supabase_network_tfm_server
+
+# Supabase exposes their services on this network
+networks:
+  # This is derived from `supabase_network_${project_id}`
+  # Where project_id is defined in the `config.toml` file.
+  supabase_network_tfm_server:
+    external: true
