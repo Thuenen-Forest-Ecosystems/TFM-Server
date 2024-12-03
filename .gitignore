@@ -1,6 +1,6 @@
 .env
 .vscode
 
-supabase/seeds/
+#supabase/seeds/
 
 .DS_Store
