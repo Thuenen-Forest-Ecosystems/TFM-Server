@@ -9,5 +9,4 @@
 bucket_definitions:
   global:
     data:
-      - SELECT * FROM lists
-      - SELECT * FROM todos
+      - SELECT * FROM "private_ci2027_001"."lookup_browsing", "private_ci2027_001"."lookup_cluster_situation"

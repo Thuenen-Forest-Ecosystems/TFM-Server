@@ -40,10 +40,8 @@ supabase db dump --file supabase/seeds/structure.sql --db-url "postgresql://post
 ```
 
 ```bash
-supabase db dump --file supabase/seeds/private_ci2027_001.sql --schema private_ci2027_001 --db-url "postgresql://postgres:postgres@127.0.0.1:54322/postgres" --keep-comments
-```
-
-
+supabase db dump --data-only --file supabase/seeds/private_ci2027_001.sql --schema private_ci2027_001 --db-url "postgresql://postgres:postgres@127.0.0.1:54322/postgres" --keep-comments
+`
 ## Update initial schema
 ```bash
 supabase db diff --use-migra --schema private_ci2027_001 --db-url "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f private_ci2027_001.sql

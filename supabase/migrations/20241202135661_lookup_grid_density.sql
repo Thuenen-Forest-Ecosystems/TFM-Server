@@ -1,5 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_grid_density AS TABLE lookup_TEMPLATE WITH NO DATA;
+ALTER TABLE lookup_grid_density ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
+
 ALTER TABLE lookup_grid_density ADD COLUMN abbreviation enum_grid_density UNIQUE NOT NULL;
 
 --

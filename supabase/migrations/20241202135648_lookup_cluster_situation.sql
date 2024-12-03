@@ -1,5 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_cluster_situation AS TABLE lookup_TEMPLATE WITH NO DATA;
+ALTER TABLE lookup_cluster_situation ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
+
 ALTER TABLE lookup_cluster_situation ADD COLUMN abbreviation enum_cluster_situation UNIQUE NOT NULL;
 
 --

@@ -6,10 +6,64 @@
 # Note that changes to this file are not watched.
 # The service needs to be restarted for changes to take effect.
 
+# https://docs.powersync.com/usage/sync-rules/guide-many-to-many-and-join-tables
 bucket_definitions:
-  user_lists:
-    # Separate bucket per todo list
-    parameters: select id as list_id from lists where owner_id = request.user_id()
+  global:
+    #parameters: select plot_id from board_subscriptions where user_id = request.user_id()
     data:
-      - select * from lists where id = bucket.list_id
-      - select * from todos where list_id = bucket.list_id
+    
+      # Tables
+      - SELECT * FROM "private_ci2027_001"."plot"
+      - SELECT * FROM "private_ci2027_001"."plot_location"
+      - SELECT * FROM "private_ci2027_001"."position"
+      - SELECT * FROM "private_ci2027_001"."regeneration"
+      - SELECT * FROM "private_ci2027_001"."structure_lt4m"
+      - SELECT * FROM "private_ci2027_001"."tree"
+      - SELECT * FROM "private_ci2027_001"."cluster"
+      - SELECT * FROM "private_ci2027_001"."deadwood"
+      - SELECT * FROM "private_ci2027_001"."edges"
+
+      # Lookup Tables
+      - SELECT * FROM "private_ci2027_001"."lookup_browsing"
+      - SELECT * FROM "private_ci2027_001"."lookup_cluster_situation"
+      - SELECT * FROM "private_ci2027_001"."lookup_cluster_status"
+      - SELECT * FROM "private_ci2027_001"."lookup_dead_wood_type"
+      - SELECT * FROM "private_ci2027_001"."lookup_decomposition"
+      - SELECT * FROM "private_ci2027_001"."lookup_edge_status"
+      - SELECT * FROM "private_ci2027_001"."lookup_edge_type"
+      - SELECT * FROM "private_ci2027_001"."lookup_elevation_level"
+      - SELECT * FROM "private_ci2027_001"."lookup_exploration_instruction"
+      - SELECT * FROM "private_ci2027_001"."lookup_ffh_forest_type_field"
+      - SELECT * FROM "private_ci2027_001"."lookup_forest_community_field"
+      - SELECT * FROM "private_ci2027_001"."lookup_forest_office"
+      - SELECT * FROM "private_ci2027_001"."lookup_forest_status"
+      - SELECT * FROM "private_ci2027_001"."lookup_gnss_quality"
+      - SELECT * FROM "private_ci2027_001"."lookup_grid_density"
+      - SELECT * FROM "private_ci2027_001"."lookup_growth_district"
+      - SELECT * FROM "private_ci2027_001"."lookup_harvesting_method"
+      - SELECT * FROM "private_ci2027_001"."lookup_land_use"
+      - SELECT * FROM "private_ci2027_001"."lookup_management_type"
+      - SELECT * FROM "private_ci2027_001"."lookup_marker_profile"
+      - SELECT * FROM "private_ci2027_001"."lookup_marker_status"
+      - SELECT * FROM "private_ci2027_001"."lookup_property_size_class"
+      - SELECT * FROM "private_ci2027_001"."lookup_property_type"
+      - SELECT * FROM "private_ci2027_001"."lookup_pruning"
+      - SELECT * FROM "private_ci2027_001"."lookup_sampling_stratum"
+      - SELECT * FROM "private_ci2027_001"."lookup_stand_dev_phase"
+      - SELECT * FROM "private_ci2027_001"."lookup_stand_layer"
+      - SELECT * FROM "private_ci2027_001"."lookup_stand_structure"
+      - SELECT * FROM "private_ci2027_001"."lookup_state"
+      - SELECT * FROM "private_ci2027_001"."lookup_stem_breakage"
+      - SELECT * FROM "private_ci2027_001"."lookup_stem_form"
+      - SELECT * FROM "private_ci2027_001"."lookup_template"
+      - SELECT * FROM "private_ci2027_001"."lookup_terrain"
+      - SELECT * FROM "private_ci2027_001"."lookup_terrain_form"
+      - SELECT * FROM "private_ci2027_001"."lookup_tree_size_class"
+      - SELECT * FROM "private_ci2027_001"."lookup_tree_species"
+      - SELECT * FROM "private_ci2027_001"."lookup_tree_species_group"
+      - SELECT * FROM "private_ci2027_001"."lookup_tree_status"
+      - SELECT * FROM "private_ci2027_001"."lookup_trees_less_4meter_count_factor"
+      - SELECT * FROM "private_ci2027_001"."lookup_trees_less_4meter_layer"
+      - SELECT * FROM "private_ci2027_001"."lookup_trees_less_4meter_mirrored"
+      - SELECT * FROM "private_ci2027_001"."lookup_trees_less_4meter_origin"
+      - SELECT * FROM "private_ci2027_001"."lookup_use_restriction"

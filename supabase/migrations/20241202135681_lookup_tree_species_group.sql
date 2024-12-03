@@ -1,5 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_tree_species_group AS TABLE lookup_TEMPLATE WITH NO DATA;
+ALTER TABLE lookup_tree_species_group ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
+
 ALTER TABLE lookup_tree_species_group ADD COLUMN abbreviation enum_tree_species_group UNIQUE NOT NULL;
 
 --

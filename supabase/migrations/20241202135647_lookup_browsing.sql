@@ -1,6 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_browsing AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_browsing ADD COLUMN abbreviation enum_browsing UNIQUE NOT NULL;
+ALTER TABLE lookup_browsing ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
 
 --
 -- PostgreSQL database dump

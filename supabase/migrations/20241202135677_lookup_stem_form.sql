@@ -1,5 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_stem_form AS TABLE lookup_TEMPLATE WITH NO DATA;
+ALTER TABLE lookup_stem_form ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
+
 ALTER TABLE lookup_stem_form ADD COLUMN abbreviation enum_stem_form UNIQUE NOT NULL;
 
 --
