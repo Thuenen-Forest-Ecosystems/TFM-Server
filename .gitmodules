@@ -1,0 +1,3 @@
+[submodule "supabase/seeds"]
+	path = supabase/seeds
+	url = https://git-dmz.thuenen.de/datenerfassungci2027/ci2027_datenerfassung/TFM-Seed.git
