@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS cluster (
 
 	select_access_by TEXT[] NOT NULL DEFAULT array[]::TEXT[], -- Roles that can access the cluster
 	update_access_by TEXT[] NOT NULL DEFAULT array[]::TEXT[], -- Roles that can update the cluster
+	supervisor uuid NULL, -- Supervisor of the cluster
 
 	topo_map_sheet CK_TopographicMapSheet NULL,
 	
@@ -74,6 +75,33 @@ ALTER TABLE cluster
 
 -- Enable Row-Level Security
 ALTER TABLE cluster ENABLE ROW LEVEL SECURITY;
+
+
+
+
+CREATE OR REPLACE FUNCTION private_ci2027_001.check_supervisor_update() RETURNS TRIGGER AS $$
+BEGIN
+    -- Check if the current user is the supervisor
+    IF auth.uid() != NEW.supervisor THEN
+	
+        -- If the user is not the supervisor, raise an exception if they try to update select_access_by
+        NEW.select_access_by := OLD.select_access_by;
+		NEW.update_access_by := OLD.update_access_by;
+		NEW.supervisor := OLD.supervisor;
+
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Drop the existing trigger if it exists
+DROP TRIGGER IF EXISTS check_supervisor_update_trigger ON private_ci2027_001.cluster;
+
+-- Create the trigger to call the trigger function before an update on the cluster table
+CREATE TRIGGER check_supervisor_update_trigger
+BEFORE UPDATE ON private_ci2027_001.cluster
+FOR EACH ROW
+EXECUTE FUNCTION private_ci2027_001.check_supervisor_update();
 
 
 

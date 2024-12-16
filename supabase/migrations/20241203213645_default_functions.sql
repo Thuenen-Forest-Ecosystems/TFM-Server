@@ -33,3 +33,23 @@ $$ LANGUAGE plpgsql;
 
 -- Example call to enable RLS for all tables in the schema 'private_ci2027_001'
 SELECT public.enable_rls_for_schema('private_ci2027_001');
+
+
+
+-- Create the trigger function to copy select_access_by from cluster to plot
+CREATE OR REPLACE FUNCTION private_ci2027_001.copy_select_access_by_to_plot() RETURNS TRIGGER AS $$
+BEGIN
+    -- Update the select_access_by value in the plot table
+    UPDATE private_ci2027_001.plot
+    SET select_access_by = NEW.select_access_by
+    WHERE cluster_id = NEW.cluster_name::int4;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger to call the trigger function after an update on the cluster table
+CREATE OR REPLACE TRIGGER update_select_access_by
+AFTER UPDATE ON private_ci2027_001.cluster
+FOR EACH ROW
+EXECUTE FUNCTION private_ci2027_001.copy_select_access_by_to_plot();
