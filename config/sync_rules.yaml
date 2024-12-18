@@ -16,7 +16,8 @@ bucket_definitions:
     data:
       - SELECT * FROM "private_ci2027_001"."cluster" where bucket.user_id IN select_access_by
       - SELECT *, ST_AsGeoJSON(center_location) as center_location_json, st_x(center_location) as longitude, st_y(center_location) as latitude FROM "private_ci2027_001"."plot" where bucket.user_id IN select_access_by
-
+      - SELECT * FROM "private_ci2027_001"."tree" where bucket.user_id IN select_access_by
+      - SELECT * FROM "private_ci2027_001"."deadwood" where bucket.user_id IN select_access_by
 
       #- SELECT * FROM "private_ci2027_001"."plot"
       #- SELECT * FROM "private_ci2027_001"."plot_location"
@@ -26,6 +27,7 @@ bucket_definitions:
       #- SELECT * FROM "private_ci2027_001"."tree"
       #- SELECT * FROM "private_ci2027_001"."deadwood"
       #- SELECT * FROM "private_ci2027_001"."edges"
+
   user_profile:
     parameters: SELECT request.user_id() as user_id
     data:

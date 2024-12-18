@@ -95,8 +95,8 @@ enabled = true
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://127.0.0.1:3000"]
-# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
-jwt_expiry = 3600
+# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week). 86400 = 24 Std
+jwt_expiry = 86400
 # If disabled, the refresh token will never expire.
 enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
@@ -127,13 +127,13 @@ otp_length = 6
 otp_expiry = 3600
 
 # Use a production-ready SMTP server
-# [auth.email.smtp]
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+ [auth.email.smtp]
+ host = "smtps.udag.de"
+ port = 587
+ user = "gerrit.balindt@gruenecho.de"
+ pass = "env(SENDGRID_API_KEY)"
+ admin_email = "do-not-reply@gruenecho.de"
+ sender_name = "Admin | Thünen Institut"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
