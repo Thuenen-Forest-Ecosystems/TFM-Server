@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_trees_less_4meter_mirrored AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_trees_less_4meter_mirrored ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_trees_less_4meter_mirrored ADD COLUMN abbreviation enum_trees_less_4meter_mirrored UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -24,5 +22,4 @@ ALTER TABLE lookup_trees_less_4meter_mirrored ADD COLUMN abbreviation enum_trees
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

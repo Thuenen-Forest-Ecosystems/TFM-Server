@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_land_use AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_land_use ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_land_use ADD COLUMN abbreviation enum_land_use UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -34,5 +32,4 @@ ALTER TABLE lookup_land_use ADD COLUMN abbreviation enum_land_use UNIQUE NOT NUL
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

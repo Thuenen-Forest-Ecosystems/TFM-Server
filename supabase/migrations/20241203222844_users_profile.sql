@@ -10,15 +10,11 @@ create table public.users_profile (
 
   primary key (id)
 );
-
 alter table public.users_profile enable row level security;
-
 -- Allow logged-in users or supervisor to view profile
 create policy "Allow logged-in users to view their own profile" on public.users_profile for select using (auth.uid() = id or auth.uid() = supervisor_id);
-
 -- Allow logged-in users to update their own profile
 create policy "Allow logged-in users to update their own profile" on public.users_profile for update using (auth.uid() = id);
-
 -- inserts a row into public.users_profile
 create function public.setup_new_user_profile()
 returns trigger
@@ -31,7 +27,6 @@ begin
   return new;
 end;
 $$;
-
 -- trigger the function every time a user is created
 create trigger on_auth_user_created
   after insert on auth.users

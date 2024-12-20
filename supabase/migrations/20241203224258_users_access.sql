@@ -12,15 +12,12 @@ create table public.users_access (
 
     primary key (id)
 );
-
 alter table public.users_access enable row level security;
-
 -- Allow logged-in users to insert a row into users_access and update own rows
 CREATE POLICY "Allow logged-in users to insert a row" 
 ON public.users_access 
 FOR INSERT 
 WITH CHECK (auth.uid() = created_by);
-
 -- Allow logged-in users to update own rows
 CREATE POLICY "Allow logged-in users to update own rows" 
 ON public.users_access 

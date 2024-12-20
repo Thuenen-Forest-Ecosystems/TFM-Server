@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_exploration_instruction AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_exploration_instruction ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_exploration_instruction ADD COLUMN abbreviation enum_exploration_instruction UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -35,5 +33,4 @@ ALTER TABLE lookup_exploration_instruction ADD COLUMN abbreviation enum_explorat
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

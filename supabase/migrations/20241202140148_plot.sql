@@ -1,5 +1,4 @@
 SET search_path TO private_ci2027_001, public;
-
 CREATE TABLE IF NOT EXISTS plot (
 
 	intkey varchar(12) UNIQUE NULL,
@@ -125,18 +124,13 @@ CREATE TABLE IF NOT EXISTS plot (
 	-- ez8 smallint NULL, -- ez8
 	-- ez9 smallint NULL -- ez9
 );
-
 COMMENT ON TABLE plot IS 'Tabelle für die Erfassung von Ecken';
 COMMENT ON COLUMN plot.forest_community IS 'Natürliche Waldgesellschaft.';
 COMMENT ON COLUMN plot.forest_community_field IS 'Natürliche Waldgesellschaft im Bestand definiert.';
-
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster_Unique UNIQUE (cluster_id, plot_name);
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster FOREIGN KEY (cluster_id)
 	REFERENCES cluster (cluster_name) MATCH SIMPLE
 	ON DELETE CASCADE;
-
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_SamplingStratum FOREIGN KEY (sampling_stratum) -- TODO
 --	REFERENCES lookup_sampling_stratum (abbreviation) MATCH SIMPLE
 --	ON UPDATE NO ACTION
@@ -146,12 +140,10 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupGrowthDistrict FOREIGN KEY (growth
         REFERENCES lookup_growth_district (abbreviation) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupForestStatus FOREIGN KEY (forest_status)
 		REFERENCES lookup_forest_status (abbreviation) MATCH SIMPLE
 		ON UPDATE NO ACTION
 		ON DELETE NO ACTION;
-
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupForestrOffice FOREIGN KEY (forestry_office) --TODO
 --		REFERENCES lookup_forestry_office (abbreviation) MATCH SIMPLE
 --		ON UPDATE NO ACTION
@@ -161,17 +153,14 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupElevationLevel FOREIGN KEY (elevat
 	REFERENCES lookup_elevation_level (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupPropertyType FOREIGN KEY (property_type)
 	REFERENCES lookup_property_type (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupPropertySizeClass FOREIGN KEY (property_size_class)
 	REFERENCES lookup_property_size_class (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupForestCommunity FOREIGN KEY (forest_community)
 --	REFERENCES lookup_forest_community (abbreviation) MATCH SIMPLE
 --	ON UPDATE NO ACTION
@@ -201,7 +190,6 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupLandUse FOREIGN KEY (land_use_afte
 	REFERENCES lookup_land_use (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupHarvestRestrictionSource FOREIGN KEY (harvest_restriction_source)
 --	REFERENCES lookup_use_restriction_source (abbreviation) MATCH SIMPLE
 --	ON UPDATE NO ACTION
@@ -211,27 +199,22 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupMarkerStatus FOREIGN KEY (marker_s
 	REFERENCES lookup_marker_status (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupMarkerProfile FOREIGN KEY (marker_profile)
 	REFERENCES lookup_marker_profile (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTerrainForm FOREIGN KEY (terrain_form)
 	REFERENCES lookup_terrain_form (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupManagementType FOREIGN KEY (management_type)
 	REFERENCES lookup_management_type (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupHarvestingMethod FOREIGN KEY (harvesting_method)
 	REFERENCES lookup_harvesting_method (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupBiotope FOREIGN KEY (biotope)
 --	REFERENCES lookup_biotope (abbreviation) MATCH SIMPLE
 --	ON UPDATE NO ACTION
@@ -241,22 +224,18 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupStandStructure FOREIGN KEY (stand_
 	REFERENCES lookup_stand_structure (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupStandDevPhase FOREIGN KEY (stand_dev_phase)
 	REFERENCES lookup_stand_dev_phase (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupStandLayer FOREIGN KEY (stand_layer_reg)
 	REFERENCES lookup_stand_layer (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterMirrored FOREIGN KEY (trees_greater_4meter_mirrored)
 	REFERENCES lookup_trees_less_4meter_mirrored (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterCountFactor FOREIGN KEY (trees_less_4meter_count_factor)
 --	REFERENCES lookup_trees_less_4meter_count_factor (abbreviation) MATCH SIMPLE
 --	ON UPDATE NO ACTION
@@ -279,6 +258,4 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterMirrored FOREIGN KE
 --CONSTRAINT FK_Plot_LookupStateCollect FOREIGN KEY (state_collect)
 --        REFERENCES lookup_states (abbreviation) MATCH SIMPLE
 --        ON UPDATE NO ACTION
---        ON DELETE NO ACTION,
-
-
+--        ON DELETE NO ACTION,;

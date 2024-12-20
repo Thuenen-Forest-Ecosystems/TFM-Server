@@ -108,7 +108,7 @@ alter table "public"."users_profile" drop constraint "users_profile_id_fkey";
 
 alter table "public"."users_profile" drop constraint "users_profile_supervisor_id_fkey";
 
-create table "public"."companies_access" (
+create table IF NOT EXISTS "public"."companies_access" (
     "id" uuid not null default gen_random_uuid(),
     "company_name" text not null,
     "company_email_domain" text not null,
@@ -120,7 +120,7 @@ create table "public"."companies_access" (
 
 alter table "public"."companies_access" enable row level security;
 
-create table "public"."schemas" (
+create table IF NOT EXISTS  "public"."schemas" (
     "created_at" timestamp with time zone not null default now(),
     "interval_name" text not null default ''::text,
     "is_visible" boolean not null default false,
@@ -296,7 +296,7 @@ grant truncate on table "public"."schemas" to "service_role";
 
 grant update on table "public"."schemas" to "service_role";
 
-create policy "Enable read access for all users"
+create policy IF NOT EXISTS "Enable read access for all users"
 on "public"."companies_access"
 as permissive
 for select
@@ -304,7 +304,7 @@ to authenticated
 using (true);
 
 
-create policy "Enable SELECT for authenticated users only"
+create policy IF NOT EXISTS "Enable SELECT for authenticated users only"
 on "public"."schemas"
 as permissive
 for select

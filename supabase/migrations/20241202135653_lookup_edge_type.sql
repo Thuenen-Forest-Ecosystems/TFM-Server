@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_edge_type AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_edge_type ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_edge_type ADD COLUMN abbreviation enum_edge_type UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -25,5 +23,4 @@ ALTER TABLE lookup_edge_type ADD COLUMN abbreviation enum_edge_type UNIQUE NOT N
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

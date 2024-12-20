@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_cluster_status AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_cluster_status ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_cluster_status ADD COLUMN abbreviation enum_cluster_status UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -34,5 +32,4 @@ ALTER TABLE lookup_cluster_status ADD COLUMN abbreviation enum_cluster_status UN
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

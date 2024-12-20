@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_forest_office AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_forest_office ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_forest_office ADD COLUMN abbreviation SMALLINT UNIQUE NOT NULL;
-
 ALTER TABLE lookup_forest_office ADD COLUMN phone varchar(20) NULL;
 --
 -- PostgreSQL database dump
@@ -842,5 +840,4 @@ ALTER TABLE lookup_forest_office ADD COLUMN phone varchar(20) NULL;
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

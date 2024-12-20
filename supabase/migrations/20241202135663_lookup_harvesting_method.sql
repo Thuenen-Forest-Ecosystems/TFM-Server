@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_harvesting_method AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_harvesting_method ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_harvesting_method ADD COLUMN abbreviation enum_harvesting_method UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -26,5 +24,4 @@ ALTER TABLE lookup_harvesting_method ADD COLUMN abbreviation enum_harvesting_met
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

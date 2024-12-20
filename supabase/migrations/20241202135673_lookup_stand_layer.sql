@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_stand_layer AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_stand_layer ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_stand_layer ADD COLUMN abbreviation enum_stand_layer UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -27,5 +25,4 @@ ALTER TABLE lookup_stand_layer ADD COLUMN abbreviation enum_stand_layer UNIQUE N
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

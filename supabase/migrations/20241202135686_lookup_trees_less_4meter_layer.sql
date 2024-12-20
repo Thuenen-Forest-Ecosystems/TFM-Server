@@ -1,9 +1,7 @@
 SET search_path TO private_ci2027_001;
 CREATE TABLE lookup_trees_less_4meter_layer AS TABLE lookup_TEMPLATE WITH NO DATA;
 ALTER TABLE lookup_trees_less_4meter_layer ADD COLUMN id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL;
-
 ALTER TABLE lookup_trees_less_4meter_layer ADD COLUMN abbreviation enum_trees_less_4meter_layer UNIQUE NOT NULL;
-
 --
 -- PostgreSQL database dump
 --
@@ -25,5 +23,4 @@ ALTER TABLE lookup_trees_less_4meter_layer ADD COLUMN abbreviation enum_trees_le
 
 --
 -- PostgreSQL database dump complete
---
-
+--;

@@ -1,5 +1,4 @@
 SET search_path TO private_ci2027_001, public;
-
 CREATE TABLE position (
 
 	intkey varchar(12) UNIQUE NULL,
@@ -35,7 +34,6 @@ CREATE TABLE position (
 	quality enum_gnss_quality NULL -- GNSS_Qualitaet
 
 );
-
 COMMENT ON TABLE position IS 'Position der Probenfläche';
 COMMENT ON COLUMN position.id IS 'Unique ID der Probenfläche';
 COMMENT ON COLUMN position.plot_id IS 'ID der Probenfläche';
@@ -49,11 +47,9 @@ COMMENT ON COLUMN position.start_measurement IS 'Start Measurement';
 COMMENT ON COLUMN position.stop_measurement IS 'Stop Measurement';
 COMMENT ON COLUMN position.device_gnss IS 'Device GNSS';
 COMMENT ON COLUMN position.quality IS 'Quality of GNSS';
-
 ALTER TABLE position ADD CONSTRAINT FK_Position_Plot FOREIGN KEY (plot_id)
 	REFERENCES plot (id)
 	ON DELETE CASCADE;
-
 --ALTER TABLE position ADD CONSTRAINT CK_Position_Geometry CHECK (ST_IsValid(geometry));
 --CREATE INDEX idx_position_geometry ON position USING GIST (geometry);
 
@@ -64,6 +60,4 @@ ALTER TABLE position ADD CONSTRAINT FK_Position_Plot FOREIGN KEY (plot_id)
 
 ALTER TABLE position ADD CONSTRAINT FK_Position_LookupGnssQuality FOREIGN KEY (quality)
 	REFERENCES lookup_gnss_quality (abbreviation);
-
-
--- Example data
+-- Example data;

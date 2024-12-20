@@ -1,5 +1,4 @@
 SET search_path TO private_ci2027_001;
-
 CREATE TABLE lookup_TEMPLATE (
     --id SERIAL PRIMARY KEY, // To be set by lookup table individualy
     --abbreviation varchar(10) UNIQUE NOT NULL,  // To be set by lookup table individualy

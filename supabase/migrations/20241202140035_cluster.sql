@@ -1,5 +1,4 @@
 SET search_path TO private_ci2027_001;
-
 CREATE TABLE IF NOT EXISTS cluster (
 
 	intkey varchar(12) UNIQUE NULL,
@@ -24,28 +23,18 @@ CREATE TABLE IF NOT EXISTS cluster (
 	cluster_status enum_cluster_status NULL,
 	cluster_situation enum_cluster_situation NULL
 );
-
-
-
 COMMENT ON TABLE private_ci2027_001.cluster IS 'Eindeutige Bezeichung des Traktes';
 COMMENT ON COLUMN private_ci2027_001.cluster.id IS 'Unique ID des Traktes';
 COMMENT ON COLUMN private_ci2027_001.cluster.created_at IS 'Erstellungsdatum';
-
 --COMMENT ON COLUMN private_ci2027_001.cluster.cluster_name IS 'Eindeutige Bezeichung des Traktes';
 
 COMMENT ON COLUMN private_ci2027_001.cluster.topo_map_sheet IS 'Nummer der topgraphischen Karte 1:25.000';
-
 COMMENT ON COLUMN private_ci2027_001.cluster.state_responsible IS 'Aufnahme-Bundesland für Feldaufnahmen und ggf. Vorklärungsmerkmale';
 COMMENT ON COLUMN private_ci2027_001.cluster.states_affected IS 'zugehörige Ländernummer(n), auch mehrere';
-
 COMMENT ON COLUMN private_ci2027_001.cluster.grid_density IS 'Zugehörigkeit zum Stichprobennetz, Netzdichte';
 COMMENT ON COLUMN private_ci2027_001.cluster.cluster_status IS 'Traktkennung / Traktkennzeichen lt. Vorklärung durch vTI';
 COMMENT ON COLUMN private_ci2027_001.cluster.cluster_situation IS 'Lage des Traktes im Vergleich zu Bundesland- und Landesgrenzen';
-
-
 ALTER TABLE private_ci2027_001.cluster OWNER TO postgres;
-
-
 --ALTER TABLE cluster
 --	ADD CONSTRAINT FK_Tract_LookupStates
 --	FOREIGN KEY (states[])
@@ -55,9 +44,6 @@ ALTER TABLE cluster
 	ADD CONSTRAINT FK_Tract_LookupStateResponsible
 	FOREIGN KEY (state_responsible)
 	REFERENCES lookup_state (abbreviation);
-
-
-
 --ALTER TABLE cluster
 --	ADD CONSTRAINT FK_Tract_LookupGridDensity
 --	FOREIGN KEY (grid_density)
@@ -75,10 +61,6 @@ ALTER TABLE cluster
 
 -- Enable Row-Level Security
 ALTER TABLE cluster ENABLE ROW LEVEL SECURITY;
-
-
-
-
 CREATE OR REPLACE FUNCTION private_ci2027_001.check_supervisor_update() RETURNS TRIGGER AS $$
 BEGIN
     -- Check if the current user is the supervisor
@@ -93,32 +75,24 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 -- Drop the existing trigger if it exists
 DROP TRIGGER IF EXISTS check_supervisor_update_trigger ON private_ci2027_001.cluster;
-
 -- Create the trigger to call the trigger function before an update on the cluster table
 CREATE TRIGGER check_supervisor_update_trigger
 BEFORE UPDATE ON private_ci2027_001.cluster
 FOR EACH ROW
 EXECUTE FUNCTION private_ci2027_001.check_supervisor_update();
-
-
-
 CREATE POLICY cluster_select ON cluster
 FOR SELECT
 USING (current_setting('request.jwt.claims', true)::json->>'email' = ANY(select_access_by) OR current_user = 'country_admin');
-
 CREATE POLICY cluster_delete ON cluster
 	FOR DELETE
 	USING (current_user = 'country_admin');
 COMMENT ON POLICY cluster_delete ON cluster IS 'Only country_admin can insert new clusters';
-
 CREATE POLICY cluster_insert ON cluster
 	FOR INSERT
 	WITH CHECK (current_setting('request.jwt.claims', true)::json->>'email' = ANY(update_access_by) OR current_user = 'country_admin');
 COMMENT ON POLICY cluster_insert ON cluster IS 'Only country_admin can insert new clusters';
-
 CREATE POLICY cluster_update ON cluster
 	FOR UPDATE
 	USING (current_setting('request.jwt.claims', true)::json->>'email' = ANY(update_access_by) OR current_user = 'country_admin')

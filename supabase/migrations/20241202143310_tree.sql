@@ -1,5 +1,4 @@
 SET search_path TO private_ci2027_001, public;
-
 CREATE TABLE tree (
 
 	intkey varchar(12) UNIQUE NULL,
@@ -64,35 +63,25 @@ CREATE TABLE tree (
 	bark_condition smallint NULL -- NEU:  Rindenzustand für frisch abgestorbene WZP4-Bäume (ab 2021/2022 wird das ehemals landesspez. WZ1 bundesweit verwendet)
 
 );
-
 ALTER TABLE tree ADD CONSTRAINT FK_Tree_Plot_Unique UNIQUE (plot_id, tree_number);
-
 ALTER TABLE tree ADD CONSTRAINT FK_Tree_Plot FOREIGN KEY (plot_id)
 	REFERENCES plot (id) MATCH SIMPLE
 	ON DELETE CASCADE;
-
 --ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_PlotLocation FOREIGN KEY (plot_location_id)
 --    REFERENCES plot_location (id) MATCH SIMPLE
 --    ON DELETE CASCADE;
 
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_TreeStatus FOREIGN KEY (tree_status)
 	REFERENCES lookup_tree_status (abbreviation) MATCH SIMPLE;
-
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_TreeSpecies FOREIGN KEY (tree_species)
 	REFERENCES lookup_tree_species (abbreviation) MATCH SIMPLE;
-
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_StemBreakage FOREIGN KEY (stem_breakage)
 	REFERENCES lookup_stem_breakage (abbreviation) MATCH SIMPLE;
-
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_StemForm FOREIGN KEY (stem_form)
 	REFERENCES lookup_stem_form (abbreviation) MATCH SIMPLE;
-
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_Prunging FOREIGN KEY (pruning)
 	REFERENCES lookup_pruning (abbreviation) MATCH SIMPLE;
-
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_StandLayer FOREIGN KEY (stand_layer)
 	REFERENCES lookup_stand_layer (abbreviation) MATCH SIMPLE;
-
-
 -- add Example Tree#
--- INSERT INTO tree (plot_id, tree_number, azimuth, distance, bhd, tree_height, stem_height, tree_age, stem_breakage, stem_form, pruning, pruning_height, stand_affiliation, inventory_layer, damage_dead, damage_peel_new, damage_peel_old, damage_logging, damage_fungus, damage_resin, damage_beetle, damage_other, cave_tree, crown_clear, crown_dry, damage_bark, biotope_marked, bark_condition)
+-- INSERT INTO tree (plot_id, tree_number, azimuth, distance, bhd, tree_height, stem_height, tree_age, stem_breakage, stem_form, pruning, pruning_height, stand_affiliation, inventory_layer, damage_dead, damage_peel_new, damage_peel_old, damage_logging, damage_fungus, damage_resin, damage_beetle, damage_other, cave_tree, crown_clear, crown_dry, damage_bark, biotope_marked, bark_condition);
