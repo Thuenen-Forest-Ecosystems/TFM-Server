@@ -420,7 +420,10 @@ services:
       - 4000:4000
 
   # Comment out everything below this point if you are using an external Postgres database
+  # https://supabase.com/docs/guides/self-hosting/docker#exposing-your-postgres-database
   db:
+    ports:
+      - ${POSTGRES_PORT}:${POSTGRES_PORT}
     container_name: supabase-db
     networks:
       - supabase-net
