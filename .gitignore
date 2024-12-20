@@ -4,3 +4,5 @@
 #supabase/seeds/
 
 .DS_Store
+
+volumes
