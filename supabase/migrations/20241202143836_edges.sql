@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS edges (
 
 
 	edges JSONB NOT NULL, -- NEU: GeoJSON
-	geometry_edges extensions.Geometry(LineString, 4326) NULL -- NEU: Geometrie
+	geometry_edges GEOMETRY(LineString, 4326) NULL -- NEU: Geometrie
 );
 COMMENT ON TABLE edges IS 'Tabelle für die Kanten';
 COMMENT ON COLUMN edges.id IS 'Primärschlüssel';

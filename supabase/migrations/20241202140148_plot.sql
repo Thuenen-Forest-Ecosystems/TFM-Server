@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS plot (
 	sampling_stratum INTEGER NOT NULL, -- ToDo: create enum_sampling_stratum + Lookup from bwineu.Vbl 
 	federal_state enum_state NOT NULL,
 
-	center_location extensions.GEOMETRY(Point, 4326), -- geom NEU
+	center_location GEOMETRY(Point, 4326), -- geom NEU
 
 	--state_responsible enum_state NOT NULL, -- AufnBl
 

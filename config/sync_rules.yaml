@@ -29,9 +29,11 @@ bucket_definitions:
       #- SELECT * FROM "private_ci2027_001"."edges"
 
   user_profile:
-    parameters: SELECT request.user_id() as user_id
+    parameters:
+      - SELECT request.user_id() as user_id
     data:
-      - SELECT * FROM "public"."users_profile" WHERE user_id = bucket.user_id
+      - SELECT * FROM "public"."users_profile" WHERE id = bucket.user_id
+
   supervisor_profile:
     parameters: SELECT supervisor_id FROM "public"."users_profile" WHERE user_id = request.user_id()
     data:

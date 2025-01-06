@@ -1,5 +1,11 @@
 # TFM Server
 
+## Local development
+```bash
+supabase start
+docker compose --env-file .env.local -f docker-compose.local.yaml start 
+```
+
 ## Start Server
 
 ```bash

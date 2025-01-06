@@ -11,8 +11,8 @@ CREATE TABLE position (
 	modified_at TIMESTAMP DEFAULT NULL,
     modified_by uuid DEFAULT auth.uid() NOT NULL,
 
-    position_median extensions.Geometry(Point, 4326) NOT NULL,
-	position_mean extensions.GEOMETRY(Point, 4326) NOT NULL,
+    position_median GEOMETRY(Point, 4326) NOT NULL,
+	position_mean GEOMETRY(Point, 4326) NOT NULL,
 
 	--altitude_median float NULL, -- NEU
 	--altitude_mean float NULL, -- Hoehe_MEAN

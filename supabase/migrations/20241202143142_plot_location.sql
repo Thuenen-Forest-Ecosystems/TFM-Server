@@ -15,7 +15,7 @@ CREATE TABLE plot_location (
     radius smallint NOT NULL DEFAULT 100, -- Radius (cm) NEU
 
     --sub_plot_type enum_plot_type NOT NULL,
-    geometry extensions.GEOMETRY(POINT, 4326) NULL, -- Geometry (Polygon) NEU
+    geometry GEOMETRY(POINT, 4326) NULL, -- Geometry (Polygon) NEU
     --geometry_buffer GEOMETRY(POLYGON, 4326) NULL, -- Geometry (Polygon) NEU
 
     no_entities BOOLEAN DEFAULT FALSE -- Sub Plot is marked as "has no entities". 

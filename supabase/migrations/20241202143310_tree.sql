@@ -18,7 +18,7 @@ CREATE TABLE tree (
 
 	azimuth CK_GON NOT NULL, -- Azi
 	distance smallint NOT NULL, -- Hori
-	geometry extensions.GEOMETRY(POINT, 4326) NULL, -- Geometry (Point) NEU
+	geometry GEOMETRY(POINT, 4326) NULL, -- Geometry (Point) NEU
 	--geometry_dbh GEOMETRY(POLYGON, 4326) NULL, -- Geometry (Point) NEU
 
 
