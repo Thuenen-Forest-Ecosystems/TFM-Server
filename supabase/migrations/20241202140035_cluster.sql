@@ -9,8 +9,10 @@ CREATE TABLE IF NOT EXISTS cluster (
 	modified_at TIMESTAMP DEFAULT NULL,
 	modified_by uuid DEFAULT auth.uid() NOT NULL,
 
-	select_access_by TEXT[] NOT NULL DEFAULT array[]::TEXT[], -- Roles that can access the cluster
-	update_access_by TEXT[] NOT NULL DEFAULT array[]::TEXT[], -- Roles that can update the cluster
+	select_access_by TEXT[] NOT NULL DEFAULT array[]::text[],
+	update_access_by TEXT[] NOT NULL DEFAULT array[]::text[],
+	selectable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
+	updatable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
 	supervisor uuid NULL, -- Supervisor of the cluster
 
 	topo_map_sheet CK_TopographicMapSheet NULL,
@@ -61,40 +63,4 @@ ALTER TABLE cluster
 
 -- Enable Row-Level Security
 ALTER TABLE cluster ENABLE ROW LEVEL SECURITY;
-CREATE OR REPLACE FUNCTION private_ci2027_001.check_supervisor_update() RETURNS TRIGGER AS $$
-BEGIN
-    -- Check if the current user is the supervisor
-    IF auth.uid() != NEW.supervisor THEN
-	
-        -- If the user is not the supervisor, raise an exception if they try to update select_access_by
-        NEW.select_access_by := OLD.select_access_by;
-		NEW.update_access_by := OLD.update_access_by;
-		NEW.supervisor := OLD.supervisor;
 
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
--- Drop the existing trigger if it exists
-DROP TRIGGER IF EXISTS check_supervisor_update_trigger ON private_ci2027_001.cluster;
--- Create the trigger to call the trigger function before an update on the cluster table
-CREATE TRIGGER check_supervisor_update_trigger
-BEFORE UPDATE ON private_ci2027_001.cluster
-FOR EACH ROW
-EXECUTE FUNCTION private_ci2027_001.check_supervisor_update();
-CREATE POLICY cluster_select ON cluster
-FOR SELECT
-USING (current_setting('request.jwt.claims', true)::json->>'email' = ANY(select_access_by) OR current_user = 'country_admin');
-CREATE POLICY cluster_delete ON cluster
-	FOR DELETE
-	USING (current_user = 'country_admin');
-COMMENT ON POLICY cluster_delete ON cluster IS 'Only country_admin can insert new clusters';
-CREATE POLICY cluster_insert ON cluster
-	FOR INSERT
-	WITH CHECK (current_setting('request.jwt.claims', true)::json->>'email' = ANY(update_access_by) OR current_user = 'country_admin');
-COMMENT ON POLICY cluster_insert ON cluster IS 'Only country_admin can insert new clusters';
-CREATE POLICY cluster_update ON cluster
-	FOR UPDATE
-	USING (current_setting('request.jwt.claims', true)::json->>'email' = ANY(update_access_by) OR current_user = 'country_admin')
-	WITH CHECK (true);
-COMMENT ON POLICY cluster_update ON cluster IS 'Only country_admin can update clusters';

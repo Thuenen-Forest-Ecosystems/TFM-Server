@@ -11,6 +11,9 @@ CREATE TABLE tree (
 	modified_at TIMESTAMP DEFAULT NULL,
 	modified_by uuid DEFAULT auth.uid() NOT NULL,
 
+	selectable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
+	updatable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
+
 	tree_number smallint NOT NULL, -- Bnr || Mehrwert ggü. ID?
 	tree_marked boolean NOT NULL DEFAULT false, -- Perm 
 	tree_status enum_tree_status NULL, -- Pk

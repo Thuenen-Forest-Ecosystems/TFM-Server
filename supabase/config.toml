@@ -127,13 +127,13 @@ otp_length = 6
 otp_expiry = 3600
 
 # Use a production-ready SMTP server
- [auth.email.smtp]
- host = "env(SMTP_HOST)"
+[auth.email.smtp]
+host = "env(SMTP_HOST)"
 port = 587  # Ensure this is an integer env(SMTP_PORT)
- user = "env(SMTP_USER)"
- pass = "env(SMTP_PASS)"
- admin_email = "env(SMTP_ADMIN_EMAIL)"
- sender_name = "env(SMTP_SENDER_NAME)"
+user = "env(SMTP_USER)"
+pass = "env(SMTP_PASS)"
+admin_email = "env(SMTP_ADMIN_EMAIL)"
+sender_name = "env(SMTP_SENDER_NAME)"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

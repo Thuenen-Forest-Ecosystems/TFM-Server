@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS plot (
 	modified_at TIMESTAMP DEFAULT NULL,
 	modified_by uuid DEFAULT auth.uid() NOT NULL,
 
+	selectable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
+	updatable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
+
 	interval_name enum_interval_name NOT NULL DEFAULT 'ci2027', -- Intervall
 
 	sampling_stratum INTEGER NOT NULL, -- ToDo: create enum_sampling_stratum + Lookup from bwineu.Vbl 
