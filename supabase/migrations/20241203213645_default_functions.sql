@@ -36,11 +36,33 @@ SELECT public.enable_rls_for_schema('private_ci2027_001');
 CREATE OR REPLACE FUNCTION private_ci2027_001.copy_select_access_by_to_plot()
 RETURNS TRIGGER AS $$
 DECLARE
-    updated_plot_id INT;
+    plot_row RECORD;
 BEGIN
-    UPDATE private_ci2027_001.plot
-    SET selectable_by = NEW.selectable_by
-    WHERE cluster_id = NEW.cluster_name::int4;
+   
+
+    FOR plot_row IN
+        SELECT id
+        FROM private_ci2027_001.plot
+        WHERE cluster_id = NEW.cluster_name::int4
+    LOOP
+        UPDATE private_ci2027_001.plot
+        SET selectable_by = NEW.selectable_by
+        WHERE id = plot_row.id;
+
+        UPDATE private_ci2027_001.tree
+        SET selectable_by = NEW.selectable_by
+        WHERE plot_id =  plot_row.id;
+
+        UPDATE private_ci2027_001.deadwood
+        SET selectable_by = NEW.selectable_by
+        WHERE plot_id =  plot_row.id;
+
+    END LOOP;
+    
+    
+
+    -- Update the tree table
+    
 
     RETURN NEW;
 END;

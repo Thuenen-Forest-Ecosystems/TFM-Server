@@ -10,6 +10,9 @@ CREATE TABLE deadwood (
 	modified_at TIMESTAMP DEFAULT NULL,
     modified_by uuid DEFAULT auth.uid() NOT NULL,
 
+	selectable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
+	updatable_by uuid[] NOT NULL DEFAULT array[]::uuid[],
+
 	tree_species_group enum_tree_species_group NULL, -- Tbagr
 	dead_wood_type enum_dead_wood_type NULL, -- Tart
 	decomposition enum_decomposition NULL, -- Tzg
