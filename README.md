@@ -1,5 +1,11 @@
 # TFM Server
 
+## Clone Repository
+```bash
+git clone --recurse-submodules -j8 https://github.com/Thuenen-Forest-Ecosystems/TFM-Server.git
+cd TFM-Server
+```
+
 ## Local development
 
 ### Start Supabase and Powersync
