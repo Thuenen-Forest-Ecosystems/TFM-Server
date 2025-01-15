@@ -1,5 +1,10 @@
 # TFM Server
 
+## Requirements
+Make sure you have the following installed:
+- [Docker](https://docs.docker.com/engine/install/)
+- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+
 ## Clone Repository
 ```bash
 git clone --recurse-submodules -j8 https://github.com/Thuenen-Forest-Ecosystems/TFM-Server.git
