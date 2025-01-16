@@ -15,12 +15,6 @@ cp .env.example .env
 
 ## Local development
 
-##Requirements
-- window in virtueller umgebung (wsl)
-- nvm installieren
-- Docker Berechtigungen
-- 
-
 ### Start Supabase and Powersync
 ```bash
 supabase start
