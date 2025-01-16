@@ -2,6 +2,7 @@
 
 ## Requirements
 Make sure you have the following installed:
+- [Git](https://git-scm.com/downloads)
 - [Docker](https://docs.docker.com/engine/install/)
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
 
