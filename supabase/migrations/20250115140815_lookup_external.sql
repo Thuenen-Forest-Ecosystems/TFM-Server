@@ -16,9 +16,12 @@ SET search_path TO lookup_external;
 CREATE TABLE lookup_ffh (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_national_park (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_natur_park (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE lookup_vogelschutzgebiete (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_vogel_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_biogeographische_region (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+
 CREATE TABLE lookup_biosphaere (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+ALTER TABLE lookup_biosphaere ADD COLUMN bfn_code varchar(20) NULL;
+
 CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_gemeinde (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);

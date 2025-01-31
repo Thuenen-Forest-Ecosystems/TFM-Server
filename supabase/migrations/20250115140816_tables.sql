@@ -23,13 +23,21 @@ CREATE TABLE IF NOT EXISTS table_TEMPLATE (
     supervisor_id uuid DEFAULT auth.uid() NULL,
     selectable_by uuid[] DEFAULT ARRAY[]::uuid[] NULL,
     updatable_by uuid[] DEFAULT ARRAY[]::uuid[] NULL
-    
 );
 
 
 
 ------------------------------------------------- CLUSTER -------------------------------------------------
 CREATE TABLE cluster (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+ALTER TABLE cluster 
+    ADD COLUMN cluster_name integer NOT NULL,
+	ADD COLUMN topo_map_sheet integer NULL,
+	ADD COLUMN state_responsible text NULL,
+	ADD COLUMN states_affected text[] NULL,
+	ADD COLUMN grid_density text NULL,
+	ADD COLUMN cluster_status text NULL,
+	ADD COLUMN cluster_situation text NULL;
+
 ALTER TABLE cluster ADD CONSTRAINT FK_cluster_ModifiedBy
     FOREIGN KEY (modified_by)
     REFERENCES auth.users (id);
@@ -37,29 +45,20 @@ ALTER TABLE cluster ADD CONSTRAINT FK_cluster_SupervisorId
     FOREIGN KEY (supervisor_id)
     REFERENCES auth.users (id);
 
-ALTER TABLE cluster ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL;
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_Unique UNIQUE (cluster_name);
 
-ALTER TABLE cluster ADD COLUMN IF NOT EXISTS topo_map_sheet integer NULL;
-
-ALTER TABLE cluster ADD COLUMN IF NOT EXISTS state_responsible text NULL;
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupStateResponsible
 	FOREIGN KEY (state_responsible)
 	REFERENCES lookup.lookup_state (abbreviation);
 
-ALTER TABLE cluster ADD COLUMN IF NOT EXISTS states_affected text[] NULL;
-
-ALTER TABLE cluster ADD COLUMN IF NOT EXISTS grid_density text NULL;
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupGridDensity
     FOREIGN KEY (grid_density)
     REFERENCES lookup.lookup_grid_density (abbreviation);
 
-ALTER TABLE cluster ADD COLUMN IF NOT EXISTS cluster_status text NULL;
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterStatus
     FOREIGN KEY (cluster_status)
     REFERENCES lookup.lookup_cluster_status (abbreviation);
 
-ALTER TABLE cluster ADD COLUMN IF NOT EXISTS cluster_situation text NULL;
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterSituation
     FOREIGN KEY (cluster_situation)
     REFERENCES lookup.lookup_cluster_situation (abbreviation);
@@ -69,7 +68,7 @@ CREATE TABLE plot (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot 
     ADD COLUMN interval_name text NOT NULL DEFAULT 'ci2027',
     ADD COLUMN sampling_stratum INTEGER NOT NULL,
-    ADD COLUMN federal_state text NOT NULL,
+    ADD COLUMN federal_state text NULL,
     ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- geom NEU
 	ADD COLUMN growth_district text  NULL, -- wb
 	ADD COLUMN forest_status text NULL, -- wa
@@ -111,8 +110,8 @@ ALTER TABLE plot
 	ADD COLUMN trees_greater_4meter_mirrored text NULL, -- schigt4_sp (gespiegelt)
 	ADD COLUMN trees_greater_4meter_basal_area_factor text NULL, -- schigt4_zf
 	ADD COLUMN trees_less_4meter_coverage smallint NULL, -- schile4_bedg
-	ADD COLUMN trees_less_4meter_layer text NULL -- schile4_schi
-;
+	ADD COLUMN trees_less_4meter_layer text NULL; -- schile4_schi
+
 
 ALTER TABLE plot ADD CONSTRAINT FK_plot_ModifiedBy
     FOREIGN KEY (modified_by)
