@@ -21,10 +21,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-SELECT public.enable_rls_for_schema('ci2027');
+SELECT public.enable_rls_for_schema('inventory_archive');
 SELECT public.enable_rls_for_schema('lookup');
 SELECT public.enable_rls_for_schema('lookup_external');
 
 
 -- DROP SELECT ACCESS FOR ANON
-DROP POLICY IF EXISTS default_select ON ci2027.position;
+DROP POLICY IF EXISTS default_select ON inventory_archive.position;

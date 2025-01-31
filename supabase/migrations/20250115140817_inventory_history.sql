@@ -1,19 +1,19 @@
 SET default_transaction_read_only = OFF;
 
--- SCHEMA ci2027
-CREATE SCHEMA ci2027;
-ALTER SCHEMA ci2027 OWNER TO postgres;
-COMMENT ON SCHEMA ci2027 IS 'Kohlenstoffinventur 2027';
-GRANT USAGE ON SCHEMA ci2027 TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA ci2027 TO anon, authenticated, service_role;
-GRANT ALL ON ALL ROUTINES IN SCHEMA ci2027 TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA ci2027 TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA ci2027 GRANT ALL ON TABLES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA ci2027 GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA ci2027 GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+-- SCHEMA inventory_archive
+CREATE SCHEMA inventory_archive;
+ALTER SCHEMA inventory_archive OWNER TO postgres;
+COMMENT ON SCHEMA inventory_archive IS 'Kohlenstoffinventur 2027';
+GRANT USAGE ON SCHEMA inventory_archive TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA inventory_archive TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA inventory_archive TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA inventory_archive TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA inventory_archive GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA inventory_archive GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA inventory_archive GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 
 
-SET search_path TO ci2027;
+SET search_path TO inventory_archive;
 
 CREATE TABLE IF NOT EXISTS table_TEMPLATE (
     intkey varchar(12) UNIQUE NULL, 
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS table_TEMPLATE (
 
 
 ------------------------------------------------- CLUSTER -------------------------------------------------
-CREATE TABLE cluster (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE cluster (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE cluster 
     ADD COLUMN cluster_name integer NOT NULL,
 	ADD COLUMN topo_map_sheet integer NULL,
@@ -64,12 +64,11 @@ ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterSituation
     REFERENCES lookup.lookup_cluster_situation (abbreviation);
 
 ------------------------------------------------- PLOT -------------------------------------------------
-CREATE TABLE plot (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE plot (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot 
-    ADD COLUMN interval_name text NOT NULL DEFAULT 'ci2027',
     ADD COLUMN sampling_stratum INTEGER NOT NULL,
     ADD COLUMN federal_state text NULL,
-    ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- geom NEU
+    --ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- geom NEU
 	ADD COLUMN growth_district text  NULL, -- wb
 	ADD COLUMN forest_status text NULL, -- wa
 	ADD COLUMN accessibility smallint NULL, -- begehbar TODO: Lookup Table
@@ -110,7 +109,17 @@ ALTER TABLE plot
 	ADD COLUMN trees_greater_4meter_mirrored text NULL, -- schigt4_sp (gespiegelt)
 	ADD COLUMN trees_greater_4meter_basal_area_factor text NULL, -- schigt4_zf
 	ADD COLUMN trees_less_4meter_coverage smallint NULL, -- schile4_bedg
-	ADD COLUMN trees_less_4meter_layer text NULL; -- schile4_schi
+	ADD COLUMN trees_less_4meter_layer text NULL,
+	
+	ADD COLUMN biogeographische_region text NULL, -- BiogeogrRegion
+	ADD COLUMN biosphaere text NULL, -- Biosphaere
+	ADD COLUMN ffh text NULL, -- FFH
+	ADD COLUMN national_park text NULL, -- NationalP
+	ADD COLUMN natur_park text NULL, -- NaturP
+	ADD COLUMN vogel_schutzgebiet text NULL, -- VogelSG
+	ADD COLUMN natur_schutzgebiet text NULL -- NaturSG
+
+	; -- schile4_schi
 
 
 ALTER TABLE plot ADD CONSTRAINT FK_plot_ModifiedBy
@@ -238,6 +247,36 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterMirrored FOREIGN KE
 	REFERENCES lookup.lookup_trees_less_4meter_mirrored (abbreviation) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
+
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupBiosgeographischeRegion FOREIGN KEY (biogeographische_region)
+	REFERENCES lookup_external.lookup_biogeographische_region (abbreviation) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupBiosphaere FOREIGN KEY (biosphaere)
+	REFERENCES lookup_external.lookup_biosphaere (abbreviation) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupFfh FOREIGN KEY (ffh)
+	REFERENCES lookup_external.lookup_ffh (abbreviation) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupNationalPark FOREIGN KEY (national_park)
+	REFERENCES lookup_external.lookup_national_park (abbreviation) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupNaturePark FOREIGN KEY (natur_park)
+	REFERENCES lookup_external.lookup_natur_park (abbreviation) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupVogelSchutzgebiet FOREIGN KEY (vogel_schutzgebiet)
+	REFERENCES lookup_external.lookup_vogel_schutzgebiet (abbreviation) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupNatureSchutzgebiet FOREIGN KEY (natur_schutzgebiet)
+	REFERENCES lookup_external.lookup_natur_schutzgebiet (abbreviation) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterCountFactor FOREIGN KEY (trees_less_4meter_count_factor)
 --	REFERENCES lookup_trees_less_4meter_count_factor (abbreviation) MATCH SIMPLE
 --	ON UPDATE NO ACTION
@@ -262,8 +301,19 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterMirrored FOREIGN KE
 --        ON UPDATE NO ACTION
 --        ON DELETE NO ACTION,;
 
+CREATE TABLE plot_coordinates (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE plot_coordinates 
+    ADD COLUMN plot_id uuid UNIQUE NOT NULL,
+    ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- bwi.koord.b0_ecke_soll
+	ADD COLUMN cartesian_x float NOT NULL, -- bwi.koord.b0_ecke_soll.Soll_Hoch
+	ADD COLUMN cartesian_y float NOT NULL; -- bwi.koord.b0_ecke_soll.Soll_Recht
+
+ALTER TABLE plot_coordinates ADD CONSTRAINT FK_PlotPosition_Plot FOREIGN KEY (plot_id)
+	REFERENCES plot (id) MATCH SIMPLE
+	ON DELETE CASCADE;
+
 ------------------------------------------------- TREE -------------------------------------------------
-CREATE TABLE tree (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE tree (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE tree 
     ADD COLUMN tree_number smallint NOT NULL,
     ADD COLUMN plot_id uuid NOT NULL,
@@ -284,7 +334,7 @@ ALTER TABLE tree
 	ADD COLUMN stem_form text NULL DEFAULT '0', --Kst
 	ADD COLUMN pruning text NULL, -- Ast
 	ADD COLUMN pruning_height smallint NULL, -- Ast_Hoe (Astungungshöhe [dm])
-	ADD COLUMN within_stand BOOLEAN NULL DEFAULT false, -- Bz https://git-dmz.thuenen.de/datenerfassungci2027/ci2027_datenerfassung/ci2027-db-structure/-/issues/3#note_24310
+	ADD COLUMN within_stand BOOLEAN NULL DEFAULT false, -- Bz https://git-dmz.thuenen.de/datenerfassunginventory_archive/inventory_archive_datenerfassung/inventory_archive-db-structure/-/issues/3#note_24310
 	ADD COLUMN stand_layer text NULL, -- Bs //saplings_layer
 	ADD COLUMN damage_dead boolean NULL DEFAULT false, -- Tot
 	ADD COLUMN damage_peel_new boolean NULL DEFAULT false, -- jSchael
@@ -321,7 +371,7 @@ ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_StandLayer FOREIGN KEY (stand_layer)
 
 
 ------------------------------------------------- POSITION -------------------------------------------------
-CREATE TABLE position (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE position (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE position
 	ADD COLUMN plot_id uuid NOT NULL,
     ADD COLUMN position_median public.GEOMETRY(Point, 4326) NOT NULL,
@@ -343,7 +393,7 @@ ALTER TABLE position ADD CONSTRAINT FK_Position_LookupGnssQuality FOREIGN KEY (q
 	REFERENCES lookup.lookup_gnss_quality (abbreviation);
 
 ------------------------------------------------- POSITION -------------------------------------------------
-CREATE TABLE edges (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE edges (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE edges
 	ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN edge_number INTEGER NULL, -- NEU: Kanten-ID || ToDo: Welchen Mehrwert hat diese ID gegenüber der ID?
@@ -364,7 +414,7 @@ ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupTerrain FOREIGN KEY (terrain)
 	REFERENCES lookup.lookup_terrain (abbreviation);
 
 ------------------------------------------------- REGENERATION -------------------------------------------------
-CREATE TABLE regeneration (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE regeneration (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE regeneration
     ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN tree_species text NULL, --Ba
@@ -384,7 +434,7 @@ ALTER TABLE regeneration ADD CONSTRAINT FK_Saplings2m_LookupTreeSizeClass FOREIG
     REFERENCES lookup.lookup_tree_size_class (abbreviation);
 
 ------------------------------------------------- STRUCTURE LESS THAN 4 METER -------------------------------------------------
-CREATE TABLE structure_lt4m (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE structure_lt4m (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE structure_lt4m
 	ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN tree_species text NULL, --Ba
@@ -398,7 +448,7 @@ ALTER TABLE structure_lt4m ADD CONSTRAINT FK_StructureLt4m_LookupTreeSpecies FOR
 
 
 ------------------------------------------------- DEADWOOD -------------------------------------------------
-CREATE TABLE deadwood (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE deadwood (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE deadwood
 	ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN tree_species_group text NULL, -- Tbagr
@@ -422,7 +472,7 @@ ALTER TABLE deadwood ADD CONSTRAINT FK_Deadwood_LookupDecomposition FOREIGN KEY 
 
 
 ------------------------------------------------- PLOT LOCATION -------------------------------------------------
-CREATE TABLE plot_location (LIKE ci2027.table_TEMPLATE INCLUDING ALL);
+CREATE TABLE plot_location (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot_location
 	ADD COLUMN parent_table text NOT NULL,
 	ADD COLUMN azimuth smallint NOT NULL, -- Azimuth (Gon) NEU

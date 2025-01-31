@@ -48,6 +48,6 @@ $$ LANGUAGE plpgsql;
 -- https://stackoverflow.com/questions/48317818/revoke-particular-columns-in-postgresql
 -- https://supabase.com/docs/guides/database/postgres/column-level-security
 -- Example usage
-REVOKE SELECT ON TABLE ci2027.plot FROM anon;
-SELECT set_column_privileges('ci2027', 'plot', 'anon', ARRAY['center_location'], ARRAY['SELECT']);
+-- REVOKE SELECT ON TABLE ci2027.plot FROM anon;
+-- SELECT set_column_privileges('ci2027', 'plot', 'anon', ARRAY['center_location'], ARRAY['SELECT']);
 
