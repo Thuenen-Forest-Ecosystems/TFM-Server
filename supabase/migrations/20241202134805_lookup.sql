@@ -16,7 +16,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA lookup GRANT ALL ON SEQUENC
 SET search_path TO lookup;
 
 CREATE TABLE IF NOT EXISTS lookup_TEMPLATE (
-    abbreviation text UNIQUE NOT NULL,
+    --abbreviation text UNIQUE NOT NULL,
+    code serial UNIQUE NOT NULL,
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL,
     name_de text NOT NULL,
     name_en text NULL,
@@ -35,8 +36,8 @@ CREATE TABLE IF NOT EXISTS lookup_edge_status (LIKE lookup.lookup_TEMPLATE INCLU
 CREATE TABLE IF NOT EXISTS lookup_edge_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_elevation_level (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_exploration_instruction (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_ffh_forest_type_field (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_forest_community_field (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_ffh_forest_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_forest_community (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_forest_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_forest_status (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_gnss_quality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -51,12 +52,12 @@ CREATE TABLE IF NOT EXISTS lookup_property_size_class (LIKE lookup.lookup_TEMPLA
 CREATE TABLE IF NOT EXISTS lookup_property_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_pruning (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_sampling_stratum (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_stand_dev_phase (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_stand_development_phase (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_stand_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_stand_structure (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
 CREATE TABLE IF NOT EXISTS lookup_state (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-ALTER TABLE lookup_state ADD COLUMN code varchar(20) NULL;
+ALTER TABLE lookup_state ADD COLUMN abbreviation text NULL;
 
 CREATE TABLE IF NOT EXISTS lookup_stem_breakage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_stem_form (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -69,9 +70,26 @@ ALTER TABLE lookup_tree_species ADD COLUMN taxonomy_order varchar(1) NULL;
 ALTER TABLE lookup_tree_species ADD COLUMN height_group varchar(20) NULL;
 
 CREATE TABLE IF NOT EXISTS lookup_tree_status (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_count_factor (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_basal_area_factor (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_mirrored (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_origin (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_harvest_restriction (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_harvest_restriction_source (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+--CREATE TABLE IF NOT EXISTS lookup_harvest_restriction_source (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_accessibility (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_biotope (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+
+
+-- External Lookup Tables
+CREATE TABLE lookup_ffh (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_national_park (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_natur_park (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_vogel_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_biogeographische_region (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+
+CREATE TABLE lookup_biosphaere (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+ALTER TABLE lookup_biosphaere ADD COLUMN bfn_code varchar(20) NULL;
+
+CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_gemeinde (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
