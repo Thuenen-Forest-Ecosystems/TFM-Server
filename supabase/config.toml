@@ -8,7 +8,7 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` is always included.
-schemas = ["private_ci2027_001", "public", "graphql_public"]
+schemas = ["lookup", "lookup_external", "inventory_archive", "playground", "public", "graphql_public"]
 # Extra schemas to add to the search_path of every request. `public` is always included.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
@@ -82,11 +82,11 @@ file_size_limit = "50MiB"
 enabled = true
 
 # Uncomment to configure local storage buckets
-[storage.buckets.images]
+[storage.buckets.TFM]
 public = false
-file_size_limit = "50MiB"
-allowed_mime_types = ["image/png", "image/jpeg"]
-objects_path = "./images"
+file_size_limit = "10MiB"
+#allowed_mime_types = ["image/png", "image/jpeg", "text/javascript", "application/json"]
+objects_path = "./TFM"
 
 [auth]
 enabled = true
