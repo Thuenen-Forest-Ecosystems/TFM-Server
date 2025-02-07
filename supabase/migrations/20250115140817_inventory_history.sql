@@ -16,7 +16,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA inventory_archive GRANT ALL
 SET search_path TO inventory_archive;
 
 CREATE TABLE IF NOT EXISTS table_TEMPLATE (
-    intkey varchar(12) UNIQUE NULL, 
+    intkey varchar(50) UNIQUE NOT NULL, 
     id uuid UNIQUE DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL,
     modified_at TIMESTAMP DEFAULT NULL,
 	modified_by uuid DEFAULT auth.uid() NULL,
@@ -66,7 +66,7 @@ ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterSituation
 ------------------------------------------------- PLOT -------------------------------------------------
 CREATE TABLE plot (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot 
-    ADD COLUMN sampling_stratum INTEGER NOT NULL,
+    ADD COLUMN sampling_stratum INTEGER NULL,
     ADD COLUMN federal_state INTEGER NULL, -- lookup_state
     --ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- move to plot_coordinates
 	ADD COLUMN growth_district INTEGER  NULL, -- wb -- lookup_growth_district
@@ -487,11 +487,13 @@ ALTER TABLE deadwood ADD CONSTRAINT FK_Deadwood_LookupDecomposition FOREIGN KEY 
 
 
 ------------------------------------------------- PLOT LOCATION -------------------------------------------------
-CREATE TABLE plot_location (LIKE table_TEMPLATE INCLUDING ALL);
-ALTER TABLE plot_location
+CREATE TABLE subplots_relative_position (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE subplots_relative_position
+	-- ADD COLUMN plot_id uuid NOT NULL,
+	ADD COLUMN plot_coordinates_id uuid NOT NULL,
 	ADD COLUMN parent_table text NOT NULL,
 	ADD COLUMN azimuth smallint NOT NULL, -- Azimuth (Gon) NEU
     ADD COLUMN distance smallint NOT NULL  DEFAULT 500, -- Distance (cm) NEU
     ADD COLUMN radius smallint NOT NULL DEFAULT 100, -- Radius (cm) NEU
     -- ADD COLUMN geometry public.GEOMETRY(POINT, 4326) NULL, -- Geometry (Polygon) NEU
-    ADD COLUMN no_entities BOOLEAN DEFAULT FALSE -- Sub Plot is marked as "has no entities". 
+    ADD COLUMN has_entities BOOLEAN DEFAULT TRUE -- Sub Plot is marked as "has no entities". 
