@@ -17,12 +17,12 @@ SET search_path TO inventory_archive;
 
 CREATE TABLE IF NOT EXISTS table_TEMPLATE (
     intkey varchar(50) UNIQUE NOT NULL, 
-    id uuid UNIQUE DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL,
-    modified_at TIMESTAMP DEFAULT NULL,
-	modified_by uuid DEFAULT auth.uid() NULL,
-    supervisor_id uuid DEFAULT auth.uid() NULL,
-    selectable_by uuid[] DEFAULT ARRAY[]::uuid[] NULL,
-    updatable_by uuid[] DEFAULT ARRAY[]::uuid[] NULL
+    id uuid UNIQUE DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL
+    --modified_at TIMESTAMP DEFAULT NULL,
+	--modified_by uuid DEFAULT auth.uid() NULL,
+    --supervisor_id uuid DEFAULT auth.uid() NULL,
+    --selectable_by uuid[] DEFAULT ARRAY[]::uuid[] NULL,
+    --updatable_by uuid[] DEFAULT ARRAY[]::uuid[] NULL
 );
 
 
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS table_TEMPLATE (
 ------------------------------------------------- CLUSTER -------------------------------------------------
 CREATE TABLE cluster (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE cluster 
-    ADD COLUMN cluster_name INTEGER NOT NULL,
+    ADD COLUMN cluster_name INTEGER NOT NULL CHECK (cluster_name >= 1),
 	ADD COLUMN topo_map_sheet INTEGER NULL,
 	ADD COLUMN state_responsible INTEGER NULL, -- lookup_state
 	ADD COLUMN states_affected INTEGER[] NULL, -- lookup_state
@@ -38,12 +38,12 @@ ALTER TABLE cluster
 	ADD COLUMN cluster_status INTEGER NULL, -- lookup_state
 	ADD COLUMN cluster_situation INTEGER NULL; -- lookup_cluster_status
 
-ALTER TABLE cluster ADD CONSTRAINT FK_cluster_ModifiedBy
-    FOREIGN KEY (modified_by)
-    REFERENCES auth.users (id);
-ALTER TABLE cluster ADD CONSTRAINT FK_cluster_SupervisorId
-    FOREIGN KEY (supervisor_id)
-    REFERENCES auth.users (id);
+--ALTER TABLE cluster ADD CONSTRAINT FK_cluster_ModifiedBy
+--    FOREIGN KEY (modified_by)
+--    REFERENCES auth.users (id);
+--ALTER TABLE cluster ADD CONSTRAINT FK_cluster_SupervisorId
+--    FOREIGN KEY (supervisor_id)
+--    REFERENCES auth.users (id);
 
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_Unique UNIQUE (cluster_name);
 
@@ -89,12 +89,12 @@ ALTER TABLE plot
 	ADD COLUMN harvest_restriction INTEGER NULL, -- ne TODO: Lookup Table & enum
 	--ADD COLUMN harvest_restriction_source INTEGER NULL, -- NEU: NeUrsacheB
 	ADD COLUMN marker_status INTEGER NULL, -- perm lookup_marker_status
-	ADD COLUMN marker_azimuth INTEGER NULL CHECK (marker_azimuth >= 0 AND marker_azimuth <= 400), -- perm_azi: 
-	ADD COLUMN marker_distance SMALLINT NULL, -- perm_hori
+	ADD COLUMN marker_azimuth INTEGER NULL CHECK (marker_azimuth >= 0 AND marker_azimuth <= 399), -- perm_azi: 
+	ADD COLUMN marker_distance SMALLINT NULL CHECK (marker_distance >= 0 AND marker_distance <= 15000), -- perm_hori Zentimeter 
 	ADD COLUMN marker_profile INTEGER NULL, -- perm_profil -- lookup_marker_profile
 	ADD COLUMN terrain_form INTEGER NULL, -- gform -- lookup_terrain_form
-	ADD COLUMN terrain_slope SMALLINT NULL CHECK (terrain_slope >= 0 AND terrain_slope <= 360), -- gneig [Grad]
-	ADD COLUMN terrain_exposure SMALLINT NULL CHECK (terrain_exposure >= 0 AND terrain_exposure <= 400), -- gexp [Gon]
+	ADD COLUMN terrain_slope SMALLINT NULL CHECK (terrain_slope >= 0 AND terrain_slope <= 90), -- gneig [Grad]
+	ADD COLUMN terrain_exposure SMALLINT NULL CHECK (terrain_exposure >= 0 AND terrain_exposure <= 399), -- gexp [Gon]
 	ADD COLUMN management_type INTEGER NULL, -- be - lookup_management_type
 	ADD COLUMN harvesting_method INTEGER NULL, -- ernte (x3_ernte) - lookup_harvesting_method
 	ADD COLUMN biotope INTEGER NULL, -- biotop (x3_biotop) - lookup_biotope
@@ -133,16 +133,16 @@ ALTER TABLE plot
 	; -- schile4_schi
 
 
-ALTER TABLE plot ADD CONSTRAINT FK_plot_ModifiedBy
-    FOREIGN KEY (modified_by)
-    REFERENCES auth.users (id);
-ALTER TABLE plot ADD CONSTRAINT FK_plot_SupervisorId
-    FOREIGN KEY (supervisor_id)
-    REFERENCES auth.users (id);
+--ALTER TABLE plot ADD CONSTRAINT FK_plot_ModifiedBy
+--    FOREIGN KEY (modified_by)
+--    REFERENCES auth.users (id);
+--ALTER TABLE plot ADD CONSTRAINT FK_plot_SupervisorId
+--    FOREIGN KEY (supervisor_id)
+--    REFERENCES auth.users (id);
 
 
 --- make id unique
-ALTER TABLE plot ADD COLUMN IF NOT EXISTS plot_name integer NOT NULL;
+ALTER TABLE plot ADD COLUMN IF NOT EXISTS plot_name integer NOT NULL CHECK (plot_name >= 1 AND plot_name <= 4);
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL;
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL;
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Unique UNIQUE (cluster_name, plot_name);
@@ -298,7 +298,7 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterLayer FOREIGN KEY (
 ------------------------------------------------- PLOT COORDINATES -------------------------------------------------
 
 CREATE TABLE plot_coordinates (LIKE table_TEMPLATE INCLUDING ALL);
-ALTER TABLE plot_coordinates 
+ALTER TABLE plot_coordinates
     ADD COLUMN plot_id uuid UNIQUE NOT NULL,
     ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- bwi.koord.b0_ecke_soll
 	ADD COLUMN cartesian_x float NOT NULL, -- bwi.koord.b0_ecke_soll.Soll_Hoch
@@ -316,8 +316,8 @@ ALTER TABLE plot_coordinates ADD CONSTRAINT FK_PlotPosition_Plot FOREIGN KEY (pl
 CREATE TABLE plot_landmark (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot_landmark 
     ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN landmark_azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 400), -- mark_azi GON
-	ADD COLUMN landmark_distance SMALLINT NOT NULL, -- mark_hori
+	ADD COLUMN landmark_azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 399), -- mark_azi [Gon]
+	ADD COLUMN landmark_distance SMALLINT NOT NULL CHECK (landmark_distance > 0), -- mark_hori [cm]
 	ADD COLUMN landmark_note TEXT NOT NULL; -- mark_beschreibung
 
 --- remove column intkey due to does not exist in the new data model
@@ -333,19 +333,19 @@ ALTER TABLE tree
     ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN tree_marked boolean NOT NULL DEFAULT false,
 	ADD COLUMN tree_status INTEGER NULL,
-	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND azimuth <= 400),
-	ADD COLUMN distance smallint NOT NULL,
+	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND azimuth <= 399), -- [Gon]
+	ADD COLUMN distance smallint NOT NULL CHECK (distance >= 0), -- [cm]
 	-- ADD COLUMN geometry public.GEOMETRY(POINT, 4326) NULL,
 	ADD COLUMN tree_species INTEGER NULL,
 	ADD COLUMN dbh smallint NULL,
 	ADD COLUMN dbh_height smallint NULL DEFAULT 130,
 	ADD COLUMN tree_height smallint NULL,
 	ADD COLUMN stem_height smallint NULL,
-	ADD COLUMN tree_height_azimuth smallint NULL CHECK (tree_height_azimuth >= 0 AND tree_height_azimuth <= 400),
-	ADD COLUMN tree_height_distance smallint NULL,
-	ADD COLUMN tree_age smallint NULL,
-	ADD COLUMN stem_breakage INTEGER NULL DEFAULT '0', -- Kh
-	ADD COLUMN stem_form INTEGER NULL DEFAULT '0', --Kst
+	ADD COLUMN tree_height_azimuth smallint NULL CHECK (tree_height_azimuth >= 0 AND tree_height_azimuth <= 399), -- MPos_Azi [Gon]
+	ADD COLUMN tree_height_distance smallint NULL CHECK (tree_height_distance >= 200 AND tree_height_distance <= 7500), -- MPos_Hori [cm] 
+	ADD COLUMN tree_age smallint NULL CHECK (tree_age > 0 AND tree_age <= 1000), -- Alter in Jahren
+	ADD COLUMN stem_breakage INTEGER NULL DEFAULT 0, -- Kh
+	ADD COLUMN stem_form INTEGER NULL DEFAULT 0, --Kst
 	ADD COLUMN pruning INTEGER NULL, -- Ast
 	-- ADD COLUMN pruning_height smallint NULL, -- Ast_Hoe (Astungungshöhe [dm]) Deprecated
 	ADD COLUMN within_stand BOOLEAN NULL DEFAULT false, -- Bz https://git-dmz.thuenen.de/datenerfassunginventory_archive/inventory_archive_datenerfassung/inventory_archive-db-structure/-/issues/3#note_24310
@@ -390,10 +390,10 @@ ALTER TABLE position
 	ADD COLUMN plot_id uuid NOT NULL,
     ADD COLUMN position_median public.GEOMETRY(Point, 4326) NOT NULL,
 	ADD COLUMN position_mean public.GEOMETRY(Point, 4326) NOT NULL,
-	ADD COLUMN hdop_mean float NOT NULL, -- HDOP  MEAN OR MEDIAN ???
-	ADD COLUMN pdop_mean float NOT NULL, -- PDOP  MEAN OR MEDIAN ???
-	ADD COLUMN satellites_count_mean float NOT NULL, -- NumSat MEAN OR MEDIAN ???
-	ADD COLUMN measurement_count smallint NOT NULL, -- AnzahlMessungen
+	ADD COLUMN hdop_mean float NOT NULL CHECK (hdop_mean >= 0), -- HDOP  MEAN OR MEDIAN ???
+	ADD COLUMN pdop_mean float NULL CHECK (pdop_mean IS NULL OR pdop_mean >= 0), -- PDOP  MEAN OR MEDIAN ???
+	ADD COLUMN satellites_count_mean float NOT NULL CHECK (satellites_count_mean >= 1), -- NumSat MEAN OR MEDIAN ???
+	ADD COLUMN measurement_count smallint NOT NULL CHECK (measurement_count >= 1), -- AnzahlMessungen
 	ADD COLUMN rtcm_age float NULL, -- RTCMAlter
 	ADD COLUMN start_measurement timestamp NOT NULL, -- UTCStartzeit
 	ADD COLUMN stop_measurement timestamp NOT NULL, -- UTCStopzeit
@@ -406,11 +406,11 @@ ALTER TABLE position ADD CONSTRAINT FK_Position_Plot FOREIGN KEY (plot_id)
 ALTER TABLE position ADD CONSTRAINT FK_Position_LookupGnssQuality FOREIGN KEY (quality)
 	REFERENCES lookup.lookup_gnss_quality (code);
 
-------------------------------------------------- POSITION -------------------------------------------------
+------------------------------------------------- EDGES -------------------------------------------------
 CREATE TABLE edges (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE edges
 	ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN edge_number INTEGER NULL, -- NEU: Kanten-ID || ToDo: Welchen Mehrwert hat diese ID gegenüber der ID?
+	ADD COLUMN edge_number INTEGER NULL CHECK (edge_number >= 1), -- NEU: Kanten-ID || ToDo: Welchen Mehrwert hat diese ID gegenüber der ID?
 	ADD COLUMN edge_status INTEGER NULL, --Rk
 	ADD COLUMN edge_type INTEGER NULL, --Rart
 	ADD COLUMN terrain INTEGER NULL, --Rterrain
@@ -436,7 +436,7 @@ ALTER TABLE regeneration
 	ADD COLUMN tree_size_class INTEGER NULL, --Gr
 	ADD COLUMN damage_peel smallint NULL, --Schael
 	ADD COLUMN protection_individual boolean NULL, --Schu
-	ADD COLUMN tree_count smallint NOT NULL; --Anz
+	ADD COLUMN tree_count smallint NOT NULL CHECK (tree_count >= 1 AND tree_count <= 350); --Anz
 
 ALTER TABLE regeneration ADD CONSTRAINT FK_Saplings2m_Plot FOREIGN KEY (plot_id) REFERENCES plot(id) MATCH SIMPLE
 	ON DELETE CASCADE;
@@ -452,7 +452,7 @@ CREATE TABLE structure_lt4m (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE structure_lt4m
 	ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN tree_species INTEGER NULL, --Ba
-	ADD COLUMN coverage INTEGER NOT NULL CHECK (coverage >= 0 AND coverage <= 100), --Anteil TODO: enum_coverage NEU
+	ADD COLUMN coverage INTEGER NOT NULL CHECK (coverage >= 1 AND coverage <= 100), --Anteil TODO: enum_coverage NEU
 	ADD COLUMN regeneration_type INTEGER NULL; --Vart lookup_trees_less_4meter_origin
 
 ALTER TABLE structure_lt4m ADD CONSTRAINT FK_StructureLt4m_Plot FOREIGN KEY (plot_id) REFERENCES plot(id)
@@ -469,10 +469,10 @@ ALTER TABLE deadwood
 	ADD COLUMN tree_species_group INTEGER NULL, -- Tbagr
 	ADD COLUMN dead_wood_type INTEGER NULL, -- Tart
 	ADD COLUMN decomposition INTEGER NULL, -- Tzg
-	ADD COLUMN length_height smallint NULL, -- Tl
-	ADD COLUMN diameter_butt smallint NOT NULL, -- Tbd
-	ADD COLUMN diameter_top smallint NULL, -- Tsd
-	ADD COLUMN count smallint NULL, -- Anz
+	ADD COLUMN length_height smallint NULL CHECK (length_height >= 1 AND length_height <= 800), -- Tl [cm]
+	ADD COLUMN diameter_butt smallint NOT NULL CHECK (diameter_butt >= 10 AND diameter_butt <= 300), -- Tbd [cm]
+	ADD COLUMN diameter_top smallint NULL CHECK (diameter_top >= 0 AND diameter_top <= 300), -- Tsd [cm]
+	ADD COLUMN count smallint NULL CHECK (count >= 1 AND count <= 100), -- Anz
 	ADD COLUMN bark_pocket BOOLEAN DEFAULT FALSE; -- TRinde
 
 ALTER TABLE deadwood ADD CONSTRAINT FK_Deadwood_Plot FOREIGN KEY (plot_id)
@@ -492,8 +492,8 @@ ALTER TABLE subplots_relative_position
 	-- ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN plot_coordinates_id uuid NOT NULL,
 	ADD COLUMN parent_table text NOT NULL,
-	ADD COLUMN azimuth smallint NOT NULL, -- Azimuth (Gon) NEU
-    ADD COLUMN distance smallint NOT NULL  DEFAULT 500, -- Distance (cm) NEU
-    ADD COLUMN radius smallint NOT NULL DEFAULT 100, -- Radius (cm) NEU
-    -- ADD COLUMN geometry public.GEOMETRY(POINT, 4326) NULL, -- Geometry (Polygon) NEU
-    ADD COLUMN has_entities BOOLEAN DEFAULT TRUE -- Sub Plot is marked as "has no entities". 
+	ADD COLUMN azimuth smallint NOT NULL CHECK (azimuth >= 0 AND azimuth <= 399), -- Azimuth (Gon) NEU
+    ADD COLUMN distance smallint NOT NULL  DEFAULT 500 CHECK (distance >= 0 AND distance <= 1000), -- Distance (cm) NEU
+    ADD COLUMN radius smallint NOT NULL DEFAULT 100 CHECK (radius >= 1 AND radius <= 1000), -- Radius (cm) NEU
+    ADD COLUMN has_entities BOOLEAN DEFAULT TRUE,
+	ADD COLUMN center_location public.GEOMETRY(Polygon, 4326) NULL;
