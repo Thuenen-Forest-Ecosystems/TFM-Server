@@ -89,12 +89,12 @@ ALTER TABLE plot
 	ADD COLUMN harvest_restriction INTEGER NULL, -- ne TODO: Lookup Table & enum
 	--ADD COLUMN harvest_restriction_source INTEGER NULL, -- NEU: NeUrsacheB
 	ADD COLUMN marker_status INTEGER NULL, -- perm lookup_marker_status
-	ADD COLUMN marker_azimuth INTEGER NULL CHECK (marker_azimuth >= 0 AND marker_azimuth <= 400), -- perm_azi: 
+	ADD COLUMN marker_azimuth INTEGER NULL CHECK (marker_azimuth >= 0 AND marker_azimuth <= 399), -- perm_azi: 
 	ADD COLUMN marker_distance SMALLINT NULL CHECK (marker_distance >= 0 AND marker_distance <= 15000), -- perm_hori Zentimeter 
 	ADD COLUMN marker_profile INTEGER NULL, -- perm_profil -- lookup_marker_profile
 	ADD COLUMN terrain_form INTEGER NULL, -- gform -- lookup_terrain_form
 	ADD COLUMN terrain_slope SMALLINT NULL CHECK (terrain_slope >= 0 AND terrain_slope <= 90), -- gneig [Grad]
-	ADD COLUMN terrain_exposure SMALLINT NULL CHECK (terrain_exposure >= 0 AND terrain_exposure <= 400), -- gexp [Gon]
+	ADD COLUMN terrain_exposure SMALLINT NULL CHECK (terrain_exposure >= 0 AND terrain_exposure <= 399), -- gexp [Gon]
 	ADD COLUMN management_type INTEGER NULL, -- be - lookup_management_type
 	ADD COLUMN harvesting_method INTEGER NULL, -- ernte (x3_ernte) - lookup_harvesting_method
 	ADD COLUMN biotope INTEGER NULL, -- biotop (x3_biotop) - lookup_biotope
@@ -316,7 +316,7 @@ ALTER TABLE plot_coordinates ADD CONSTRAINT FK_PlotPosition_Plot FOREIGN KEY (pl
 CREATE TABLE plot_landmark (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot_landmark 
     ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN landmark_azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 400), -- mark_azi [Gon]
+	ADD COLUMN landmark_azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 399), -- mark_azi [Gon]
 	ADD COLUMN landmark_distance SMALLINT NOT NULL CHECK (landmark_distance > 0), -- mark_hori [cm]
 	ADD COLUMN landmark_note TEXT NOT NULL; -- mark_beschreibung
 
@@ -333,7 +333,7 @@ ALTER TABLE tree
     ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN tree_marked boolean NOT NULL DEFAULT false,
 	ADD COLUMN tree_status INTEGER NULL,
-	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND azimuth <= 400), -- [Gon]
+	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND azimuth <= 399), -- [Gon]
 	ADD COLUMN distance smallint NOT NULL CHECK (distance >= 0), -- [cm]
 	-- ADD COLUMN geometry public.GEOMETRY(POINT, 4326) NULL,
 	ADD COLUMN tree_species INTEGER NULL,
@@ -341,9 +341,9 @@ ALTER TABLE tree
 	ADD COLUMN dbh_height smallint NULL DEFAULT 130,
 	ADD COLUMN tree_height smallint NULL,
 	ADD COLUMN stem_height smallint NULL,
-	ADD COLUMN tree_height_azimuth smallint NULL CHECK (tree_height_azimuth >= 0 AND tree_height_azimuth <= 400), -- MPos_Azi [Gon]
+	ADD COLUMN tree_height_azimuth smallint NULL CHECK (tree_height_azimuth >= 0 AND tree_height_azimuth <= 399), -- MPos_Azi [Gon]
 	ADD COLUMN tree_height_distance smallint NULL CHECK (tree_height_distance >= 200 AND tree_height_distance <= 7500), -- MPos_Hori [cm] 
-	ADD COLUMN tree_age smallint NULL CHECK (tree_age >= 7 AND tree_age <= 1000), -- Alter in Jahren
+	ADD COLUMN tree_age smallint NULL CHECK (tree_age > 0 AND tree_age <= 1000), -- Alter in Jahren
 	ADD COLUMN stem_breakage INTEGER NULL DEFAULT 0, -- Kh
 	ADD COLUMN stem_form INTEGER NULL DEFAULT 0, --Kst
 	ADD COLUMN pruning INTEGER NULL, -- Ast

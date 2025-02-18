@@ -30,7 +30,7 @@ DECLARE
 BEGIN
     current_point := start_point; -- Start point is already in the correct SRID
 
-    point_array := ARRAY[current_point];
+    --point_array := ARRAY[current_point];
 
     FOR i IN 0..(jsonb_array_length(edges) - 1) LOOP
         azimuth_gon := ((edges->>i)::jsonb->>'azimuth')::numeric;
