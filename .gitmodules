@@ -1,3 +1,6 @@
-[submodule "supabase/seeds"]
-	path = supabase/seeds
+[submodule "supabase/seeds/hidden"]
+	path = supabase/seeds/hidden
+	url = https://git-dmz.thuenen.de/datenerfassungci2027/ci2027_datenerfassung/tfm-seed-intern.git
+[submodule "supabase/seeds/public"]
+	path = supabase/seeds/public
 	url = https://git-dmz.thuenen.de/datenerfassungci2027/ci2027_datenerfassung/TFM-Seed.git

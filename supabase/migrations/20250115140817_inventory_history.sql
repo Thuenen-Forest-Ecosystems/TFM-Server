@@ -36,7 +36,8 @@ ALTER TABLE cluster
 	ADD COLUMN states_affected INTEGER[] NULL, -- lookup_state
 	ADD COLUMN grid_density INTEGER NULL, -- lookup_grid_density
 	ADD COLUMN cluster_status INTEGER NULL, -- lookup_state
-	ADD COLUMN cluster_situation INTEGER NULL; -- lookup_cluster_status
+	ADD COLUMN cluster_situation INTEGER NULL,
+	ADD COLUMN inspire_grid_cell TEXT NOT NULL; -- lookup_cluster_status
 
 --ALTER TABLE cluster ADD CONSTRAINT FK_cluster_ModifiedBy
 --    FOREIGN KEY (modified_by)
