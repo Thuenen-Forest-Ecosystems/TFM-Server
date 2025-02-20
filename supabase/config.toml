@@ -8,7 +8,7 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` is always included.
-schemas = ["lookup", "lookup_external", "inventory_archive", "playground", "public", "graphql_public"]
+schemas = ["lookup", "inventory_archive", "public", "graphql_public"]
 # Extra schemas to add to the search_path of every request. `public` is always included.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
@@ -45,7 +45,7 @@ enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory. For example:
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']
-sql_paths = ['./seeds/*.sql']
+sql_paths = ['./seeds/hidden/*.sql', './seeds/public/*.sql']
 
 [realtime]
 enabled = true
