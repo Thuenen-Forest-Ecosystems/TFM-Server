@@ -8,12 +8,12 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` is always included.
-schemas = ["lookup", "inventory_archive", "public", "graphql_public"]
+schemas = ["inventory_archive", "lookup",  "public", "graphql_public"]
 # Extra schemas to add to the search_path of every request. `public` is always included.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
-max_rows = 10000
+max_rows = 1000000
 
 [api.tls]
 enabled = false
@@ -26,6 +26,10 @@ shadow_port = 54320
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
 # server_version;` on the remote database to check.
 major_version = 15
+
+[db.settings]
+max_connections = 100
+statement_timeout = 600000
 
 [db.pooler]
 enabled = false
@@ -45,7 +49,7 @@ enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory. For example:
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']
-sql_paths = ['./seeds/hidden/*.sql', './seeds/public/*.sql']
+sql_paths = ['./seeds/public/*.sql', './seeds/hidden/*.sql']
 
 [realtime]
 enabled = true
@@ -76,7 +80,7 @@ port = 54324
 [storage]
 enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
-file_size_limit = "50MiB"
+file_size_limit = "150MiB"
 
 [storage.image_transformation]
 enabled = true
