@@ -27,10 +27,6 @@ shadow_port = 54320
 # server_version;` on the remote database to check.
 major_version = 15
 
-[db.settings]
-max_connections = 100
-statement_timeout = 600000
-
 [db.pooler]
 enabled = false
 # Port to use for the local connection pooler.
