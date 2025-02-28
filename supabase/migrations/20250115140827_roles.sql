@@ -9,6 +9,8 @@ END $$;
 -- Ensure future tables in public are not accessible
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres
 REVOKE SELECT ON TABLES FROM ti_read;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 
 GRANT CONNECT ON DATABASE postgres TO ti_read;
 
@@ -19,9 +21,12 @@ GRANT USAGE ON SCHEMA lookup TO ti_read;
 GRANT SELECT ON ALL TABLES IN SCHEMA lookup TO ti_read;
 
 -- Grant access to the public schema
-GRANT USAGE ON SCHEMA public TO ti_read;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO ti_read;
-
+--GRANT USAGE ON SCHEMA public TO ti_read;
+--GRANT SELECT ON ALL TABLES IN SCHEMA public TO ti_read;
+--
 -- Ensure future tables in public are accessible
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres
-GRANT SELECT ON TABLES TO ti_read;
+--ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+--GRANT SELECT ON TABLES TO ti_read;
+
+
+

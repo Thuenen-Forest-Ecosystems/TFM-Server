@@ -17,11 +17,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION create_linestring_from_edges(edges JSONB, start_point geometry)
-RETURNS geometry AS $$
+CREATE OR REPLACE FUNCTION create_linestring_from_edges(edges JSONB, start_point public.geometry)
+RETURNS public.geometry AS $$
 DECLARE
-    point_array geometry[];
-    current_point geometry;
+    point_array public.geometry[];
+    current_point public.geometry;
     azimuth_rad float8;
     distance_cm float8;
     distance_m float8;
@@ -56,7 +56,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION update_geom_column()
 RETURNS TRIGGER AS $$
 DECLARE
-  start_point geometry;
+  start_point public.geometry;
 BEGIN
     SELECT position_mean INTO start_point
     FROM inventory_archive.position
@@ -89,12 +89,12 @@ EXECUTE PROCEDURE update_geom_column();
 CREATE OR REPLACE FUNCTION update_circle_geometry()
 RETURNS TRIGGER AS $$
 DECLARE
-    start_point geometry;
+    start_point public.geometry;
     azimuth_rad float8;
-    new_center_point geometry;
+    new_center_point public.geometry;
     distance_m float8;
 BEGIN
-    SELECT center_location::geometry INTO start_point
+    SELECT center_location::public.geometry INTO start_point
     FROM inventory_archive.plot_coordinates
     WHERE id = NEW.plot_coordinates_id;
 
@@ -111,7 +111,7 @@ BEGIN
     new_center_point := ST_Project(start_point, distance_m, azimuth_rad);
     
     -- Create buffer using geography type for true circular shape
-    NEW.center_location := ST_Buffer(new_center_point::geography, NEW.radius)::geometry;
+    NEW.center_location := ST_Buffer(new_center_point::geography, NEW.radius)::public.geometry;
 
     RETURN NEW;
 END;

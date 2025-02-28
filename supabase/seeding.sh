@@ -29,8 +29,8 @@ PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
     -d postgres \
     -n lookup \
     --inserts \
-    --rows-per-insert=10000 \
     --data-only \
+    --rows-per-insert=10000 \
     --enable-row-security \
     > seeds/public/lookup.sql
 clean_sql_file seeds/public/lookup.sql
@@ -69,8 +69,6 @@ for table in plot_coordinates plot_landmark position subplots_relative_position
 done;
 
 
-# make directory if it doesn't exist
-mkdir -p seeds/public/plot
 # split into smaller files
 split -l $CHUNK_SIZE seeds/public/plot.sql seeds/public/plot_part_
 # Add necessary PostgreSQL headers to each chunk
@@ -81,8 +79,7 @@ done;
 # remove base file
 rm seeds/public/plot.sql
 
-# make directory if it doesn't exist
-mkdir -p seeds/public/tree
+
 # split into smaller files
 split -l $CHUNK_SIZE seeds/public/tree.sql seeds/public/tree_part_
 # Add necessary PostgreSQL headers to each chunk
