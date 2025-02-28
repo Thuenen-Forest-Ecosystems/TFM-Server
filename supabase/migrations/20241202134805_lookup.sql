@@ -93,3 +93,10 @@ ALTER TABLE lookup_biosphaere ADD COLUMN bfn_code varchar(20) NULL;
 CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_gemeinde (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+
+CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+
+
+CREATE TABLE lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup_interval (code, name_de, name_en, interval) VALUES (2027, '2027', '2027', ARRAY['ci2027']);
+INSERT INTO lookup_interval (code, name_de, name_en, interval) VALUES (2022, '2022', '2022', ARRAY['ci2022']);

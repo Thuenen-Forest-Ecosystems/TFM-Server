@@ -13,24 +13,24 @@ bucket_definitions:
   #country_admin:
   #  parameters: SELECT admin_countries FROM "public"."users_profile" WHERE id = bucket.user_id
   #  data:
-  #    - SELECT * FROM "ci2027"."cluster" where state_responsible IN bucket.admin_countries
+  #    - SELECT * FROM "lookup"."cluster" where state_responsible IN bucket.admin_countries
 
   user_tables:
     parameters: SELECT request.user_id() as user_id
     data:
-      - SELECT * FROM "ci2027"."cluster" where bucket.user_id IN selectable_by
-      - SELECT *, ST_AsGeoJSON(center_location) as center_location_json, st_x(center_location) as longitude, st_y(center_location) as latitude FROM "ci2027"."plot" where bucket.user_id IN selectable_by
-      - SELECT * FROM "ci2027"."tree" WHERE bucket.user_id IN selectable_by
-      - SELECT * FROM "ci2027"."deadwood" WHERE bucket.user_id IN selectable_by
+      - SELECT * FROM "inventory_archive"."cluster" where bucket.user_id IN selectable_by
+      - SELECT *, ST_AsGeoJSON(center_location) as center_location_json, st_x(center_location) as longitude, st_y(center_location) as latitude FROM "inventory_archive"."plot" where bucket.user_id IN selectable_by
+      - SELECT * FROM "inventory_archive"."tree" WHERE bucket.user_id IN selectable_by
+      - SELECT * FROM "inventory_archive"."deadwood" WHERE bucket.user_id IN selectable_by
  
-      #- SELECT * FROM "ci2027"."plot"
-      #- SELECT * FROM "ci2027"."plot_location"
-      #- SELECT * FROM "ci2027"."position"
-      #- SELECT * FROM "ci2027"."regeneration"
-      #- SELECT * FROM "ci2027"."structure_lt4m"
-      #- SELECT * FROM "ci2027"."tree"
-      #- SELECT * FROM "ci2027"."deadwood"
-      #- SELECT * FROM "ci2027"."edges"
+      #- SELECT * FROM "lookup"."plot"
+      #- SELECT * FROM "lookup"."plot_location"
+      #- SELECT * FROM "lookup"."position"
+      #- SELECT * FROM "lookup"."regeneration"
+      #- SELECT * FROM "lookup"."structure_lt4m"
+      #- SELECT * FROM "lookup"."tree"
+      #- SELECT * FROM "lookup"."deadwood"
+      #- SELECT * FROM "lookup"."edges"
 
   user_profile:
     parameters:
@@ -47,46 +47,46 @@ bucket_definitions:
     data:
       - SELECT * FROM "public"."schemas"
       # Lookup Tables
-      - SELECT * FROM "ci2027"."lookup_browsing"
-      - SELECT * FROM "ci2027"."lookup_cluster_situation"
-      - SELECT * FROM "ci2027"."lookup_cluster_status"
-      - SELECT * FROM "ci2027"."lookup_dead_wood_type"
-      - SELECT * FROM "ci2027"."lookup_decomposition"
-      - SELECT * FROM "ci2027"."lookup_edge_status"
-      - SELECT * FROM "ci2027"."lookup_edge_type"
-      - SELECT * FROM "ci2027"."lookup_elevation_level"
-      - SELECT * FROM "ci2027"."lookup_exploration_instruction"
-      - SELECT * FROM "ci2027"."lookup_ffh_forest_type_field"
-      - SELECT * FROM "ci2027"."lookup_forest_community_field"
-      - SELECT * FROM "ci2027"."lookup_forest_office"
-      - SELECT * FROM "ci2027"."lookup_forest_status"
-      - SELECT * FROM "ci2027"."lookup_gnss_quality"
-      - SELECT * FROM "ci2027"."lookup_grid_density"
-      - SELECT * FROM "ci2027"."lookup_growth_district"
-      - SELECT * FROM "ci2027"."lookup_harvesting_method"
-      - SELECT * FROM "ci2027"."lookup_land_use"
-      - SELECT * FROM "ci2027"."lookup_management_type"
-      - SELECT * FROM "ci2027"."lookup_marker_profile"
-      - SELECT * FROM "ci2027"."lookup_marker_status"
-      - SELECT * FROM "ci2027"."lookup_property_size_class"
-      - SELECT * FROM "ci2027"."lookup_property_type"
-      - SELECT * FROM "ci2027"."lookup_pruning"
-      - SELECT * FROM "ci2027"."lookup_sampling_stratum"
-      - SELECT * FROM "ci2027"."lookup_stand_dev_phase"
-      - SELECT * FROM "ci2027"."lookup_stand_layer"
-      - SELECT * FROM "ci2027"."lookup_stand_structure"
-      - SELECT * FROM "ci2027"."lookup_state"
-      - SELECT * FROM "ci2027"."lookup_stem_breakage"
-      - SELECT * FROM "ci2027"."lookup_stem_form"
-      - SELECT * FROM "ci2027"."lookup_template"
-      - SELECT * FROM "ci2027"."lookup_terrain"
-      - SELECT * FROM "ci2027"."lookup_terrain_form"
-      - SELECT * FROM "ci2027"."lookup_tree_size_class"
-      - SELECT * FROM "ci2027"."lookup_tree_species"
-      - SELECT * FROM "ci2027"."lookup_tree_species_group"
-      - SELECT * FROM "ci2027"."lookup_tree_status"
-      - SELECT * FROM "ci2027"."lookup_trees_less_4meter_count_factor"
-      - SELECT * FROM "ci2027"."lookup_trees_less_4meter_layer"
-      - SELECT * FROM "ci2027"."lookup_trees_less_4meter_mirrored"
-      - SELECT * FROM "ci2027"."lookup_trees_less_4meter_origin"
-      - SELECT * FROM "ci2027"."lookup_use_restriction"
+      - SELECT * FROM "lookup"."lookup_browsing"
+      - SELECT * FROM "lookup"."lookup_cluster_situation"
+      - SELECT * FROM "lookup"."lookup_cluster_status"
+      - SELECT * FROM "lookup"."lookup_dead_wood_type"
+      - SELECT * FROM "lookup"."lookup_decomposition"
+      - SELECT * FROM "lookup"."lookup_edge_status"
+      - SELECT * FROM "lookup"."lookup_edge_type"
+      - SELECT * FROM "lookup"."lookup_elevation_level"
+      - SELECT * FROM "lookup"."lookup_exploration_instruction"
+      - SELECT * FROM "lookup"."lookup_ffh_forest_type_field"
+      - SELECT * FROM "lookup"."lookup_forest_community_field"
+      - SELECT * FROM "lookup"."lookup_forest_office"
+      - SELECT * FROM "lookup"."lookup_forest_status"
+      - SELECT * FROM "lookup"."lookup_gnss_quality"
+      - SELECT * FROM "lookup"."lookup_grid_density"
+      - SELECT * FROM "lookup"."lookup_growth_district"
+      - SELECT * FROM "lookup"."lookup_harvesting_method"
+      - SELECT * FROM "lookup"."lookup_land_use"
+      - SELECT * FROM "lookup"."lookup_management_type"
+      - SELECT * FROM "lookup"."lookup_marker_profile"
+      - SELECT * FROM "lookup"."lookup_marker_status"
+      - SELECT * FROM "lookup"."lookup_property_size_class"
+      - SELECT * FROM "lookup"."lookup_property_type"
+      - SELECT * FROM "lookup"."lookup_pruning"
+      - SELECT * FROM "lookup"."lookup_sampling_stratum"
+      - SELECT * FROM "lookup"."lookup_stand_dev_phase"
+      - SELECT * FROM "lookup"."lookup_stand_layer"
+      - SELECT * FROM "lookup"."lookup_stand_structure"
+      - SELECT * FROM "lookup"."lookup_state"
+      - SELECT * FROM "lookup"."lookup_stem_breakage"
+      - SELECT * FROM "lookup"."lookup_stem_form"
+      - SELECT * FROM "lookup"."lookup_template"
+      - SELECT * FROM "lookup"."lookup_terrain"
+      - SELECT * FROM "lookup"."lookup_terrain_form"
+      - SELECT * FROM "lookup"."lookup_tree_size_class"
+      - SELECT * FROM "lookup"."lookup_tree_species"
+      - SELECT * FROM "lookup"."lookup_tree_species_group"
+      - SELECT * FROM "lookup"."lookup_tree_status"
+      - SELECT * FROM "lookup"."lookup_trees_less_4meter_count_factor"
+      - SELECT * FROM "lookup"."lookup_trees_less_4meter_layer"
+      - SELECT * FROM "lookup"."lookup_trees_less_4meter_mirrored"
+      - SELECT * FROM "lookup"."lookup_trees_less_4meter_origin"
+      - SELECT * FROM "lookup"."lookup_use_restriction"

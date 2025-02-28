@@ -129,9 +129,10 @@ ALTER TABLE plot
 	ADD COLUMN harvest_restriction_wetness boolean NULL DEFAULT FALSE, -- NeGelEig - Gelände - Ursache der Nutzungseinschränkung 14-Geländeeigenschaften, Nassstandort
 	ADD COLUMN harvest_restriction_low_yield boolean NULL DEFAULT FALSE, -- NeGerErtrag - geringer Ertrag - Ursache der Nutzungseinschränkung 15-geringer Ertragserwartungen (dGZ < 1 m³/(ha*a))
 	ADD COLUMN harvest_restriction_private_conservation boolean NULL DEFAULT FALSE, -- NeEigenbin - Eigenbindung - Ursache der Nutzungseinschränkung 16-Schutzflächen in Eigenbindung (z.B. Naturreservate)
-	ADD COLUMN harvest_restriction_other_internalcause boolean NULL DEFAULT FALSE -- NeSIBUrsach - s. innerbetriebl. Urs. - Ursache der Nutzungseinschränkung 19-sonstige innerbetriebliche Ursachen
-
-	; -- schile4_schi
+	ADD COLUMN harvest_restriction_other_internalcause boolean NULL DEFAULT FALSE, -- NeSIBUrsach - s. innerbetriebl. Urs. - Ursache der Nutzungseinschränkung 19-sonstige innerbetriebliche Ursachen
+	
+	ADD COLUMN usage_type INTEGER NULL -- NutzArt
+	;
 
 
 --ALTER TABLE plot ADD CONSTRAINT FK_plot_ModifiedBy
@@ -295,6 +296,13 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterLayer FOREIGN KEY (
 	REFERENCES lookup.lookup_trees_less_4meter_layer (code) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
+
+-- usage_type
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupUsageType FOREIGN KEY (usage_type)
+	REFERENCES lookup.lookup_usage_type (code) MATCH SIMPLE
+	ON UPDATE NO ACTION
+	ON DELETE NO ACTION;
+
 
 ------------------------------------------------- PLOT COORDINATES -------------------------------------------------
 
