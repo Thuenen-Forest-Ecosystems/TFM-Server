@@ -1,5 +1,6 @@
 -- Create publication for powersync
 DROP PUBLICATION IF EXISTS powersync;
+
 CREATE PUBLICATION powersync;
 
 CREATE OR REPLACE FUNCTION add_all_tables_to_publication(publication_name TEXT, schema_name TEXT)
@@ -18,7 +19,8 @@ BEGIN
     END LOOP;
 END $$ LANGUAGE plpgsql;
 
-SELECT add_all_tables_to_publication('powersync', 'inventory_archive');
+SELECT add_all_tables_to_publication('powersync', 'inventory');
 SELECT add_all_tables_to_publication('powersync', 'lookup');
-SELECT add_all_tables_to_publication('powersync', 'lookup_external');
 ALTER PUBLICATION powersync ADD TABLE public.schemas;
+ALTER PUBLICATION powersync ADD TABLE public.users_profile;
+ALTER PUBLICATION powersync ADD TABLE public.organizations;

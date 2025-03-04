@@ -18,10 +18,10 @@ bucket_definitions:
   user_tables:
     parameters: SELECT request.user_id() as user_id
     data:
-      - SELECT * FROM "inventory_archive"."cluster" where bucket.user_id IN selectable_by
-      - SELECT *, ST_AsGeoJSON(center_location) as center_location_json, st_x(center_location) as longitude, st_y(center_location) as latitude FROM "inventory_archive"."plot" where bucket.user_id IN selectable_by
-      - SELECT * FROM "inventory_archive"."tree" WHERE bucket.user_id IN selectable_by
-      - SELECT * FROM "inventory_archive"."deadwood" WHERE bucket.user_id IN selectable_by
+      - SELECT * FROM "inventory"."plot" where bucket.user_id IN selectable_by
+      #- SELECT *, ST_AsGeoJSON(center_location) as center_location_json, st_x(center_location) as longitude, st_y(center_location) as latitude FROM "inventory_archive"."plot" where bucket.user_id IN selectable_by
+      #- SELECT * FROM "inventory_archive"."tree" WHERE bucket.user_id IN selectable_by
+      #- SELECT * FROM "inventory_archive"."deadwood" WHERE bucket.user_id IN selectable_by
  
       #- SELECT * FROM "lookup"."plot"
       #- SELECT * FROM "lookup"."plot_location"
@@ -38,14 +38,15 @@ bucket_definitions:
     data:
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.user_id
 
-  supervisor_profile:
-    parameters: SELECT supervisor_id FROM "public"."users_profile" WHERE user_id = request.user_id()
-    data:
-      - SELECT * FROM "public"."users_profile" WHERE bucket.supervisor_id = id
+  #supervisor_profile:
+  #  parameters: SELECT supervisor_id FROM "public"."users_profile" WHERE user_id = request.user_id()
+  #  data:
+  #    - SELECT * FROM "public"."users_profile" WHERE bucket.supervisor_id = id
 
   global:
     data:
       - SELECT * FROM "public"."schemas"
+      - SELECT * FROM "public"."organizations"
       # Lookup Tables
       - SELECT * FROM "lookup"."lookup_browsing"
       - SELECT * FROM "lookup"."lookup_cluster_situation"
