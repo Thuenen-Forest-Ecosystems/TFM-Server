@@ -12,51 +12,50 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA inventory GRANT ALL ON SEQU
 
 SET search_path TO inventory;
 
-create table "plot" (
+create table "records" (
     "id" uuid primary key default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "data" json not null,
     "schema" uuid not null
 );
 
-COMMENT ON TABLE "plot" IS 'Plots';
+COMMENT ON TABLE "records" IS 'Plots';
 
-alter table "plot" enable row level security;
+alter table "records" enable row level security;
 
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_Schema FOREIGN KEY (schema) REFERENCES public.schemas(id) ON DELETE CASCADE;
+ALTER TABLE records ADD CONSTRAINT FK_Records_Schema FOREIGN KEY (schema) REFERENCES public.schemas(id) ON DELETE CASCADE;
 
 
-create table "plot_changes" (
+create table "record_changes" (
     "id" uuid primary key default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "data" json not null,
     "schema" uuid not null
 );
 
-COMMENT ON TABLE "plot_changes" IS 'Änderungen an Plots';
+COMMENT ON TABLE "record_changes" IS 'Änderungen an Plots';
 
 
-alter table "plot_changes" enable row level security;
+alter table "record_changes" enable row level security;
 
-ALTER TABLE plot_changes ADD CONSTRAINT FK_PlotChanges_Schema FOREIGN KEY (schema) REFERENCES public.schemas(id) ON DELETE CASCADE;
+ALTER TABLE record_changes ADD CONSTRAINT FK_RecordChanges_Schema FOREIGN KEY (schema) REFERENCES public.schemas(id) ON DELETE CASCADE;
 
 
 --- Backout plot to backup_changes every time plot updates
-CREATE OR REPLACE FUNCTION inventory.handle_plot_changes()
+CREATE OR REPLACE FUNCTION inventory.handle_record_changes()
 returns trigger
 language plpgsql
 security definer set search_path = ''
 as $$
 begin
-  insert into inventory.plot_changes (data, schema) values (old.data, old.schema);
+  insert into inventory.record_changes (data, schema) values (old.data, old.schema);
   return new;
 end;
 $$;
 
 -- trigger the function every time a plot is updated
-DROP TRIGGER IF EXISTS on_plot_updated ON inventory.plot;
-create trigger on_plot_updated
-  after update on inventory.plot
-  for each row execute procedure inventory.handle_plot_changes();
+DROP TRIGGER IF EXISTS on_record_updated ON inventory.records;
 
-
+create trigger on_record_updated
+  after update on inventory.records
+  for each row execute procedure inventory.handle_record_changes();
