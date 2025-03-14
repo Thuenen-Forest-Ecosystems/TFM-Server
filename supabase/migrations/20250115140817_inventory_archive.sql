@@ -145,8 +145,8 @@ ALTER TABLE plot
 
 --- make id unique
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS plot_name integer NOT NULL CHECK (plot_name >= 1 AND plot_name <= 4);
-ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL;
-ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL;
+ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL REFERENCES cluster (cluster_name);
+ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL REFERENCES cluster (id);
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Unique UNIQUE (cluster_name, plot_name);
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster_Unique UNIQUE (cluster_name, plot_name);
 
@@ -391,6 +391,7 @@ ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_Prunging FOREIGN KEY (pruning)
 	REFERENCES lookup.lookup_pruning (code) MATCH SIMPLE;
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_StandLayer FOREIGN KEY (stand_layer)
 	REFERENCES lookup.lookup_stand_layer (code) MATCH SIMPLE;
+
 
 
 ------------------------------------------------- POSITION -------------------------------------------------

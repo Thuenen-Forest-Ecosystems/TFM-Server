@@ -1,17 +1,5 @@
 SET search_path TO public;
 
--- CREATE troop table
--- https://supabase.com/docs/guides/database/postgres/custom-claims-and-role-based-access-control-rbac?queryGroups=language&language=plpgsql
--- https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook
-CREATE TABLE IF NOT EXISTS troop (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    name text NULL,
-    user_id uuid NOT NULL
-);
-
-ALTER TABLE troop ENABLE ROW LEVEL SECURITY;
-
 -- Create the auth hook function
 create or replace function public.custom_access_token_hook(event jsonb)
 returns jsonb
@@ -20,18 +8,38 @@ stable
 as $$
   declare
     claims jsonb;
-    troop_id uuid;
+    claim_troop_id uuid;
+    claim_state_responsible smallint;
+    claim_is_admin BOOLEAN;
   begin
+
+    --
+    select state_responsible, is_admin into claim_state_responsible, claim_is_admin from public.users_profile where id = (event->>'user_id')::uuid;
+
     -- Fetch the user role in the troop table
-    select id into troop_id from public.troop where user_id = (event->>'user_id')::uuid;
+    select id into claim_troop_id from public.troop where user_id = (event->>'user_id')::uuid;
 
     claims := event->'claims';
 
-    if troop_id is not null then
+    if claim_troop_id is not null then
       -- Set the claim
-      claims := jsonb_set(claims, '{troop_id}', to_jsonb(troop_id));
+      claims := jsonb_set(claims, '{troop_id}', to_jsonb(claim_troop_id));
     else
       claims := jsonb_set(claims, '{troop_id}', 'null');
+    end if;
+
+    if claim_state_responsible is not null then
+      -- Set the claim
+      claims := jsonb_set(claims, '{state_responsible}', to_jsonb(claim_state_responsible));
+    else
+      claims := jsonb_set(claims, '{state_responsible}', 'null');
+    end if;
+
+    if claim_is_admin is not null then
+      -- Set the claim
+      claims := jsonb_set(claims, '{is_admin}', to_jsonb(claim_is_admin));
+    else
+      claims := jsonb_set(claims, '{is_admin}', 'null');
     end if;
 
     -- Update the 'claims' object in the original event
@@ -43,6 +51,10 @@ as $$
 $$;
 
 grant usage on schema public to supabase_auth_admin;
+
+grant select on table public.users_profile to supabase_auth_admin;
+grant select on table public.troop to supabase_auth_admin;
+
 
 grant execute
   on function public.custom_access_token_hook

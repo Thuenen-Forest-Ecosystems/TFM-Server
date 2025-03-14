@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS lookup_tree_species_group (LIKE lookup.lookup_TEMPLAT
 CREATE TABLE IF NOT EXISTS lookup_tree_species (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 ALTER TABLE lookup_tree_species ADD COLUMN taxonomy_order varchar(1) NULL;
 ALTER TABLE lookup_tree_species ADD COLUMN height_group varchar(20) NULL;
+ALTER TABLE lookup_tree_species ADD COLUMN genus text NULL;
+ALTER TABLE lookup_tree_species ADD COLUMN species text NULL;
 
 CREATE TABLE IF NOT EXISTS lookup_tree_status (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_basal_area_factor (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -98,5 +100,3 @@ CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
 
 CREATE TABLE lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-INSERT INTO lookup_interval (code, name_de, name_en, interval) VALUES (2027, '2027', '2027', ARRAY['ci2027']);
-INSERT INTO lookup_interval (code, name_de, name_en, interval) VALUES (2022, '2022', '2022', ARRAY['ci2022']);

@@ -10,35 +10,17 @@
 # https://docs.powersync.com/usage/use-case-examples/custom-types-arrays-and-json
 
 bucket_definitions:
-
-  cluster:
+  troop:
     parameters:
-      - SELECT state_responsible FROM "public"."users_profile" WHERE id = request.user_id()
+      - SELECT request.jwt() ->> 'troop_id' as troop_id
     data:
-      - SELECT * FROM "inventory_archive"."cluster" where state_responsible = bucket.state_responsible
-  plot:
-    parameters:
-      - SELECT plot_id FROM "public"."troop_permission" WHERE user_id = request.jwt() -->> 'troop_id'
-    data:
-      - SELECT * FROM "inventory_archive"."plot" where id = bucket.plot_id
-      
+      - SELECT * FROM "public"."troop" WHERE id = bucket.troop_id
 
   user_profile:
     parameters:
       - SELECT request.user_id() as user_id
     data:
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.user_id
-  
-  #schemas:
-  #  parameters:
-  #    - SELECT state_responsible FROM "public"."users_profile" WHERE id = request.user_id()
-  #  data:
-  #    - SELECT * FROM "public"."schemas" WHERE state_responsible = bucket.state_responsible
-
-  #supervisor_profile:
-  #  parameters: SELECT supervisor_id FROM "public"."users_profile" WHERE user_id = request.user_id()
-  #  data:
-  #    - SELECT * FROM "public"."users_profile" WHERE bucket.supervisor_id = id
 
   global:
     data:
@@ -47,7 +29,7 @@ bucket_definitions:
       - SELECT * FROM "public"."users_profile"
 
       # Lookup Tables
-      #- SELECT * FROM "lookup"."lookup_browsing"
+      - SELECT * FROM "lookup"."lookup_browsing"
       - SELECT * FROM "lookup"."lookup_cluster_situation"
       - SELECT * FROM "lookup"."lookup_cluster_status"
       - SELECT * FROM "lookup"."lookup_dead_wood_type"
@@ -56,8 +38,8 @@ bucket_definitions:
       - SELECT * FROM "lookup"."lookup_edge_type"
       - SELECT * FROM "lookup"."lookup_elevation_level"
       - SELECT * FROM "lookup"."lookup_exploration_instruction"
-      - SELECT * FROM "lookup"."lookup_ffh_forest_type_field"
-      - SELECT * FROM "lookup"."lookup_forest_community_field"
+      - SELECT * FROM "lookup"."lookup_ffh_forest_type"
+      - SELECT * FROM "lookup"."lookup_forest_community"
       - SELECT * FROM "lookup"."lookup_forest_office"
       - SELECT * FROM "lookup"."lookup_forest_status"
       - SELECT * FROM "lookup"."lookup_gnss_quality"
@@ -89,4 +71,4 @@ bucket_definitions:
       - SELECT * FROM "lookup"."lookup_trees_less_4meter_layer"
       - SELECT * FROM "lookup"."lookup_trees_less_4meter_mirrored"
       - SELECT * FROM "lookup"."lookup_trees_less_4meter_origin"
-      - SELECT * FROM "lookup"."lookup_use_restriction"
+      - SELECT * FROM "lookup"."lookup_usage_type"

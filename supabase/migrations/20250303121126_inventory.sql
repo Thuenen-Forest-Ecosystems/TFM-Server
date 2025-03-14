@@ -15,6 +15,7 @@ SET search_path TO inventory;
 create table "records" (
     "id" uuid primary key default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
+    "updated_by" uuid not null DEFAULT auth.uid(),
     "data" json not null,
     "schema" uuid not null
 );
@@ -29,6 +30,7 @@ ALTER TABLE records ADD CONSTRAINT FK_Records_Schema FOREIGN KEY (schema) REFERE
 create table "record_changes" (
     "id" uuid primary key default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
+    "updated_by" uuid not null,
     "data" json not null,
     "schema" uuid not null
 );
@@ -48,7 +50,8 @@ language plpgsql
 security definer set search_path = ''
 as $$
 begin
-  insert into inventory.record_changes (data, schema) values (old.data, old.schema);
+  INSERT INTO inventory.record_changes (updated_by, data, schema)
+  VALUES (NEW.updated_by, NEW.data, NEW.schema);
   return new;
 end;
 $$;
