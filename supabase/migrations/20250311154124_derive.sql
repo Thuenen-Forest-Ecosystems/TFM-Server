@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS table_TEMPLATE (
 );
 
 
+
 CREATE TABLE derived_deadwood (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE derived_deadwood
     ADD COLUMN deadwood_id uuid REFERENCES inventory_archive.deadwood(id) NOT NULL,
@@ -31,3 +32,4 @@ ALTER TABLE derived_deadwood
 
 ---RLS
 ALTER TABLE derived_deadwood ENABLE ROW LEVEL SECURITY;
+ALTER TABLE table_TEMPLATE ENABLE ROW LEVEL SECURITY;

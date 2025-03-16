@@ -17,7 +17,7 @@ as $$
     select state_responsible, is_admin into claim_state_responsible, claim_is_admin from public.users_profile where id = (event->>'user_id')::uuid;
 
     -- Fetch the user role in the troop table
-    select id into claim_troop_id from public.troop where user_id = (event->>'user_id')::uuid;
+    select id into claim_troop_id from public.troop where (event->>'user_id')::uuid = ANY(user_ids);
 
     claims := event->'claims';
 

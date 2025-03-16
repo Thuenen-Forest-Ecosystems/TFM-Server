@@ -100,3 +100,4 @@ CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
 
 CREATE TABLE lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);

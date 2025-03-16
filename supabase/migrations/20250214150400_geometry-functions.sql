@@ -123,3 +123,50 @@ CREATE TRIGGER update_subplot_trigger
 BEFORE UPDATE OR INSERT ON inventory_archive.subplots_relative_position
 FOR EACH ROW
 EXECUTE FUNCTION update_circle_geometry();
+
+
+-- UPDATE TREE_LOCATION ON TREE UPDATE OR INSERT --
+
+CREATE OR REPLACE FUNCTION inventory_archive.update_tree_location()
+RETURNS TRIGGER AS $$
+DECLARE
+    start_point public.geometry;
+    azimuth_rad float8;
+    new_center_point public.geometry;
+    distance_m float8;
+BEGIN
+    RAISE NOTICE 'plot_id: %', NEW."plot_id";
+
+    SELECT center_location::public.geometry INTO start_point
+    FROM inventory_archive.plot_coordinates
+    WHERE plot_id = NEW."plot_id";
+
+    IF start_point IS NULL THEN
+        RAISE NOTICE 'No start point found for plot_coordinates_id: %', NEW."plot_id";
+        RETURN NEW;
+    END IF;
+
+    -- Calculate in WGS84
+    azimuth_rad := radians_from_gon(CAST(NEW.azimuth AS float8));
+    distance_m := NEW.distance / 100.0;  -- Convert cm to m
+    
+    -- Use ST_Project which handles geodetic calculations
+     new_center_point := ST_Project(start_point, distance_m, azimuth_rad);
+
+    INSERT INTO inventory_archive.tree_coordinates (tree_id, tree_location)
+    VALUES (NEW.id, new_center_point)
+    ON CONFLICT (tree_id) 
+    DO UPDATE SET tree_location = EXCLUDED.tree_location;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_tree_location_trigger ON inventory_archive.tree;
+
+CREATE TRIGGER update_tree_location_trigger
+AFTER UPDATE OR INSERT ON inventory_archive.tree
+FOR EACH ROW
+EXECUTE FUNCTION inventory_archive.update_tree_location();
+
+
