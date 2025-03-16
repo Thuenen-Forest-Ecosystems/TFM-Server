@@ -145,8 +145,8 @@ ALTER TABLE plot
 
 --- make id unique
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS plot_name integer NOT NULL CHECK (plot_name >= 1 AND plot_name <= 4);
-ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL;
-ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL;
+ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL REFERENCES cluster (cluster_name);
+ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL REFERENCES cluster (id);
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Unique UNIQUE (cluster_name, plot_name);
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster_Unique UNIQUE (cluster_name, plot_name);
 
@@ -392,6 +392,16 @@ ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_Prunging FOREIGN KEY (pruning)
 ALTER TABLE tree ADD CONSTRAINT FK_WzpTree_StandLayer FOREIGN KEY (stand_layer)
 	REFERENCES lookup.lookup_stand_layer (code) MATCH SIMPLE;
 
+------------------------------------------------- Tree Coordinates -------------------------------------------------
+
+CREATE TABLE tree_coordinates (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE tree_coordinates
+	ADD COLUMN tree_id uuid NOT NULL REFERENCES tree (id) UNIQUE,
+	ADD COLUMN tree_location public.GEOMETRY(Point, 4326) NOT NULL;
+
+-- remove intkey column
+ALTER TABLE tree_coordinates DROP COLUMN IF EXISTS intkey;
+
 
 ------------------------------------------------- POSITION -------------------------------------------------
 CREATE TABLE position (LIKE table_TEMPLATE INCLUDING ALL);
@@ -470,6 +480,31 @@ ALTER TABLE structure_lt4m ADD CONSTRAINT FK_StructureLt4m_LookupTreeSpecies FOR
     REFERENCES lookup.lookup_tree_species (code);
 ALTER TABLE structure_lt4m ADD CONSTRAINT FK_StructureLt4m_LookupLess4Origin FOREIGN KEY (regeneration_type)
     REFERENCES lookup.lookup_trees_less_4meter_origin (code);
+
+------------------------------------------------- STRUCTURE GREATER THAN 8 METER -------------------------------------------------
+CREATE TABLE structure_gt4m (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE structure_gt4m 
+    ADD COLUMN plot_id uuid NOT NULL,
+	ADD COLUMN tree_species SMALLINT NOT NULL, --Ba
+  	ADD COLUMN stock_layer SMALLINT NOT NULL, --Schi, see lookup table bwi.xyk.x_Schi, ungleich stand_layer (vormals Bs)
+	ADD COLUMN count SMALLINT NOT NULL, -- Anz,
+  	ADD COLUMN is_mirrored BOOLEAN NOT NULL; --Sp
+
+
+COMMENT ON TABLE structure_gt4m IS 'Winkelzählprobe mit Zählfaktor 1 oder 2 für die Bestockungsaufnahme - Bäume ab 4 m Höhe';
+
+COMMENT ON COLUMN structure_gt4m.id IS 'Primary Key';
+COMMENT ON COLUMN structure_gt4m.plot_id IS 'Foreign Key to Plot.id';
+COMMENT ON COLUMN structure_gt4m.tree_species IS 'Baumart';
+COMMENT ON COLUMN structure_gt4m.stock_layer IS 'Bestockungsschicht';
+COMMENT ON COLUMN structure_gt4m.count IS 'Anzahl gleichartiger Bäume nach Baumart und Bestockungsschicht';
+COMMENT ON COLUMN structure_gt4m.is_mirrored IS 'Manuelle Spiegelung bei WZP1/2  (Bäume über 4 m Höhe)';
+
+ALTER TABLE structure_gt4m ADD CONSTRAINT FK_StructureGt4m_Plot FOREIGN KEY (plot_id) REFERENCES plot(id)
+	ON DELETE CASCADE;
+
+ALTER TABLE structure_gt4m ADD CONSTRAINT FK_StructureGt4m_LookupTreeSpecies FOREIGN KEY (tree_species)
+    REFERENCES lookup.lookup_tree_species (code);
 
 ------------------------------------------------- DEADWOOD -------------------------------------------------
 CREATE TABLE deadwood (LIKE table_TEMPLATE INCLUDING ALL);

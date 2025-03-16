@@ -52,7 +52,7 @@ for table in cluster plot deadwood edges regeneration structure_lt4m tree
 
 done;
 
-for table in plot_coordinates plot_landmark position subplots_relative_position
+for table in plot_coordinates plot_landmark position subplots_relative_position tree_coordinates
     do PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
         -h 127.0.0.1 \
         -p 54322 \

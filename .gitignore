@@ -9,3 +9,5 @@ tmp/
 .DS_Store
 
 volumes
+
+supabase/tmp
