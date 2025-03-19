@@ -34,3 +34,4 @@ DROP POLICY IF EXISTS default_select_anon ON inventory_archive.position;
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.plot_coordinates;
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.plot_landmark;
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.subplots_relative_position;
+DROP POLICY IF EXISTS default_select_anon ON inventory_archive.tree_coordinates;

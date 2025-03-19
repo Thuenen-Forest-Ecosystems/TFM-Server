@@ -26,7 +26,7 @@ bucket_definitions:
     data:
       - SELECT * FROM "public"."schemas"
       - SELECT * FROM "public"."organizations"
-      - SELECT * FROM "public"."users_profile"
+      #- SELECT * FROM "public"."users_profile"
 
       # Lookup Tables
       - SELECT * FROM "lookup"."lookup_browsing"
