@@ -123,11 +123,11 @@ revoke execute
 
 grant all
   on table public.troop
-to supabase_auth_admin;
+to supabase_auth_admin, authenticated;
 
 revoke all
   on table public.troop
-  from authenticated, anon, public;
+  from anon, public;
 
 create policy "Allow auth admin to read user roles" ON public.users_profile
 as permissive for select

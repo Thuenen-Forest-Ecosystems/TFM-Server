@@ -20,11 +20,30 @@ insert into "public"."schemas"
 ("interval_name", "title", "description", "is_visible", "bucket_schema_file_name", "bucket_plausability_file_name") values ('ci2027', 'CI 2027', 'CI 2027', true, 'ci2027_schema_0.0.1.json', 'ci2027_plausability_0.0.1.js');
 
 
+
+--- Add Organizations table that are allowed to create auth.users
+CREATE TABLE IF NOT EXISTS organizations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    apex_domain text NOT NULL,
+    created_by uuid DEFAULT auth.uid() REFERENCES auth.users(id),
+    state_responsible smallint NULL REFERENCES lookup.lookup_state (code),
+    parent_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name text NULL
+);
+
+INSERT INTO organizations (apex_domain) VALUES ('@thuenen.de');
+
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+
 -- Path: supabase/migrations/20241202134806_public.sql
 CREATE TABLE IF NOT EXISTS public.users_profile (
     id uuid not null references auth.users on delete cascade primary key,
     is_admin boolean NOT NULL DEFAULT false,
-    state_responsible smallint NULL
+    state_responsible smallint NULL,
+    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    email text NOT NULL
 );
 
 Alter Table public.users_profile enable row level security;
@@ -36,8 +55,33 @@ returns trigger
 language plpgsql
 security definer set search_path = ''
 as $$
+DECLARE
+  domain_part text;
+  org_id uuid;
 begin
-  insert into public.users_profile (id) values (new.id);
+  -- GET organization_id from the email domain
+  domain_part := '@' || split_part(new.email, '@', 2);
+  
+  -- Look up the organization_id based on the domain
+  SELECT id INTO org_id
+  FROM public.organizations
+  WHERE apex_domain like domain_part;
+
+  -- If no organization found, raise an exception
+  IF org_id IS NULL THEN
+    RAISE EXCEPTION 'No organization found for domain %', domain_part;
+  END IF;
+
+  insert into public.users_profile (id, email, organization_id) values (new.id, new.email, org_id)
+  on conflict (id) do update set email = new.email;
+
+  -- Check if the user is an admin - FIXED duplicate check
+  if new.email like '%@thuenen.de' then
+    update public.users_profile set is_admin = true where id = new.id;
+  else
+    update public.users_profile set is_admin = false where id = new.id;
+  end if;
+  -- Check if the user is a state responsible
   return new;
 end;
 $$;
@@ -47,63 +91,6 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user_profile();
-
-
-
---- Add Organizations table that are allowed to create auth.users
-CREATE TABLE IF NOT EXISTS organizations (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    apex_domain text NOT NULL UNIQUE
-);
-
-INSERT INTO organizations (apex_domain) VALUES ('@thuenen.de');
-
-ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
-
---- Insert new User in auth.users only if the email ends with apex_domain is in the organizations table
-DROP FUNCTION IF EXISTS public.check_domain_before_insert CASCADE;
-CREATE OR REPLACE FUNCTION check_domain_before_insert()
-RETURNS TRIGGER
-SECURITY DEFINER
-AS $$
-DECLARE
-    domain_to_check TEXT;
-    domain_exists BOOLEAN;
-BEGIN
-    -- Extract domain part (everything after @)
-    BEGIN
-        domain_to_check := '@' || split_part(NEW.email, '@', 2);
-        
-        -- Debug log 
-        RAISE NOTICE 'Checking domain: %', domain_to_check;
-        
-        -- Verify the domain exists in our allowed list
-        SELECT EXISTS (
-            SELECT 1 
-            FROM public.organizations 
-            WHERE apex_domain = domain_to_check
-        ) INTO domain_exists;
-        
-        IF NOT domain_exists THEN
-            RAISE EXCEPTION 'Email domain % not authorized', domain_to_check;
-        END IF;
-        
-        RETURN NEW;
-    EXCEPTION
-        WHEN OTHERS THEN
-            RAISE NOTICE 'Error in check_domain_before_insert: % %', SQLERRM, SQLSTATE;
-            RETURN NEW; -- Allow registration during debugging
-    END;
-END;
-$$ LANGUAGE plpgsql;
-
-
-DROP TRIGGER IF EXISTS before_insert_user_check ON auth.users;
-CREATE OR REPLACE TRIGGER before_insert_user_check
-BEFORE INSERT ON auth.users
-FOR EACH ROW
-EXECUTE FUNCTION check_domain_before_insert();
 
  
 -- CREATE troop table
@@ -115,7 +102,8 @@ CREATE TABLE IF NOT EXISTS troop (
     name text NULL,
     supervisor_id uuid NOT NULL REFERENCES auth.users(id),
     user_ids uuid[] NOT NULL DEFAULT '{}',
-    plot_ids uuid[] NOT NULL DEFAULT '{}'
+    plot_ids uuid[] NOT NULL DEFAULT '{}',
+    organzation_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE
 );
 
 ALTER TABLE troop ENABLE ROW LEVEL SECURITY;

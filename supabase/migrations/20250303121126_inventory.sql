@@ -17,7 +17,8 @@ create table "records" (
     "created_at" timestamp with time zone not null default now(),
     "updated_by" uuid not null DEFAULT auth.uid(),
     "data" json not null,
-    "schema" uuid not null
+    "schema" uuid not null,
+    "is_valid" boolean not null default false
 );
 
 COMMENT ON TABLE "records" IS 'Plots';
@@ -32,7 +33,8 @@ create table "record_changes" (
     "created_at" timestamp with time zone not null default now(),
     "updated_by" uuid not null,
     "data" json not null,
-    "schema" uuid not null
+    "schema" uuid not null,
+    "is_valid" boolean not null default false
 );
 
 COMMENT ON TABLE "record_changes" IS 'Änderungen an Plots';

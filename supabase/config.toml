@@ -8,9 +8,9 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` is always included.
-schemas = ["derived","inventory_archive","inventory", "lookup",  "public", "graphql_public"]
+schemas = ["derived","inventory_archive", "inventory", "lookup",  "public", "graphql_public"]
 # Extra schemas to add to the search_path of every request. `public` is always included.
-extra_search_path = ["public", "extensions"]
+extra_search_path = ["public", "inventory", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
 max_rows = 1000000
@@ -116,7 +116,7 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
