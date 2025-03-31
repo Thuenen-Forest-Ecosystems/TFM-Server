@@ -92,7 +92,7 @@ objects_path = "./TFM"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+site_url = "env(ADDITIONAL_REDIRECT_URLS)"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://127.0.0.1:3000"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week). 86400 = 24 Std
@@ -136,9 +136,12 @@ admin_email = "env(SMTP_ADMIN_EMAIL)"
 sender_name = "env(SMTP_SENDER_NAME)"
 
 # Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+[auth.email.template.invite]
+subject = "Einladung zur Mitarbeit an einer Inventur"
+content_path = "./supabase/templates/invite.html"
+[auth.email.template.confirmation]
+subject = "Bestätige deine E-Mail-Adresse"
+content_path = "./supabase/templates/confirmation.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

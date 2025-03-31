@@ -26,3 +26,4 @@ ALTER PUBLICATION powersync ADD TABLE public.organizations;
 ALTER PUBLICATION powersync ADD TABLE public.troop;
 ALTER PUBLICATION powersync ADD TABLE public.schemas;
 ALTER PUBLICATION powersync ADD TABLE public.users_profile;
+ALTER PUBLICATION powersync ADD TABLE public.records;

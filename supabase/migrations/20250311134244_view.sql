@@ -52,9 +52,9 @@ SELECT
     ) AS edges
         
 FROM inventory_archive.plot
-WHERE EXISTS (
+/*WHERE EXISTS (
     SELECT 1
     FROM public.troop tp
     WHERE tp.id = (auth.jwt() ->> 'troop_id'::text)::uuid
     AND tp.plot_ids @> ARRAY[plot.id]
-);
+);*/

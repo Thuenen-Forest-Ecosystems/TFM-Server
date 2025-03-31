@@ -100,10 +100,10 @@ CREATE TABLE IF NOT EXISTS troop (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     name text NULL,
-    supervisor_id uuid NOT NULL REFERENCES auth.users(id),
+    supervisor_id uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
     user_ids uuid[] NOT NULL DEFAULT '{}',
     plot_ids uuid[] NOT NULL DEFAULT '{}',
-    organzation_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE
+    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE
 );
 
 ALTER TABLE troop ENABLE ROW LEVEL SECURITY;
@@ -116,3 +116,165 @@ ALTER TABLE troop ENABLE ROW LEVEL SECURITY;
 --);
 --
 --ALTER TABLE troop_permissions ENABLE ROW LEVEL SECURITY;
+
+
+
+create table "records" (
+    "id" uuid primary key default gen_random_uuid(),
+    "created_at" timestamp with time zone not null default now(),
+    "updated_by" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
+    "properties" jsonb not null default '{}'::jsonb,
+    "previous_properties" jsonb not null default '{}'::jsonb,
+    "previous_properties_updated_at" timestamp with time zone not null default now(),
+    "is_valid" boolean not null default false,
+    "supervisor_id" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
+    "plot_id" uuid NULL REFERENCES inventory_archive.plot(id) UNIQUE,
+    "troop_id" uuid NULL REFERENCES troop(id),
+    "schema_id" uuid NULL REFERENCES public.schemas(id),
+    "schema_name" text NULL DEFAULT 'ci2027'
+    
+);
+
+COMMENT ON TABLE "records" IS 'Plots';
+
+alter table "records" enable row level security;
+
+create table "record_changes" (
+    "id" uuid primary key default gen_random_uuid(),
+    "created_at" timestamp with time zone not null default now(),
+    "updated_by" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
+    "properties" jsonb not null default '{}'::jsonb,
+    "previous_properties" jsonb not null default '{}'::jsonb,
+    "previous_properties_updated_at" timestamp with time zone not null default now(),
+    "is_valid" boolean not null default false,
+    "supervisor_id" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
+    "plot_id" uuid NULL REFERENCES inventory_archive.plot(id),
+    "troop_id" uuid NULL REFERENCES troop(id),
+    "schema_id" uuid NULL REFERENCES public.schemas(id),
+    "schema_name" text NULL DEFAULT 'ci2027'
+);
+
+COMMENT ON TABLE "record_changes" IS 'Änderungen an Plots';
+
+alter table "record_changes" enable row level security;
+
+
+--- Backout plot to backup_changes every time plot updates
+CREATE OR REPLACE FUNCTION public.handle_record_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- only if is_valid change
+  if new.is_valid != old.is_valid then
+    -- Check if the new properties are different from the old properties
+    if new.properties IS DISTINCT FROM old.properties then
+      -- Insert a record into the record_changes table
+      INSERT INTO public.record_changes (updated_by, properties, schema_name, previous_properties, previous_properties_updated_at, is_valid, supervisor_id, plot_id, troop_id, schema_id)
+      VALUES (NEW.updated_by, NEW.properties, NEW.schema_name, OLD.properties, OLD.previous_properties_updated_at, OLD.is_valid, OLD.supervisor_id, OLD.plot_id, OLD.troop_id, OLD.schema_id);
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- trigger the function every time a plot is updated
+DROP TRIGGER IF EXISTS on_record_updated ON records;
+create trigger on_record_updated
+  after update on records
+  for each row execute procedure handle_record_changes();
+
+
+
+
+
+-- First, create a function to validate JSON against schema
+CREATE OR REPLACE FUNCTION public.validate_json_properties_by_schema(schema_id uuid, properties jsonb)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    schema_def json; -- Changed to jsonb
+BEGIN
+    -- Get the schema definition
+    SELECT schema INTO schema_def FROM public.schemas WHERE id = schema_id; -- Cast to jsonb
+    -- Check if schema_def is null (schema not found) before calling jsonb_matches_schema
+    IF schema_def IS NULL THEN
+        RETURN FALSE; -- Or handle the error as needed (e.g., RAISE EXCEPTION)
+    END IF;
+    
+    -- Check if properties is null or empty
+    IF properties IS NULL OR properties = '{}'::jsonb THEN
+        RETURN TRUE; -- Or FALSE, depending on your requirements
+    END IF;
+
+    return extensions.jsonb_matches_schema(schema := schema_def, instance := properties);
+
+END;
+$$;
+
+-- Create trigger function to validate records and set is_valid flag
+CREATE OR REPLACE FUNCTION validate_record_properties()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+
+    -- Only validate if both schema_id and properties are present
+    IF NEW.schema_name IS NOT NULL AND NEW.properties IS NOT NULL AND jsonb_typeof(NEW.properties) = 'object' THEN
+        -- Get Schema ID from interval_name, selecting the latest
+        SELECT id INTO NEW.schema_id 
+        FROM public.schemas 
+        WHERE interval_name = NEW.schema_name AND is_visible = true
+        ORDER BY created_at DESC
+        LIMIT 1;
+        -- Check if the JSON data is valid against the schema
+        NEW.is_valid := public.validate_json_properties_by_schema(NEW.schema_id, NEW.properties);
+    ELSE
+        -- If either schema_id or properties is missing, mark as invalid
+        NEW.is_valid := FALSE;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- Create or replace the trigger
+DROP TRIGGER IF EXISTS before_record_insert_update ON public.records;
+CREATE TRIGGER before_record_insert_update
+    AFTER INSERT OR UPDATE ON public.records
+    FOR EACH ROW EXECUTE FUNCTION public.validate_record_properties();
+
+
+
+
+-- Invitation table
+CREATE TABLE public.invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    inviter_id UUID REFERENCES auth.users(id),
+    invitee_email VARCHAR NOT NULL,
+    token VARCHAR NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    expires_at TIMESTAMPTZ,
+    accepted BOOLEAN DEFAULT FALSE,
+    troop_id UUID REFERENCES public.troop(id),
+    organization_id UUID REFERENCES public.organizations(id)
+);
+ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
+-- Create a policy to allow only the inviter ALL
+CREATE POLICY "Enable all access for authenticated users"
+ON public.invitations
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING (inviter_id = auth.uid() OR troop_id IN (
+    SELECT id FROM public.troop WHERE supervisor_id = auth.uid()
+))
+WITH CHECK (inviter_id = auth.uid() OR troop_id IN (
+    SELECT id FROM public.troop WHERE supervisor_id = auth.uid()
+));

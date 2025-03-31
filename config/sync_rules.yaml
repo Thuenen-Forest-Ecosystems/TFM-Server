@@ -22,18 +22,24 @@ bucket_definitions:
     data:
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.user_id
 
-  #records:
-  #  parameters:
-  #    - SELECT request.jwt() ->> 'troop_id' as troop_id
-  #  data:
-  #    - SELECT * FROM "inventory"."records" WHERE troop_id = bucket.troop_id
-  #    - SELECT * FROM "public"."troop" WHERE id = bucket.troop_id
-  #country_admin:
-  #  parameters:
-  #    - SELECT request.user_id() as user_id
-  #  data:
-  #    - SELECT * FROM "inventory"."records" WHERE supervisor_id = bucket.user_id
-  #    - SELECT * FROM "public"."troop" WHERE supervisor_id = bucket.user_id
+  # RECORDS
+  records_admin:
+    parameters:
+      - SELECT is_admin FROM "public"."users_profile" WHERE id = request.user_id()
+    data:
+      - SELECT * FROM "public"."records" WHERE true = bucket.is_admin
+  records_troop:
+    parameters:
+      - SELECT request.jwt() ->> 'troop_id' as troop_id
+    data:
+      - SELECT * FROM "public"."records" WHERE troop_id = bucket.troop_id
+      - SELECT * FROM "public"."troop" WHERE id = bucket.troop_id
+  records_country_admin:
+    parameters:
+      - SELECT request.user_id() as user_id
+    data:
+      - SELECT * FROM "public"."records" WHERE supervisor_id = bucket.user_id
+      - SELECT * FROM "public"."troop" WHERE supervisor_id = bucket.user_id
 
   organizations:
     parameters:
@@ -45,10 +51,9 @@ bucket_definitions:
   global:
     data:
       - SELECT * FROM "public"."schemas"
-      #- SELECT * FROM "public"."users_profile"
+      - SELECT * FROM "public"."organizations"
       - SELECT * FROM "public"."troop"
-      - SELECT * FROM "inventory"."records"
-      - SELECT * FROM "inventory"."records_test"
+      - SELECT * FROM "inventory_archive"."cluster"
 
       # Lookup Tables
       - SELECT * FROM "lookup"."lookup_browsing"
