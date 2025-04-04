@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     name text NULL
 );
 
-INSERT INTO organizations (apex_domain) VALUES ('@thuenen.de');
+INSERT INTO organizations (apex_domain, name) VALUES ('@thuenen.de', 'Thünen-Institut');
 
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
@@ -87,10 +87,13 @@ end;
 $$;
 
 -- trigger the function every time a user is created
+-- trigger the function only when a user's email is confirmed
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute procedure public.handle_new_user_profile();
+  after update of email_confirmed_at on auth.users
+  for each row
+  when (old.email_confirmed_at is null and new.email_confirmed_at is not null)
+  execute procedure public.handle_new_user_profile();
 
  
 -- CREATE troop table

@@ -46,12 +46,13 @@ bucket_definitions:
       - SELECT organization_id FROM "public"."users_profile" WHERE id = request.user_id()
     data:
       - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
-      #- SELECT * FROM "public"."troop" WHERE organization_id = bucket.organization_id
+      - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
 
   global:
     data:
       - SELECT * FROM "public"."schemas"
       - SELECT * FROM "public"."organizations"
+      - SELECT * FROM "public"."users_profile"
       - SELECT * FROM "public"."troop"
       - SELECT * FROM "inventory_archive"."cluster"
 
