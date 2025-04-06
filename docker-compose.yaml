@@ -6,7 +6,7 @@
 
 # https://medium.com/@igor.mytyuk/supabase-self-hosted-deploy-475718fe906f
 
-name: CNFI-Server
+name: TFM-Server
 
 # Include syntax requires Docker compose > 2.20.3
 # https://docs.docker.com/compose/release-notes/#2203
