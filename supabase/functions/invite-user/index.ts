@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
       }
     )
 
+
     const token = authHeader.replace('Bearer ', '')
     const { data:userData, error:userError } = await supabase.auth.getUser(token)
 
@@ -59,9 +60,9 @@ Deno.serve(async (req) => {
       )
     }
 
-
     // Generate the invitation link
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: 'https://thuenen-forest-ecosystems.github.io/TFM-Documentation/dashboard/set-password',
       data: {
         invited_by: userData.user.id,
         ...metaData

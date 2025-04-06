@@ -25,7 +25,7 @@ insert into "public"."schemas"
 CREATE TABLE IF NOT EXISTS organizations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    apex_domain text NOT NULL,
+    apex_domain text NULL,
     created_by uuid DEFAULT auth.uid() REFERENCES auth.users(id),
     state_responsible smallint NULL REFERENCES lookup.lookup_state (code),
     parent_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS public.users_profile (
     id uuid not null references auth.users on delete cascade primary key,
     is_admin boolean NOT NULL DEFAULT false,
     state_responsible smallint NULL,
-    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    organization_id uuid NULL REFERENCES organizations(id),
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     email text NOT NULL
 );
@@ -60,17 +60,25 @@ DECLARE
   org_id uuid;
 begin
   -- GET organization_id from the email domain
-  domain_part := '@' || split_part(new.email, '@', 2);
-  
-  -- Look up the organization_id based on the domain
-  SELECT id INTO org_id
-  FROM public.organizations
-  WHERE apex_domain like domain_part;
+  --domain_part := '@' || split_part(new.email, '@', 2);
+  --
+  ---- Look up the organization_id based on the domain
+  --SELECT id INTO org_id
+  --FROM public.organizations
+  --WHERE apex_domain like domain_part;
+--
+  ---- If no organization found, raise an exception
+  --IF org_id IS NULL THEN
+  --  RAISE EXCEPTION 'No organization found for domain %', domain_part;
+  --END IF;
 
-  -- If no organization found, raise an exception
-  IF org_id IS NULL THEN
-    RAISE EXCEPTION 'No organization found for domain %', domain_part;
-  END IF;
+  -- Get the organization_id from auth.users.raw_user_meta_data
+  if new.raw_user_meta_data is not null then
+    select (new.raw_user_meta_data::jsonb ->> 'organization_id')::uuid into org_id;
+  else
+    -- If no organization found
+    org_id := null;
+  end if;
 
   insert into public.users_profile (id, email, organization_id) values (new.id, new.email, org_id)
   on conflict (id) do update set email = new.email;
