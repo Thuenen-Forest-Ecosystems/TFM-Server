@@ -11,6 +11,7 @@ as $$
   declare
     claims jsonb;
     claim_troop_id uuid;
+    claim_organization_id uuid;
     claim_state_responsible smallint;
     claim_is_admin BOOLEAN;
     user_id_text text;
@@ -39,11 +40,14 @@ as $$
     END;
 
     -- Check if user exists in users_profile first
-    SELECT COUNT(*) > 0 INTO found_user_record
+    SELECT 
+      organization_id  -- Using MAX to get a single value when COUNT > 0
+    INTO 
+      claim_organization_id
     FROM public.users_profile
-    WHERE id = user_id_uuid;
-    
-    RAISE NOTICE 'Found user record: %', found_user_record;
+    WHERE id = user_id_uuid Limit 1;
+
+
 
     -- Try to get data from users_profile with error handling
     BEGIN
@@ -95,6 +99,8 @@ as $$
               CASE WHEN claim_troop_id IS NULL THEN 'null' ELSE to_jsonb(claim_troop_id) END);
     claims := jsonb_set(claims, '{state_responsible}', to_jsonb(claim_state_responsible));
     claims := jsonb_set(claims, '{is_admin}', to_jsonb(claim_is_admin));
+    claims := jsonb_set(claims, '{organization_id}',
+              CASE WHEN claim_organization_id IS NULL THEN 'null' ELSE to_jsonb(claim_organization_id) END);
 
     RAISE NOTICE 'Final claims: %', claims;
     

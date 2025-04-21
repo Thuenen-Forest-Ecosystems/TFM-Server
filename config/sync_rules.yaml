@@ -15,6 +15,12 @@ bucket_definitions:
   #    - SELECT request.jwt() ->> 'troop_id' as troop_id
   #  data:
   #    - SELECT * FROM "public"."troop" WHERE id = bucket.troop_id
+  admin:
+    parameters:
+       - SELECT is_admin FROM "public"."users_profile" WHERE id = request.user_id()
+    data:
+      - SELECT * FROM "inventory_archive"."plot" WHERE TRUE = bucket.is_admin
+      - SELECT * FROM "public"."records" WHERE TRUE = bucket.is_admin
 
   user_profile:
     parameters:
@@ -23,23 +29,19 @@ bucket_definitions:
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.user_id
 
   # RECORDS
-  records_admin:
-    parameters:
-      - SELECT is_admin FROM "public"."users_profile" WHERE id = request.user_id()
-    data:
-      - SELECT * FROM "public"."records" WHERE true = bucket.is_admin
   records_troop:
     parameters:
       - SELECT request.jwt() ->> 'troop_id' as troop_id
     data:
-      - SELECT * FROM "public"."records" WHERE troop_id = bucket.troop_id
       - SELECT * FROM "public"."troop" WHERE id = bucket.troop_id
   records_country_admin:
     parameters:
       - SELECT request.user_id() as user_id
     data:
-      - SELECT * FROM "public"."records" WHERE supervisor_id = bucket.user_id
       - SELECT * FROM "public"."troop" WHERE supervisor_id = bucket.user_id
+      
+
+ 
 
   organizations:
     parameters:
@@ -47,6 +49,8 @@ bucket_definitions:
     data:
       - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
+      - SELECT * FROM "public"."records" WHERE organization_id = bucket.organization_id
+      
 
   global:
     data:

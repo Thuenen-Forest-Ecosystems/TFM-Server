@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS organizations (
     created_by uuid DEFAULT auth.uid() REFERENCES auth.users(id),
     state_responsible smallint NULL REFERENCES lookup.lookup_state (code),
     parent_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    name text NULL
+    name text NULL,
+    can_admin_troop boolean NOT NULL DEFAULT false,
+    can_admin_organization boolean NOT NULL DEFAULT false,
 );
 
 INSERT INTO organizations (apex_domain, name) VALUES ('@thuenen.de', 'Thünen-Institut');
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.users_profile (
     id uuid not null references auth.users on delete cascade primary key,
     is_admin boolean NOT NULL DEFAULT false,
     state_responsible smallint NULL,
+    is_organization_admin boolean NOT NULL DEFAULT false,
     organization_id uuid NULL REFERENCES organizations(id),
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     email text NOT NULL
@@ -129,21 +132,20 @@ ALTER TABLE troop ENABLE ROW LEVEL SECURITY;
 --ALTER TABLE troop_permissions ENABLE ROW LEVEL SECURITY;
 
 
-
+DROP TABLE IF EXISTS public.records CASCADE;
 create table "records" (
     "id" uuid primary key default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
-    "updated_by" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
+    "updated_by" uuid null DEFAULT auth.uid() REFERENCES auth.users(id),
     "properties" jsonb not null default '{}'::jsonb,
     "previous_properties" jsonb not null default '{}'::jsonb,
     "previous_properties_updated_at" timestamp with time zone not null default now(),
     "is_valid" boolean not null default false,
-    "supervisor_id" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
     "plot_id" uuid NULL REFERENCES inventory_archive.plot(id) UNIQUE,
     "troop_id" uuid NULL REFERENCES troop(id),
     "schema_id" uuid NULL REFERENCES public.schemas(id),
-    "schema_name" text NULL DEFAULT 'ci2027'
-    
+    "schema_name" text NULL DEFAULT 'ci2027',
+    "state_responsible" smallint not NULL REFERENCES lookup.lookup_state (code)
 );
 
 COMMENT ON TABLE "records" IS 'Plots';
@@ -236,6 +238,11 @@ SET search_path = ''
 AS $$
 BEGIN
 
+    SELECT id INTO NEW.schema_id 
+    FROM public.schemas 
+    WHERE interval_name = NEW.schema_name AND is_visible = true
+    ORDER BY created_at DESC
+    LIMIT 1;
     -- Only validate if both schema_id and properties are present
     IF NEW.schema_name IS NOT NULL AND NEW.properties IS NOT NULL AND jsonb_typeof(NEW.properties) = 'object' THEN
         -- Get Schema ID from interval_name, selecting the latest
@@ -258,7 +265,7 @@ $$;
 -- Create or replace the trigger
 DROP TRIGGER IF EXISTS before_record_insert_update ON public.records;
 CREATE TRIGGER before_record_insert_update
-    AFTER INSERT OR UPDATE ON public.records
+    BEFORE INSERT OR UPDATE ON public.records
     FOR EACH ROW EXECUTE FUNCTION public.validate_record_properties();
 
 

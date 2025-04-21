@@ -1,0 +1,55 @@
+<html>
+  <body>
+    <p>Hallo,</p>
+    <p>
+        sie möchten Ihre E-Mailadresse ändern.<br/>
+    </p>
+    <p>
+        Klicken Sie hierzu auf den folgenden Link um der Änderung zuzustimmen<br/>
+    </p>
+    <p>
+        <a href="{{ .ConfirmationURL }}">
+            <button style="background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+                Bestätigen
+            </button>
+        </a><br/>
+        <small>
+            <a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a>
+        </small>
+    </p>
+
+    <p>
+        Nach der Bestätigung kannst du dich mit deiner neuen E-Mail-Adresse und deinem Passwort bei den entsprechenden Diensten anmelden.<br/>
+        Bei Fragen oder Problemen, antworte auf diese E-Mail.
+    </p>
+
+    <p>
+        Vielen Dank,<br/>
+        Gerrit Balindt
+    </p>
+    <div style="color:gray;">
+        <p>
+            <small>
+                Thünen-Institut, Institut für Waldökosysteme<br/>
+                Alfred-Möllerstr.1 <br/>
+                Haus 41/42 <br/>
+                16225 Eberswalde 
+            </small>
+        </p>
+        <p>
+            <small>
+                <a href="https://www.thuenen.de/de/impressum">Impressum</a> |
+                <a href="https://www.thuenen.de/de/datenschutzerklaerung">Datenschutz</a>
+            </small>
+        </p>
+    </div>
+    <p>
+        <small>
+            Wenn Sie diese E-Mail nicht angefordert haben, können Sie sie ignorieren.
+        </small><br/>
+        <small>
+            Diese E-Mail wurde automatisch generiert.
+        </small>
+    </p>
+  </body>
+</html>

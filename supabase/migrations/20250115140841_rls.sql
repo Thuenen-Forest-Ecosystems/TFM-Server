@@ -78,8 +78,69 @@ USING (auth.uid() = created_by OR EXISTS (
     WHERE id = auth.uid() AND is_admin = true
 ));
 
+-- Create an RLS policy for updating public.users_profile
+CREATE POLICY "update_same_org_admin_policy"
+ON public.users_profile
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.users_profile AS up
+        WHERE up.id = auth.uid()
+        AND up.organization_id = public.users_profile.organization_id
+        AND up.is_organization_admin = true
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.users_profile AS up
+        WHERE up.id = auth.uid()
+        AND up.organization_id = public.users_profile.organization_id
+        AND up.is_organization_admin = true
+    )
+);
+-- Drop the problematic policy first
+DROP POLICY IF EXISTS "select_same_organization_policy" ON public.users_profile;
+
+-- Create a security definer function to safely get user organization and admin status
+CREATE OR REPLACE FUNCTION public.get_user_profile_info(user_id uuid)
+RETURNS TABLE (organization_id uuid, is_admin boolean)
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+    SELECT organization_id, is_admin
+    FROM public.users_profile
+    WHERE id = user_id;
+$$;
+
+-- Create a fixed policy using the helper function
+CREATE POLICY "select_same_organization_policy"
+ON public.users_profile
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+    -- User can see their own profile
+    auth.uid() = id
+    OR 
+    -- User can see profiles in the same organization
+    (
+        SELECT p.organization_id
+        FROM public.get_user_profile_info(auth.uid()) p
+    ) = organization_id
+    OR
+    -- Admins can see all profiles
+    (
+        SELECT p.is_admin
+        FROM public.get_user_profile_info(auth.uid()) p
+    ) = true
+);
+
 -- Neue UPDATE-Policy hinzufügen
-create policy "Enable update for users based on email"
+create policy "Enable update for same user and admin"
 on "public"."organizations"
 as PERMISSIVE
 for UPDATE
