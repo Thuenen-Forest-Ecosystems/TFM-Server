@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     parent_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name text NULL,
     can_admin_troop boolean NOT NULL DEFAULT false,
-    can_admin_organization boolean NOT NULL DEFAULT false,
+    can_admin_organization boolean NOT NULL DEFAULT false
 );
 
 INSERT INTO organizations (apex_domain, name) VALUES ('@thuenen.de', 'Thünen-Institut');

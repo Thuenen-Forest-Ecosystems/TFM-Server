@@ -9,7 +9,7 @@ SELECT
         (
             SELECT json_agg(row_to_json(plot_coordinates.*))
             FROM inventory_archive.plot_coordinates
-            WHERE tree.plot_id = plot.id
+            WHERE plot_coordinates.plot_id = plot.id
         ),
         '[]'::json
     ) AS plot_coordinates,

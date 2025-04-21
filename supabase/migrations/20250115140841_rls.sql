@@ -182,35 +182,35 @@ ALTER TABLE public.records ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "record_access_policy" ON public.records;
 
 -- Create a single unified policy for all operations
-CREATE POLICY "record_access_policy"
-ON public.records
-FOR ALL
-USING (
-    -- User is record supervisor
-    supervisor_id = auth.uid()
-    OR
-    -- User is a member of the troop associated with the record
-    public.is_troop_member(troop_id)
-    OR
-    -- User is an admin
-    EXISTS (
-        SELECT 1
-        FROM public.users_profile
-        WHERE id = auth.uid() AND is_admin = true
-    )
-)
-WITH CHECK (
-    -- Same conditions for write operations
-    supervisor_id = auth.uid()
-    OR
-    public.is_troop_member(troop_id)
-    OR
-    EXISTS (
-        SELECT 1
-        FROM public.users_profile
-        WHERE id = auth.uid() AND is_admin = true
-    )
-);
+--CREATE POLICY "record_access_policy"
+--ON public.records
+--FOR ALL
+--USING (
+--    -- User is record supervisor
+--    supervisor_id = auth.uid()
+--    OR
+--    -- User is a member of the troop associated with the record
+--    public.is_troop_member(troop_id)
+--    OR
+--    -- User is an admin
+--    EXISTS (
+--        SELECT 1
+--        FROM public.users_profile
+--        WHERE id = auth.uid() AND is_admin = true
+--    )
+--)
+--WITH CHECK (
+--    -- Same conditions for write operations
+--    supervisor_id = auth.uid()
+--    OR
+--    public.is_troop_member(troop_id)
+--    OR
+--    EXISTS (
+--        SELECT 1
+--        FROM public.users_profile
+--        WHERE id = auth.uid() AND is_admin = true
+--    )
+--);
 
 
 
