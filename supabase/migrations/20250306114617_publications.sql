@@ -24,3 +24,6 @@ SELECT add_all_tables_to_publication('powersync', 'inventory_archive');
 SELECT add_all_tables_to_publication('powersync', 'lookup');
 ALTER PUBLICATION powersync ADD TABLE public.organizations;
 ALTER PUBLICATION powersync ADD TABLE public.troop;
+ALTER PUBLICATION powersync ADD TABLE public.schemas;
+ALTER PUBLICATION powersync ADD TABLE public.users_profile;
+ALTER PUBLICATION powersync ADD TABLE public.records;
