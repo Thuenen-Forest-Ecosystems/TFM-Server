@@ -112,7 +112,7 @@ services:
   auth:
     container_name: supabase-auth
     volumes:
-      - ./supabase/templates:/supabase/templates
+      - ./supabase/templates:/templates
     networks:
       - supabase-net
     image: supabase/gotrue:v2.164.0
@@ -150,7 +150,6 @@ services:
 
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
-      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_EXP: ${JWT_EXPIRY}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
 
