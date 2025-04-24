@@ -111,6 +111,8 @@ services:
 
   auth:
     container_name: supabase-auth
+    volumes:
+      - ./supabase/templates:/supabase/templates
     networks:
       - supabase-net
     image: supabase/gotrue:v2.164.0
