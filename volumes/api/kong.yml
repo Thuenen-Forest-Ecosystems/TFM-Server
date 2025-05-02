@@ -63,6 +63,7 @@ services:
     plugins:
       - name: cors
 
+
   ## Secure Auth routes
   - name: auth-v1
     _comment: 'GoTrue: /auth/v1/* -> http://auth:9999/*'
