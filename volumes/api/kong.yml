@@ -196,6 +196,8 @@ services:
     plugins:
       - name: cors
 
+  
+
   ## Analytics routes
   - name: analytics-v1
     _comment: 'Analytics: /analytics/v1/* -> http://logflare:4000/*'

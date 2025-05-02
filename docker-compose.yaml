@@ -25,19 +25,23 @@ services:
     depends_on:
       mongo-rs-init:
         condition: service_completed_successfully
+      # Add dependency on the Supabase database
+      db:
+        condition: service_healthy
     volumes:
       - ./config:/config
     networks:
       - default
       #- supabase_network_tfm_server
       - supabase-net
+    environment:
+      PS_SUPABASE_JWT_SECRET: ${JWT_SECRET}
 
   # ====== SUPABASE ======
   studio:
     container_name: supabase-studio
     networks:
       - supabase-net
-
     volumes:
       - ./supabase:/supabase
       - ./supabase/seed.sql:/docker-entrypoint-initdb.d/seed.sql
