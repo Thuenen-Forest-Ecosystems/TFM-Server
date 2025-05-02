@@ -14,5 +14,19 @@ PGPASSWORD=postgres pg_dump \
     -n inventory_archive \
     --data-only \
     --enable-row-security \
-    > tmp/icp_dictionaries.sql
-clean_sql_file tmp/icp_dictionaries.sql
+    > tmp/inventory_archive.sql
+clean_sql_file tmp/inventory_archive.sql
+
+# Truncate all tables in inventory_archive schema
+psql "postgres://postgres:$POSTGRES_PASSWORD@134.110.100.75:3389/$POSTGRES_DB" \
+  -t \
+  -c "SELECT 'TRUNCATE TABLE inventory_archive.' || tablename || ' CASCADE;' 
+      FROM pg_tables 
+      WHERE schemaname = 'inventory_archive';" | \
+while read cmd; do
+  psql "postgres://postgres:$POSTGRES_PASSWORD@134.110.100.75:3389/$POSTGRES_DB" -c "$cmd"
+done
+
+sleep 1
+
+psql "postgres://postgres:$POSTGRES_PASSWORD@134.110.100.75:3389/$POSTGRES_DB" -f tmp/inventory_archive.sql

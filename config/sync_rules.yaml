@@ -15,12 +15,12 @@ bucket_definitions:
   #    - SELECT request.jwt() ->> 'troop_id' as troop_id
   #  data:
   #    - SELECT * FROM "public"."troop" WHERE id = bucket.troop_id
-  admin:
-    parameters:
-       - SELECT is_admin FROM "public"."users_profile" WHERE id = request.user_id()
-    data:
-      - SELECT * FROM "inventory_archive"."plot" WHERE TRUE = bucket.is_admin
-      - SELECT * FROM "public"."records" WHERE TRUE = bucket.is_admin
+  #admin:
+  #  parameters:
+  #     - SELECT is_admin FROM "public"."users_profile" WHERE id = request.user_id()
+  #  data:
+  #    #- SELECT * FROM "inventory_archive"."plot" WHERE TRUE = bucket.is_admin
+  #    - SELECT * FROM "public"."records" WHERE TRUE = bucket.is_admin
 
   user_profile:
     parameters:
