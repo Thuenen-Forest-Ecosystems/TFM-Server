@@ -34,8 +34,6 @@ services:
       - default
       #- supabase_network_tfm_server
       - supabase-net
-    environment:
-      PS_SUPABASE_JWT_SECRET: ${JWT_SECRET}
 
   # ====== SUPABASE ======
   studio:

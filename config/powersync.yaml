@@ -30,13 +30,7 @@ sync_rules:
 client_auth:
   # Enable this if using Supabase Auth
   supabase: true
-<<<<<<< Updated upstream
   supabase_jwt_secret: !env PS_SUPABASE_JWT_SECRET
-
-=======
-  supabase_jwt_secret: !env PS_SUPABASE_JWT_SECRET  
-  # Use the shared JWT secret instead
->>>>>>> Stashed changes
   #jwt_secret: !env PS_JWT_SECRET
 
   #allow_local_jwks: true
