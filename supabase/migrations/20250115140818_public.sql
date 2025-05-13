@@ -2,7 +2,7 @@ SET search_path TO public;
 
 create table IF NOT EXISTS "public"."schemas" (
     "created_at" timestamp with time zone not null default now(),
-    "interval_name" text not null UNIQUE,
+    "interval_name" public.enum_interval_name default 'ci2027',
     "title" text not null,
     "description" text,
     "is_visible" boolean not null default false,
@@ -145,7 +145,8 @@ create table "records" (
     "troop_id" uuid NULL REFERENCES troop(id),
     "schema_id" uuid NULL REFERENCES public.schemas(id),
     "schema_name" text NULL DEFAULT 'ci2027',
-    "state_responsible" smallint not NULL REFERENCES lookup.lookup_state (code)
+    "state_responsible" smallint not NULL REFERENCES lookup.lookup_state (code),
+    "organization_id" uuid not NULL REFERENCES organizations(id)
 );
 
 COMMENT ON TABLE "records" IS 'Plots';

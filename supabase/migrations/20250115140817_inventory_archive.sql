@@ -16,7 +16,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA inventory_archive GRANT ALL
 SET search_path TO inventory_archive;
 
 CREATE TABLE IF NOT EXISTS table_TEMPLATE (
-    intkey varchar(50) UNIQUE NOT NULL, 
+    intkey varchar(50) UNIQUE NULL,
     id uuid UNIQUE DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL
     --modified_at TIMESTAMP DEFAULT NULL,
 	--modified_by uuid DEFAULT auth.uid() NULL,
@@ -67,6 +67,7 @@ ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterSituation
 ------------------------------------------------- PLOT -------------------------------------------------
 CREATE TABLE plot (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot 
+	ADD COLUMN interval_name public.enum_interval_name default 'ci2027',
     ADD COLUMN sampling_stratum INTEGER NULL,
     ADD COLUMN federal_state INTEGER NULL, -- lookup_state
     --ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- move to plot_coordinates
@@ -147,8 +148,8 @@ ALTER TABLE plot
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS plot_name integer NOT NULL CHECK (plot_name >= 1 AND plot_name <= 4);
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL REFERENCES cluster (cluster_name);
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL REFERENCES cluster (id);
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_Unique UNIQUE (cluster_name, plot_name);
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster_Unique UNIQUE (cluster_name, plot_name);
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_Unique UNIQUE (cluster_name, plot_name, interval_name);
+--ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster_Unique UNIQUE (cluster_name, plot_name);
 
 
 
@@ -340,10 +341,10 @@ CREATE TABLE tree (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE tree 
     ADD COLUMN tree_number smallint NOT NULL,
     ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN tree_marked boolean NOT NULL DEFAULT false,
+	ADD COLUMN tree_marked boolean NOT DEFAULT false,
 	ADD COLUMN tree_status INTEGER NULL,
 	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND azimuth <= 399), -- [Gon]
-	ADD COLUMN distance smallint NOT NULL CHECK (distance >= 0), -- [cm]
+	ADD COLUMN distance smallint NULL CHECK (distance >= 0), -- [cm]
 	-- ADD COLUMN geometry public.GEOMETRY(POINT, 4326) NULL,
 	ADD COLUMN tree_species INTEGER NULL,
 	ADD COLUMN dbh smallint NULL,
@@ -533,7 +534,7 @@ ALTER TABLE deadwood ADD CONSTRAINT FK_Deadwood_LookupDecomposition FOREIGN KEY 
 ------------------------------------------------- PLOT LOCATION -------------------------------------------------
 CREATE TABLE subplots_relative_position (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE subplots_relative_position
-	-- ADD COLUMN plot_id uuid NOT NULL,
+	ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN plot_coordinates_id uuid NOT NULL,
 	ADD COLUMN parent_table text NOT NULL,
 	ADD COLUMN azimuth smallint NOT NULL CHECK (azimuth >= 0 AND azimuth <= 399), -- Azimuth (Gon) NEU
@@ -541,3 +542,8 @@ ALTER TABLE subplots_relative_position
     ADD COLUMN radius smallint NOT NULL DEFAULT 100 CHECK (radius >= 1 AND radius <= 1000), -- Radius (cm) NEU
     ADD COLUMN has_entities BOOLEAN DEFAULT TRUE,
 	ADD COLUMN center_location public.GEOMETRY(Polygon, 4326) NULL;
+
+
+ALTER TABLE subplots_relative_position ADD CONSTRAINT FK_SubplotRelativePosition_Plot FOREIGN KEY (plot_id)
+	REFERENCES plot (id)
+	ON DELETE CASCADE;

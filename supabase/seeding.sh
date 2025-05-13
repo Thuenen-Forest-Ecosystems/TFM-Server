@@ -22,9 +22,9 @@ rm -f seeds/public/*.sql
 rm -f seeds/hidden/*.sql
 
 # Dump lookup schema
-PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
+docker exec -u postgres supabase_db_supabase pg_dump \
     -h 127.0.0.1 \
-    -p 54322 \
+    -p 5432 \
     -U postgres \
     -d postgres \
     -n lookup \
@@ -36,10 +36,10 @@ PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
 clean_sql_file seeds/public/lookup.sql
 
 
-for table in cluster plot deadwood edges regeneration structure_lt4m tree
-    do PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
+for table in cluster plot deadwood edges regeneration structure_lt4m structure_gt4m tree
+    do docker exec -u postgres supabase_db_supabase pg_dump \
         -h 127.0.0.1 \
-        -p 54322 \
+        -p 5432 \
         -U postgres \
         -d postgres \
         -n inventory_archive \
@@ -53,9 +53,9 @@ for table in cluster plot deadwood edges regeneration structure_lt4m tree
 done;
 
 for table in plot_coordinates plot_landmark position subplots_relative_position tree_coordinates
-    do PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
+    do docker exec -u postgres supabase_db_supabase pg_dump \
         -h 127.0.0.1 \
-        -p 54322 \
+        -p 5432 \
         -U postgres \
         -d postgres \
         -n inventory_archive \
