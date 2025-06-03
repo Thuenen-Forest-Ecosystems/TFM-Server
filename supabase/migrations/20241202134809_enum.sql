@@ -6,6 +6,7 @@ CREATE TYPE "enum_interval_name" AS ENUM (
     'bwi2002',
     'ci2008',
     'bwi2012',
+    'ci2012',
     'ci2017',
     'ci2022',
     'ci2027'

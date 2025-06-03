@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS lookup_cluster_status (LIKE lookup.lookup_TEMPLATE IN
 CREATE TABLE IF NOT EXISTS lookup_dead_wood_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_decomposition (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_edge_status (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_edge_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_edge_type_deprecated (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_elevation_level (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_exploration_instruction (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_ffh_forest_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -100,4 +100,41 @@ CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
 
 CREATE TABLE lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_interval (code, name_de, name_en, sort)
+VALUES
+(1, 'BWI 1987', 'BWI 1987', 1),
+(2, 'BWI 1992', 'BWI 1992', 2),
+(3, 'BWI 2002', 'BWI 2002', 3),
+(4, 'CI 2008', 'CI 2008', 4),
+(5, 'BWI 2012', 'BWI 2012', 5),
+(6, 'CI 2012', 'CI 2012', 6),
+(7, 'CI 2017', 'CI 2017', 7),
+(8, 'CI 2022', 'CI 2022', 8),
+(9, 'CI 2027', 'CI 2027', 9);
+
 CREATE TABLE lookup_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+
+-- 
+CREATE TABLE lookup_edge_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_edge_type (code, name_de, name_en, interval, sort)
+VALUES
+(10, 'neue, erstmals eingemessene Grenze zu Nichtwald', 'New boundary to non-forest, measured for the first time', ARRAY['bwi2027'], 10),
+(11, 'neue, erstmals eingemessene Grenze zu Nichtwald, welche auch für frühere Aufnahmen gilt', 'New boundary to non-forest, measured for the first time, which also applies to earlier surveys', ARRAY['bwi2027'], 11),
+(12, 'aus früherer Aufnahme übernommene, immer noch gültige Grenze zu Nichtwald', 'Still valid boundary to non-forest, taken over from previous recording', ARRAY['bwi2027'], 12),
+(20, 'neue, erstmals eingemessene Grenze zu Nichtholzboden', 'New boundary to unstocked forest land, measured for the first time', ARRAY['bwi2027'], 20),
+(21, 'neue, erstmals eingemessene Grenze zu Nichtholzboden, welche auch für frühere Aufnahmen gilt', 'New boundary to unstocked forest land, measured for the first time, which also applies to earlier surveys', ARRAY['bwi2027'], 21),
+(22, 'aus früherer Aufnahme übernommene, immer noch gültige Grenze zu Nichtholzboden', 'Still valid boundary to unstocked forest land, taken over from previous recording', ARRAY['bwi2027'], 22),
+(30, 'neue, erstmals eingemessene Grenze zu nicht begehbaren Holzboden', 'New boundary to non-accessible forest floor measured for the first time', ARRAY['bwi2027'], 30),
+(31, 'neue, erstmals eingemessene Grenze zu nicht begehbaren Holzboden, welche auch für frühere Aufnahmen gilt', 'New boundary to non-accessible forest, measured for the first time, which also applies to earlier surveys', ARRAY['bwi2027'], 31),
+(32, 'aus früherer Aufnahme übernommene, immer noch gültige Grenze zu nicht begehbaren Holzboden', 'Still valid boundary to non-accessible forest, taken over from previous recording', ARRAY['bwi2027'], 32),
+(42, 'aus früherer Aufnahme übernommene, immer noch gültige Bestandesgrenze', 'Still valid boundary between different stands, taken over from previous recording', ARRAY['bwi2027'], 42),
+(99, 'Grenze einer früheren Aufnahme, die zum aktuellen Inventurzeitpunkt nicht mehr auffindbar bzw. nicht mehr gültig ist', 'Boundary of a previous inventory that can no longer be found or is no longer valid at the current survey', ARRAY['bwi2027'], 99);
+
+CREATE TABLE lookup_id_stand_differences_rows (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_id_stand_differences_rows (code, name_de, name_en, interval, sort)
+VALUES
+(1, 'mindestens 10m und maximal 20m geringere Bestandeshöhe (das kann auch eine Blöße oder Nichtholzboden sein)', 'At least 10m and maximum 20m lower stand height (this can also be temporary unstocked area or unstocked forest land floor)', ARRAY['bwi2027'], 1),
+(2, 'mindestens 20m geringere Bestandeshöhe (das kann auch eine Blöße oder Nichtholzboden sein)', 'At least 20m lower stand height (this can also be temporary unstocked area or unstocked forest land floor)', ARRAY['bwi2027'], 2),
+(3, 'mindestens 20%-ige Änderung der Baumartenanteile bei einem Höhenunterschied von weniger als 10m', 'At least 20% change in the proportion of tree species with a height difference of less than 10 metres', ARRAY['bwi2027'], 3),
+(4, 'mindestens 20%-ige Änderung der Baumartenanteile bei einem Höhenunterschied bei mindestens 10m und maximal 20m', 'At least 20% change in the proportion of tree species with a height difference of at least 10m and maximum 20m', ARRAY['bwi2027'], 4),
+(9, 'keiner der genannten Fälle', 'None of the cases mentioned', ARRAY['bwi2027'], 9);

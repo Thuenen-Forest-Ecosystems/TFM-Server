@@ -62,18 +62,6 @@ DECLARE
   domain_part text;
   org_id uuid;
 begin
-  -- GET organization_id from the email domain
-  --domain_part := '@' || split_part(new.email, '@', 2);
-  --
-  ---- Look up the organization_id based on the domain
-  --SELECT id INTO org_id
-  --FROM public.organizations
-  --WHERE apex_domain like domain_part;
---
-  ---- If no organization found, raise an exception
-  --IF org_id IS NULL THEN
-  --  RAISE EXCEPTION 'No organization found for domain %', domain_part;
-  --END IF;
 
   -- Get the organization_id from auth.users.raw_user_meta_data
   if new.raw_user_meta_data is not null then

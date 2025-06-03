@@ -373,7 +373,8 @@ ALTER TABLE tree
 	ADD COLUMN tree_top_drought boolean NULL DEFAULT false, -- Uralt
 	ADD COLUMN bark_pocket boolean NULL DEFAULT false, -- Rindentaschen
 	ADD COLUMN biotope_marked boolean NULL DEFAULT false,
-	ADD COLUMN bark_condition smallint NULL;
+	ADD COLUMN bark_condition smallint NULL,
+	ADD COLUMN deadwood_used BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE tree ADD CONSTRAINT FK_Tree_Plot_Unique UNIQUE (plot_id, tree_number);
 ALTER TABLE tree ADD CONSTRAINT FK_Tree_Plot FOREIGN KEY (plot_id)
@@ -433,6 +434,7 @@ ALTER TABLE edges
 	ADD COLUMN edge_number INTEGER NULL CHECK (edge_number >= 1), -- NEU: Kanten-ID || ToDo: Welchen Mehrwert hat diese ID gegenüber der ID?
 	ADD COLUMN edge_status INTEGER NULL, --Rk
 	ADD COLUMN edge_type INTEGER NULL, --Rart
+	ADD COLUMN edge_type_deprecated INTEGER NULL, --Rart_Alt
 	ADD COLUMN terrain INTEGER NULL, --Rterrain
 	ADD COLUMN edges JSONB NOT NULL, -- NEU: GeoJSON
 	ADD COLUMN geometry_edges public.GEOMETRY(LineString, 4326) NULL; -- NEU: Geometrie
@@ -444,6 +446,8 @@ ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeStatus FOREIGN KEY (edge_stat
 	REFERENCES lookup.lookup_edge_status (code);
 ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type)
 	REFERENCES lookup.lookup_edge_type (code);
+ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type_deprecated)
+	REFERENCES lookup.lookup_edge_type_deprecated (code);
 ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupTerrain FOREIGN KEY (terrain)
 	REFERENCES lookup.lookup_terrain (code);
 
@@ -489,7 +493,7 @@ ALTER TABLE structure_gt4m
 	ADD COLUMN tree_species SMALLINT NOT NULL, --Ba
   	ADD COLUMN stock_layer SMALLINT NOT NULL, --Schi, see lookup table bwi.xyk.x_Schi, ungleich stand_layer (vormals Bs)
 	ADD COLUMN count SMALLINT NOT NULL, -- Anz,
-  	ADD COLUMN is_mirrored BOOLEAN NOT NULL; --Sp
+  	ADD COLUMN is_mirrored BOOLEAN; --Sp
 
 
 COMMENT ON TABLE structure_gt4m IS 'Winkelzählprobe mit Zählfaktor 1 oder 2 für die Bestockungsaufnahme - Bäume ab 4 m Höhe';
