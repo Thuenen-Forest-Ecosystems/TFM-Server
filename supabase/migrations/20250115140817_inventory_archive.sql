@@ -434,7 +434,6 @@ ALTER TABLE edges
 	ADD COLUMN edge_number INTEGER NULL CHECK (edge_number >= 1), -- NEU: Kanten-ID || ToDo: Welchen Mehrwert hat diese ID gegenüber der ID?
 	ADD COLUMN edge_status INTEGER NULL, --Rk
 	ADD COLUMN edge_type INTEGER NULL, --Rart
-	ADD COLUMN edge_type_deprecated INTEGER NULL, --Rart_Alt
 	ADD COLUMN terrain INTEGER NULL, --Rterrain
 	ADD COLUMN edges JSONB NOT NULL, -- NEU: GeoJSON
 	ADD COLUMN geometry_edges public.GEOMETRY(LineString, 4326) NULL; -- NEU: Geometrie
@@ -446,8 +445,6 @@ ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeStatus FOREIGN KEY (edge_stat
 	REFERENCES lookup.lookup_edge_status (code);
 ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type)
 	REFERENCES lookup.lookup_edge_type (code);
-ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type_deprecated)
-	REFERENCES lookup.lookup_edge_type_deprecated (code);
 ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupTerrain FOREIGN KEY (terrain)
 	REFERENCES lookup.lookup_terrain (code);
 
