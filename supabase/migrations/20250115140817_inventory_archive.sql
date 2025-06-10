@@ -67,7 +67,7 @@ ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterSituation
 ------------------------------------------------- PLOT -------------------------------------------------
 CREATE TABLE plot (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot 
-	ADD COLUMN interval_name public.enum_interval_name default 'ci2027',
+	ADD COLUMN interval_name text default 'ci2027' references lookup.lookup_interval (code) NOT NULL,
     ADD COLUMN sampling_stratum INTEGER NULL,
     ADD COLUMN federal_state INTEGER NULL, -- lookup_state
     --ADD COLUMN center_location public.GEOMETRY(Point, 4326), -- move to plot_coordinates
@@ -341,7 +341,7 @@ CREATE TABLE tree (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE tree 
     ADD COLUMN tree_number smallint NOT NULL,
     ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN tree_marked boolean NOT DEFAULT false,
+	ADD COLUMN tree_marked boolean DEFAULT false,
 	ADD COLUMN tree_status INTEGER NULL,
 	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND azimuth <= 399), -- [Gon]
 	ADD COLUMN distance smallint NULL CHECK (distance >= 0), -- [cm]

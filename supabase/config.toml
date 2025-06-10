@@ -47,6 +47,10 @@ enabled = true
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']
 sql_paths = ['./seeds/public/*.sql', './seeds/hidden/*.sql']
 
+[db.migrations]
+# https://www.youtube.com/watch?v=EALkUlOKvAs
+schema_paths = []
+
 [realtime]
 enabled = true
 # Bind realtime via either IPv4 or IPv6. (default: IPv4)
@@ -92,9 +96,12 @@ objects_path = "./TFM"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "env(SITE_URL)"
+site_url = "http://localhost:5173/TFM-Documentation"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["env(ADDITIONAL_REDIRECT_URLS)"]
+additional_redirect_urls = [
+    "http://localhost:5173/TFM-Documentation/**",
+    "https://thuenen-forest-ecosystems.github.io/TFM-Documentation/**"
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week). 86400 = 24 Std
 jwt_expiry = 86400
 # If disabled, the refresh token will never expire.

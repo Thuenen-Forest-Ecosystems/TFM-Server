@@ -2,7 +2,7 @@ SET search_path TO public;
 
 create table IF NOT EXISTS "public"."schemas" (
     "created_at" timestamp with time zone not null default now(),
-    "interval_name" public.enum_interval_name default 'ci2027',
+    "interval_name" text default 'ci2027' not null references "lookup"."lookup_interval" (code) on delete restrict on update restrict,
     "title" text not null,
     "description" text,
     "is_visible" boolean not null default false,

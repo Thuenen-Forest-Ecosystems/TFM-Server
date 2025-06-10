@@ -12,6 +12,11 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     // Get authorization header and verify authentication
     const authHeader = req.headers.get('Authorization')!
@@ -60,20 +65,75 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Generate the invitation link
-    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: 'https://thuenen-forest-ecosystems.github.io/TFM-Documentation/dashboard/set-password',
-      data: {
-        invited_by: userData.user.id,
-        ...metaData
-      }
-    });
+    let newUserID = null;
 
-    if (error) {
+    // check if user already exists
+    const { data: existingUsers, error: existingUserError } = await supabase.auth.admin.listUsers()
+    if (existingUserError) {
+      console.error('Error listing existing users:', existingUserError);
       return new Response(
-        JSON.stringify({ error: 'Failed to send invitation', details: error.message }),
+        JSON.stringify({ error: 'Failed to check existing users', details: existingUserError.message }),
         { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
+    }
+    const existingUser = existingUsers.users.find(user => user.email === email)
+
+    if (existingUser) {
+      // User already exists, no need to invite
+      console.log('User already exists:', existingUser);
+      newUserID = existingUser.id;
+    } else {
+      // Generate the invitation link
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+        redirectTo: 'http://localhost:5173/TFM-Documentation/authentication/set-password',
+        //redirectTo: 'https://thuenen-forest-ecosystems.github.io/TFM-Documentation/authentication/set-password',
+        data: {
+          invited_by: userData.user.id,
+          ...metaData
+        }
+      });
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: 'Failed to send invitation', details: error.message }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        )
+      }
+      newUserID = data.user.id;
+    }
+
+    // Add public.users_permissions
+    if (newUserID && metaData.organization_id) {
+      try {
+        const { data: permissionData, error: permissionError } = await supabase
+          .from('users_permissions')
+          .insert({
+            user_id: newUserID,
+            organization_id: metaData.organization_id,
+            created_by: userData.user.id,
+            role: metaData.role
+          })
+          .select(); // Add .select() to get the inserted data
+
+        if (permissionError) {
+          console.error('Error inserting into users_permissions:', permissionError, {
+            user_id: data.user.id,
+            organization_id: metaData.organization_id,
+            created_by: userData.user.id
+          });
+          return new Response(
+            JSON.stringify({ error: 'Failed to insert into users_permissions', details: permissionError.message }),
+            { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          )
+        }
+      } catch (e) {
+        console.error('Unexpected error during insertion:', e);
+        return new Response(
+          JSON.stringify({ error: 'Unexpected error during insertion', details: e.message }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        )
+      }
+    } else {
+      console.warn('No organization_id provided, skipping users_permissions insertion')
     }
 
 
