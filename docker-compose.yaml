@@ -43,7 +43,7 @@ services:
     volumes:
       - ./supabase:/supabase
       - ./supabase/seed.sql:/docker-entrypoint-initdb.d/seed.sql
-    image: supabase/studio:20241202-71e5240
+    image: supabase/studio:2025.06.02-sha-8f2993d
     restart: unless-stopped
     healthcheck:
       test:

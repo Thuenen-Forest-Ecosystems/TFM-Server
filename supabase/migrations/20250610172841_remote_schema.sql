@@ -33,11 +33,9 @@ drop policy "default_select_anon_and_ti_read_and_authenticated" on "inventory_ar
 
 alter table "inventory_archive"."plot" drop constraint "plot_interval_name_fkey";
 
-alter table "inventory_archive"."plot" alter column "interval_name" set default 'ci2027'::enum_interval_name;
+alter table "inventory_archive"."plot" alter column "interval_name" set default 'ci2027';
 
 alter table "inventory_archive"."plot" alter column "interval_name" drop not null;
-
-alter table "inventory_archive"."plot" alter column "interval_name" set data type enum_interval_name using "interval_name"::enum_interval_name;
 
 alter table "inventory_archive"."structure_gt4m" alter column "is_mirrored" set not null;
 
@@ -218,8 +216,6 @@ create table "lookup"."lookup_boundary_type_rows" (
 
 alter table "lookup"."lookup_boundary_type_rows" enable row level security;
 
-alter table "lookup"."lookup_interval" alter column "code" set data type integer using "code"::integer;
-
 CREATE UNIQUE INDEX lookup_boundary_type_rows_code_key ON lookup.lookup_boundary_type_rows USING btree (code);
 
 CREATE UNIQUE INDEX lookup_boundary_type_rows_pkey ON lookup.lookup_boundary_type_rows USING btree (id);
@@ -245,9 +241,8 @@ using (true);
 
 
 
-alter extension "postgis" update to '3.3.2';
-
-create type "public"."enum_interval_name" as enum ('bwi1987', 'bwi1992', 'bwi2002', 'ci2008', 'bwi2012', 'ci2017', 'ci2022', 'ci2027', 'ci2012');
+-- Remove PostGIS downgrade - extensions can only be upgraded, not downgraded
+-- alter extension "postgis" update to '3.3.2';
 
 alter table "public"."record_changes" drop constraint "record_changes_plot_id_fkey";
 
@@ -330,6 +325,7 @@ using (true);
 
 
 
-alter extension "postgis_topology" update to '3.3.2';
+-- Remove PostGIS topology downgrade - extensions can only be upgraded, not downgraded
+-- alter extension "postgis_topology" update to '3.3.2';
 
 
