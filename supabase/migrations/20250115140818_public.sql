@@ -34,13 +34,82 @@ CREATE TABLE IF NOT EXISTS organizations (
     can_admin_organization boolean NOT NULL DEFAULT false
 );
 
-INSERT INTO organizations (apex_domain, name) VALUES ('@thuenen.de', 'Thünen-Institut');
+alter table "public"."organizations" add column IF NOT EXISTS "entityName" text;
+
+alter table "public"."organizations" add column IF NOT EXISTS "is_root" boolean not null default false;
+
+alter table "public"."organizations" add column IF NOT EXISTS "type" text not null default 'organization'::text;
+
+-- INSERT INTO organizations (apex_domain, name) VALUES ('@thuenen.de', 'Thünen-Institut');
 
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Enable all access for authenticated users with same parent_organization_id" ON organizations;
+CREATE POLICY "Enable all access for authenticated users with same parent_organization_id"
+ON organizations
+AS PERMISSIVE
+FOR Select
+TO authenticated
+USING (
+    -- Allow users to access organizations where they are a member
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND up.organization_id = organizations.id
+    ) OR
+    -- Allow users to access organizations where they are a member of the parent organization
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND up.organization_id = organizations.parent_organization_id
+    )
+);
+-- Create a policy to allow authenticated users to insert update and delete organizations where organization_id is the same as their own organization_id or parent_organization_id
+DROP POLICY IF EXISTS "Enable all access for authenticated users with same organization_id or parent_organization_id" ON organizations;
+CREATE POLICY "Enable all access for authenticated users with same organization_id or parent_organization_id"
+ON organizations
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING (
+    -- Allow users to access organizations where they are a member
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND up.organization_id = organizations.id
+    ) OR
+    -- Allow users to access organizations where they are a member of the parent organization
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND up.organization_id = organizations.parent_organization_id
+    )
+)
+WITH CHECK (
+    -- Allow users to insert, update or delete organizations where they are a member
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND up.organization_id = organizations.id
+    ) OR
+    -- Allow users to insert, update or delete organizations where they are a member of the parent
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND up.organization_id = organizations.parent_organization_id
+    )
+);
+
+
 -- Path: supabase/migrations/20241202134806_public.sql
 CREATE TABLE IF NOT EXISTS public.users_profile (
-    id uuid not null references auth.users on delete cascade primary key,
+    id uuid primary key references auth.users on delete cascade,
     is_admin boolean NOT NULL DEFAULT false,
     state_responsible smallint NULL,
     is_organization_admin boolean NOT NULL DEFAULT false,
@@ -48,8 +117,21 @@ CREATE TABLE IF NOT EXISTS public.users_profile (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     email text NOT NULL
 );
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS "is_database_admin" boolean NOT NULL DEFAULT false;
 
 Alter Table public.users_profile enable row level security;
+
+-- Create a policy to allow authenticated users to access their own profile and user with same organization_id from users_permissions
+DROP POLICY IF EXISTS "Enable all access for authenticated users with same organization_id" ON public.users_profile;
+CREATE POLICY "Enable all access for authenticated users with same organization_id"
+ON public.users_profile
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+    -- Allow users to access their own profile
+    true
+);
 
 -- inserts a row into public.profiles
 DROP FUNCTION IF EXISTS public.handle_new_user_profile CASCADE;
@@ -101,14 +183,87 @@ create trigger on_auth_user_created
 CREATE TABLE IF NOT EXISTS troop (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    name text NULL,
-    supervisor_id uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
-    user_ids uuid[] NOT NULL DEFAULT '{}',
-    plot_ids uuid[] NOT NULL DEFAULT '{}',
-    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE
+    name text NOT NULL,
+    --supervisor_id uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
+    --user_ids uuid[] NOT NULL DEFAULT '{}',
+    --plot_ids uuid[] NOT NULL DEFAULT '{}',
+    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    is_control_troop boolean NOT NULL DEFAULT false
 );
 
+-- add user_ids array
+ALTER TABLE troop ADD COLUMN IF NOT EXISTS user_ids uuid[] NOT NULL DEFAULT '{}';
+
+
 ALTER TABLE troop ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Enable all access for authenticated users of same organization_id" ON troop;
+CREATE POLICY "Enable all access for authenticated users of same organization_id"
+ON troop
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+)
+WITH CHECK (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+);
+
+
+-- CREATE TAble Lose
+CREATE TABLE IF NOT EXISTS public.organizations_lose (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    name text NOT NULL,
+    description text,
+    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE
+    --parent_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE
+);
+ALTER TABLE public.organizations_lose ADD COLUMN IF NOT EXISTS responsible_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE;
+ALTER TABLE public.organizations_lose ADD COLUMN IF NOT EXISTS troop_id uuid NULL REFERENCES troop(id) ON DELETE CASCADE;
+ALTER TABLE public.organizations_lose ADD COLUMN IF NOT EXISTS record_ids uuid[] NOT NULL DEFAULT '{}';
+ALTER TABLE public.organizations_lose ADD COLUMN IF NOT EXISTS cluster_ids uuid[] NOT NULL DEFAULT '{}';
+ALTER TABLE organizations_lose ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lose Enable all access for authenticated users of same organization_id" ON organizations_lose;
+CREATE POLICY "Lose Enable all access for authenticated users of same organization_id"
+ON organizations_lose
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+    --OR parent_organization_id IN (
+    --    SELECT organization_id
+    --    FROM public.users_permissions
+    --    WHERE user_id = auth.uid()
+    --)
+)
+WITH CHECK (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+    --OR parent_organization_id IN (
+    --    SELECT organization_id
+    --    FROM public.users_permissions
+    --    WHERE user_id = auth.uid()
+    --)
+);
 
 --CREATE TABLE IF NOT EXISTS troop_permissions (
 --    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -119,27 +274,131 @@ ALTER TABLE troop ENABLE ROW LEVEL SECURITY;
 --
 --ALTER TABLE troop_permissions ENABLE ROW LEVEL SECURITY;
 
-
-DROP TABLE IF EXISTS public.records CASCADE;
-create table "records" (
+create table IF NOT EXISTS "records" (
     "id" uuid primary key default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "updated_by" uuid null DEFAULT auth.uid() REFERENCES auth.users(id),
     "properties" jsonb not null default '{}'::jsonb,
     "previous_properties" jsonb not null default '{}'::jsonb,
     "previous_properties_updated_at" timestamp with time zone not null default now(),
-    "is_valid" boolean not null default false,
-    "plot_id" uuid NULL REFERENCES inventory_archive.plot(id) UNIQUE,
-    "troop_id" uuid NULL REFERENCES troop(id),
+    "is_valid" boolean null default null,
+    "plot_id" uuid not NULL REFERENCES inventory_archive.plot(id) UNIQUE,
+    --"cluster_id" uuid NULL REFERENCES inventory_archive.cluster(id),
+    --"troop_id" uuid NULL REFERENCES troop(id),
     "schema_id" uuid NULL REFERENCES public.schemas(id),
-    "schema_name" text NULL DEFAULT 'ci2027',
-    "state_responsible" smallint not NULL REFERENCES lookup.lookup_state (code),
-    "organization_id" uuid not NULL REFERENCES organizations(id)
+    "schema_name" text NULL DEFAULT 'ci2027'
+    --"state_responsible" smallint not NULL REFERENCES lookup.lookup_state (code),
+    --"organization_id" uuid not NULL REFERENCES organizations(id)
 );
+
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "responsible_state" uuid REFERENCES organizations(id) ON DELETE SET NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "responsible_provider" uuid REFERENCES organizations(id) ON DELETE SET NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "responsible_troop" uuid REFERENCES troop(id) ON DELETE SET NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "validated_at" timestamp with time zone NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "message" text NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_id" uuid NULL REFERENCES inventory_archive.cluster(id);
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_name" text NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "plot_name" text NULL;
+
+-- Add indexes to the records table for common query fields
+CREATE INDEX IF NOT EXISTS idx_records_plot_id ON records(plot_id);
+CREATE INDEX IF NOT EXISTS idx_records_schema_id ON records(schema_id);
+CREATE INDEX IF NOT EXISTS idx_records_responsible_state ON records(responsible_state);
+CREATE INDEX IF NOT EXISTS idx_records_responsible_provider ON records(responsible_provider);
+CREATE INDEX IF NOT EXISTS idx_records_responsible_troop ON records(responsible_troop);
+CREATE INDEX IF NOT EXISTS idx_records_cluster_id ON records(cluster_id);
+CREATE INDEX IF NOT EXISTS idx_records_schema_name ON records(schema_name);
 
 COMMENT ON TABLE "records" IS 'Plots';
 
 alter table "records" enable row level security;
+
+-- Create a policy to allow "update" and "select" only users_permissions with the same organization_id of responsible_state, responsible_provider or responsible_troop
+DROP POLICY IF EXISTS "Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "records";
+CREATE POLICY "Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop"
+ON "records"
+AS PERMISSIVE
+FOR select
+TO authenticated
+USING (
+    -- If users_profile "is_admin" is true, allow access to all records
+    EXISTS (
+        SELECT 1
+        FROM public.users_profile prof
+        WHERE prof.id = auth.uid()
+          AND prof.is_admin = true
+    ) OR
+    responsible_state IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_provider IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_troop IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+);
+-- Create a policy to allow "update" and "select" only users_permissions with the same organization_id of responsible_state, responsible_provider or responsible_troop
+DROP POLICY IF EXISTS "Enable UPDATE access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "records";
+CREATE POLICY "Enable UPDATE access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop"
+ON "records"
+AS PERMISSIVE
+FOR update
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.users_profile prof
+        WHERE prof.id = auth.uid()
+          AND prof.is_admin = true
+    ) OR
+    responsible_state IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_provider IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_troop IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.users_profile prof
+        WHERE prof.id = auth.uid()
+          AND prof.is_admin = true
+    ) OR
+    responsible_state IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_provider IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_troop IN (
+       SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+);           
+ 
+
 
 create table "record_changes" (
     "id" uuid primary key default gen_random_uuid(),
@@ -148,8 +407,8 @@ create table "record_changes" (
     "properties" jsonb not null default '{}'::jsonb,
     "previous_properties" jsonb not null default '{}'::jsonb,
     "previous_properties_updated_at" timestamp with time zone not null default now(),
-    "is_valid" boolean not null default false,
-    "supervisor_id" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
+    "is_valid" boolean null default null,
+    --"supervisor_id" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
     "plot_id" uuid NULL REFERENCES inventory_archive.plot(id),
     "troop_id" uuid NULL REFERENCES troop(id),
     "schema_id" uuid NULL REFERENCES public.schemas(id),
@@ -161,127 +420,70 @@ COMMENT ON TABLE "record_changes" IS 'Änderungen an Plots';
 alter table "record_changes" enable row level security;
 
 
---- Backout plot to backup_changes every time plot updates
-CREATE OR REPLACE FUNCTION public.handle_record_changes()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  -- only if is_valid change
-  if new.is_valid != old.is_valid then
-    -- Check if the new properties are different from the old properties
-    if new.properties IS DISTINCT FROM old.properties then
-      -- Insert a record into the record_changes table
-      INSERT INTO public.record_changes (updated_by, properties, schema_name, previous_properties, previous_properties_updated_at, is_valid, supervisor_id, plot_id, troop_id, schema_id)
-      VALUES (NEW.updated_by, NEW.properties, NEW.schema_name, OLD.properties, OLD.previous_properties_updated_at, OLD.is_valid, OLD.supervisor_id, OLD.plot_id, OLD.troop_id, OLD.schema_id);
-    end if;
-  end if;
-  return new;
-end;
-$$;
-
--- trigger the function every time a plot is updated
-DROP TRIGGER IF EXISTS on_record_updated ON records;
-create trigger on_record_updated
-  after update on records
-  for each row execute procedure handle_record_changes();
-
-
-
-
-
--- First, create a function to validate JSON against schema
-CREATE OR REPLACE FUNCTION public.validate_json_properties_by_schema(schema_id uuid, properties jsonb)
-RETURNS boolean
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    schema_def json; -- Changed to jsonb
-BEGIN
-    -- Get the schema definition
-    SELECT schema INTO schema_def FROM public.schemas WHERE id = schema_id; -- Cast to jsonb
-    -- Check if schema_def is null (schema not found) before calling jsonb_matches_schema
-    IF schema_def IS NULL THEN
-        RETURN FALSE; -- Or handle the error as needed (e.g., RAISE EXCEPTION)
-    END IF;
-    
-    -- Check if properties is null or empty
-    IF properties IS NULL OR properties = '{}'::jsonb THEN
-        RETURN TRUE; -- Or FALSE, depending on your requirements
-    END IF;
-
-    return extensions.jsonb_matches_schema(schema := schema_def, instance := properties);
-
-END;
-$$;
-
--- Create trigger function to validate records and set is_valid flag
-CREATE OR REPLACE FUNCTION validate_record_properties()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-
-    SELECT id INTO NEW.schema_id 
-    FROM public.schemas 
-    WHERE interval_name = NEW.schema_name AND is_visible = true
-    ORDER BY created_at DESC
-    LIMIT 1;
-    -- Only validate if both schema_id and properties are present
-    IF NEW.schema_name IS NOT NULL AND NEW.properties IS NOT NULL AND jsonb_typeof(NEW.properties) = 'object' THEN
-        -- Get Schema ID from interval_name, selecting the latest
-        SELECT id INTO NEW.schema_id 
-        FROM public.schemas 
-        WHERE interval_name = NEW.schema_name AND is_visible = true
-        ORDER BY created_at DESC
-        LIMIT 1;
-        -- Check if the JSON data is valid against the schema
-        NEW.is_valid := public.validate_json_properties_by_schema(NEW.schema_id, NEW.properties);
-    ELSE
-        -- If either schema_id or properties is missing, mark as invalid
-        NEW.is_valid := FALSE;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
--- Create or replace the trigger
-DROP TRIGGER IF EXISTS before_record_insert_update ON public.records;
-CREATE TRIGGER before_record_insert_update
-    BEFORE INSERT OR UPDATE ON public.records
-    FOR EACH ROW EXECUTE FUNCTION public.validate_record_properties();
 
 
 
 
 -- Invitation table
-CREATE TABLE public.invitations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    inviter_id UUID REFERENCES auth.users(id),
-    invitee_email VARCHAR NOT NULL,
-    token VARCHAR NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    expires_at TIMESTAMPTZ,
-    accepted BOOLEAN DEFAULT FALSE,
-    troop_id UUID REFERENCES public.troop(id),
-    organization_id UUID REFERENCES public.organizations(id)
-);
-ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
+--CREATE TABLE public.invitations (
+--    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--    inviter_id UUID REFERENCES auth.users(id),
+--    invitee_email VARCHAR NOT NULL,
+--    token VARCHAR NOT NULL,
+--    created_at TIMESTAMPTZ DEFAULT now(),
+--    expires_at TIMESTAMPTZ,
+--    accepted BOOLEAN DEFAULT FALSE,
+--    troop_id UUID REFERENCES public.troop(id),
+--    organization_id UUID REFERENCES public.organizations(id)
+--);
+--ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
 -- Create a policy to allow only the inviter ALL
-CREATE POLICY "Enable all access for authenticated users"
-ON public.invitations
+--CREATE POLICY "Enable all access for authenticated users"
+--ON public.invitations
+--AS PERMISSIVE
+--FOR ALL
+--TO authenticated
+--USING (inviter_id = auth.uid() OR troop_id IN (
+--    SELECT id FROM public.troop WHERE supervisor_id = auth.uid()
+--))
+--WITH CHECK (inviter_id = auth.uid() OR troop_id IN (
+--    SELECT id FROM public.troop WHERE supervisor_id = auth.uid()
+--));
+
+
+-- user_permissions table
+create table IF NOT EXISTS "public"."users_permissions" (
+    "id" uuid not null default gen_random_uuid() primary key,
+    "created_at" timestamp with time zone not null default now(),
+    "user_id" uuid not null default auth.uid() references auth.users(id) on delete cascade,
+    "organization_id" uuid not null references organizations(id) on delete cascade,
+    "created_by" uuid default auth.uid() references auth.users(id) on delete cascade,
+    "troop_id" uuid references public.troop(id) on delete cascade
+    --"is_organization_admin" boolean not null default false
+);
+ALTER TABLE "public"."users_permissions" ADD COLUMN IF NOT EXISTS "is_database_admin" boolean not null default false;
+ALTER TABLE "public"."users_permissions" ADD COLUMN IF NOT EXISTS "is_organization_admin" boolean not null default false;
+
+alter table "public"."users_permissions" enable row level security;
+
+-- Update the policy for users_permissions
+DROP POLICY IF EXISTS "Enable users with own role equals organization_admin and same organization_id" ON "public"."users_permissions";
+CREATE POLICY "Enable users with own role equals organization_admin and same organization_id"
+ON "public"."users_permissions"
 AS PERMISSIVE
-FOR ALL
+FOR SELECT
 TO authenticated
-USING (inviter_id = auth.uid() OR troop_id IN (
-    SELECT id FROM public.troop WHERE supervisor_id = auth.uid()
-))
-WITH CHECK (inviter_id = auth.uid() OR troop_id IN (
-    SELECT id FROM public.troop WHERE supervisor_id = auth.uid()
-));
+USING (
+    -- Allow users to access their own permissions
+    true
+);
+
+--DROP POLICY IF EXISTS "Select user permissions for authenticated users and user_id equals auth.uid()" ON "public"."users_permissions";
+--CREATE POLICY "Select user permissions for authenticated users and user_id equals auth.uid()"
+--ON "public"."users_permissions"
+--AS PERMISSIVE
+--FOR SELECT
+--TO authenticated
+--USING (user_id = auth.uid() OR troop_id IN (
+--    SELECT id FROM public.troop WHERE supervisor_id = auth.uid()
+--));

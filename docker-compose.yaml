@@ -40,22 +40,25 @@ services:
     container_name: supabase-studio
     networks:
       - supabase-net
+    ports:
+      - "${STUDIO_PORT:-54324}:3000"
     volumes:
       - ./supabase:/supabase
       - ./supabase/seed.sql:/docker-entrypoint-initdb.d/seed.sql
-    image: supabase/studio:2025.06.02-sha-8f2993d
+    image: supabase/studio:2025.06.16-sha-c4316c3
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://studio:3000/api/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
-        ]
-      timeout: 10s
-      interval: 5s
-      retries: 3
+    # healthcheck:
+    #   test:
+    #     [
+    #       "CMD",
+    #       "node",
+    #       "-e",
+    #       "const fs = require('fs'); if (fs.existsSync('/tmp/.next.pid')) { console.log('OK'); process.exit(0); } else { process.exit(1); }"
+    #     ]
+    #   timeout: 20s
+    #   interval: 10s
+    #   retries: 5
+    #   start_period: 30s
     depends_on:
       analytics:
         condition: service_healthy

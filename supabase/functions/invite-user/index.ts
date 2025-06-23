@@ -110,13 +110,12 @@ Deno.serve(async (req) => {
             user_id: newUserID,
             organization_id: metaData.organization_id,
             created_by: userData.user.id,
-            role: metaData.role
+            is_organization_admin: metaData.is_organization_admin || false
           })
           .select(); // Add .select() to get the inserted data
 
         if (permissionError) {
           console.error('Error inserting into users_permissions:', permissionError, {
-            user_id: data.user.id,
             organization_id: metaData.organization_id,
             created_by: userData.user.id
           });
