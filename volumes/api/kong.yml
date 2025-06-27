@@ -230,7 +230,7 @@ services:
             - admin
             - anon
 
-  ## PowerSync WebSocket service
+  ## PowerSync WebSocket service - connects to root path
   - name: powersync-ws
     _comment: 'PowerSync WebSocket: /sync/stream -> ws://powersync:8181/'
     url: http://powersync:8181/
@@ -238,8 +238,9 @@ services:
     routes:
       - name: powersync-ws-stream
         strip_path: true
+        regex_priority: 1000
         paths:
-          - /sync/stream
+          - /sync/stream$
     plugins:
       - name: cors
         config:
@@ -258,6 +259,7 @@ services:
             - Connection
             - Sec-WebSocket-Key
             - Sec-WebSocket-Version
+            - Sec-WebSocket-Protocol
           credentials: true
       - name: key-auth
         config:
