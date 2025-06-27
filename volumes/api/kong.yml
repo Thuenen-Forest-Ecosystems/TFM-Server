@@ -220,7 +220,54 @@ services:
             - apikey
             - content-type
           credentials: true
-  
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  ## PowerSync WebSocket service
+  - name: powersync-ws
+    _comment: 'PowerSync WebSocket: /sync/stream -> ws://powersync:8181/'
+    url: http://powersync:8181/
+    protocol: http
+    routes:
+      - name: powersync-ws-stream
+        strip_path: true
+        paths:
+          - /sync/stream
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - https://thuenen-forest-ecosystems.github.io
+            - http://localhost:5173
+          methods:
+            - GET
+            - POST
+            - OPTIONS
+          headers:
+            - Authorization
+            - apikey
+            - content-type
+            - Upgrade
+            - Connection
+            - Sec-WebSocket-Key
+            - Sec-WebSocket-Version
+          credentials: true
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
 
   ## Analytics routes
   - name: analytics-v1
