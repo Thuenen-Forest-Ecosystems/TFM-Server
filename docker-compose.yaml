@@ -30,9 +30,16 @@ services:
         condition: service_healthy
     volumes:
       - ./config:/config
+    environment:
+      - PS_DATA_SOURCE_URI=${PS_DATA_SOURCE_URI}
+      - PS_PORT=${PS_PORT}
+      - PS_MONGO_URI=${PS_MONGO_URI}
+      - PS_SUPABASE_JWT_SECRET=${PS_SUPABASE_JWT_SECRET}
+      - PS_JWKS_URL=${PS_JWKS_URL}
+    ports:
+      - "${PS_PORT}:${PS_PORT}"
     networks:
       - default
-      #- supabase_network_tfm_server
       - supabase-net
 
   # ====== SUPABASE ======
