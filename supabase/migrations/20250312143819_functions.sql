@@ -282,15 +282,15 @@ CREATE TRIGGER before_record_insert_update
 -- Example: SELECT public.add_plot_ids_to_records('10cf8993-0190-4a9c-b135-111d8009f7b4'); // ci2027
 -- Function to get all id from inventory_archive.plot and add one row to public.records (if exists do nothing)
 DROP FUNCTION IF EXISTS public.add_plot_ids_to_records;
-CREATE OR REPLACE FUNCTION public.add_plot_ids_to_records(p_schema_id UUID)
+CREATE OR REPLACE FUNCTION public.add_plot_ids_to_records(p_schema_id UUID, p_batch_size INTEGER DEFAULT 1000)
 RETURNS INTEGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, inventory_archive
 AS $$
 DECLARE
-    inserted_count INTEGER;
-
+    inserted_count INTEGER := 0;
+    batch_count INTEGER := 0;
 BEGIN
     RAISE NOTICE 'Starting bulk insert of missing plot records...';
 
@@ -299,37 +299,43 @@ BEGIN
     ALTER TABLE public.records DISABLE TRIGGER before_record_insert_or_update;
     ALTER TABLE public.records DISABLE TRIGGER on_record_updated;
     ALTER TABLE public.records DISABLE TRIGGER before_record_insert_update;
-    
 
-    -- schema_id
-    
-    -- Single bulk insert operation - much faster than loops
-    WITH missing_plots AS (
-        SELECT p.id, p.plot_name, p.cluster_name, p.cluster_id
-        FROM inventory_archive.plot p
-        WHERE p.id IS NOT NULL 
-        AND p.interval_name = 'bwi2022'
-        -- AND p.forest_status = 3, 4 or 5
-        AND p.forest_status IN (3, 4, 5)
-        AND NOT EXISTS (
-            SELECT 1 FROM public.records r 
-            WHERE r.plot_id = p.id
+    LOOP
+        -- Insert a batch of missing plots
+        WITH missing_plots AS (
+            SELECT p.id, p.plot_name, p.cluster_name, p.cluster_id
+            FROM inventory_archive.plot p
+            JOIN inventory_archive.cluster c ON p.cluster_id = c.id
+            WHERE c.cluster_situation = 1 AND p.interval_name = 'bwi2022'
+            AND NOT EXISTS (
+                SELECT 1 FROM public.records r 
+                WHERE r.plot_id = p.id
+            )
+            LIMIT p_batch_size
         )
-    )
-    INSERT INTO public.records (plot_id, schema_id, plot_name, cluster_name, cluster_id)
-    SELECT id, p_schema_id, p.plot_name, p.cluster_name, p.cluster_id FROM missing_plots p;
+        INSERT INTO public.records (plot_id, schema_id, plot_name, cluster_name, cluster_id)
+        SELECT id, p_schema_id, plot_name, cluster_name, cluster_id FROM missing_plots;
 
-    GET DIAGNOSTICS inserted_count = ROW_COUNT;
+        GET DIAGNOSTICS batch_count = ROW_COUNT;
+
+        -- Exit the loop if no more rows are inserted
+        IF batch_count = 0 THEN
+            EXIT;
+        END IF;
+
+        inserted_count := inserted_count + batch_count;
+        RAISE NOTICE 'Inserted % records in this batch...', batch_count;
+    END LOOP;
 
     -- Re-enable triggers after the insert
     RAISE NOTICE 'Re-enabling user triggers...';
     ALTER TABLE public.records ENABLE TRIGGER before_record_insert_or_update;
     ALTER TABLE public.records ENABLE TRIGGER on_record_updated;
     ALTER TABLE public.records ENABLE TRIGGER before_record_insert_update;
-    
+
     RAISE NOTICE 'Bulk insert completed: % records inserted', inserted_count;
     RETURN inserted_count;
-    
+
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Error in bulk insert: %', SQLERRM;
     RAISE;

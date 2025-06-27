@@ -16,8 +16,8 @@ create table IF NOT EXISTS "public"."schemas" (
 alter table "public"."schemas" enable row level security;
 
 -- add first schema
-insert into "public"."schemas" 
-("interval_name", "title", "description", "is_visible", "bucket_schema_file_name", "bucket_plausability_file_name") values ('ci2027', 'CI 2027', 'CI 2027', true, 'ci2027_schema_0.0.1.json', 'ci2027_plausability_0.0.1.js');
+--insert into "public"."schemas" 
+--("interval_name", "title", "description", "is_visible", "bucket_schema_file_name", "bucket_plausability_file_name") values ('ci2027', 'CI 2027', 'CI 2027', true, 'ci2027_schema_0.0.1.json', 'ci2027_plausability_0.0.1.js');
 
 
 
@@ -290,15 +290,15 @@ create table IF NOT EXISTS "records" (
     --"state_responsible" smallint not NULL REFERENCES lookup.lookup_state (code),
     --"organization_id" uuid not NULL REFERENCES organizations(id)
 );
-
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "responsible_administration" uuid REFERENCES organizations(id) ON DELETE SET NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "responsible_state" uuid REFERENCES organizations(id) ON DELETE SET NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "responsible_provider" uuid REFERENCES organizations(id) ON DELETE SET NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "responsible_troop" uuid REFERENCES troop(id) ON DELETE SET NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "validated_at" timestamp with time zone NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "message" text NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_id" uuid NULL REFERENCES inventory_archive.cluster(id);
-ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_name" text NULL;
-ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "plot_name" text NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_name" integer NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "plot_name" smallint NULL;
 
 -- Add indexes to the records table for common query fields
 CREATE INDEX IF NOT EXISTS idx_records_plot_id ON records(plot_id);
@@ -321,13 +321,18 @@ AS PERMISSIVE
 FOR select
 TO authenticated
 USING (
-    -- If users_profile "is_admin" is true, allow access to all records
+    -- check if one of the organizations in public.users_permissions user has access to is type organizations.type = 'root'
     EXISTS (
         SELECT 1
-        FROM public.users_profile prof
-        WHERE prof.id = auth.uid()
-          AND prof.is_admin = true
+        FROM public.organizations org
+        WHERE org.id IN (
+            SELECT organization_id
+            FROM public.users_permissions
+            WHERE user_id = auth.uid()
+        )
+    AND org.type = 'root'
     ) OR
+
     responsible_state IN (
         SELECT organization_id
         FROM public.users_permissions

@@ -41,16 +41,13 @@ bucket_definitions:
       - SELECT * FROM "public"."troop" WHERE supervisor_id = bucket.user_id
       
 
- 
-
   organizations:
     parameters:
       - SELECT organization_id FROM "public"."users_profile" WHERE id = request.user_id()
     data:
       - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
-      - SELECT * FROM "public"."records" WHERE organization_id = bucket.organization_id
-      
+      - SELECT * FROM "public"."records" WHERE responsible_administration = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_provider = bucket.organization_id
 
   global:
     data:
