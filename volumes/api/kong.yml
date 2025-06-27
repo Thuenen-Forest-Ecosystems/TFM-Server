@@ -240,6 +240,12 @@ services:
         regex_priority: 2000
         paths:
           - /sync/stream$
+      # Route for external Apache that strips /sync prefix
+      - name: powersync-ws-external
+        strip_path: true
+        regex_priority: 2001
+        paths:
+          - /stream$
     plugins:
       - name: cors
         config:
