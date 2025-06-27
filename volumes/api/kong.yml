@@ -197,37 +197,6 @@ services:
     plugins:
       - name: cors
 
-  - name: powersync-v1
-    _comment: 'PowerSync: /sync/* -> http://powersync:8181/*'
-    url: http://powersync:8181/
-    routes:
-      - name: powersync-v1-all
-        strip_path: true
-        paths:
-          - /sync/
-    plugins:
-      - name: cors
-        config:
-          origins:
-            - "*"
-          methods:
-            - GET
-            - POST
-            - OPTIONS
-          headers:
-            - Authorization
-            - apikey
-            - content-type
-      - name: key-auth
-        config:
-          hide_credentials: false
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
-
   ## PowerSync WebSocket service - connects to root path
   - name: powersync-ws
     url: http://powersync:8181/
