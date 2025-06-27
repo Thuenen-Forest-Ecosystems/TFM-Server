@@ -197,6 +197,29 @@ services:
     plugins:
       - name: cors
 
+  - name: powersync-v1
+    _comment: 'PowerSync: /sync/* -> http://powersync:8181/*'
+    url: http://powersync:8181/
+    routes:
+      - name: powersync-v1-all
+        strip_path: true
+        paths:
+          - /sync/
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - https://thuenen-forest-ecosystems.github.io # Production URL
+            - http://localhost:5173                      # Local dev URL
+          methods:
+            - GET
+            - POST
+            - OPTIONS
+          headers:
+            - Authorization
+            - apikey
+            - content-type
+          credentials: true
   
 
   ## Analytics routes

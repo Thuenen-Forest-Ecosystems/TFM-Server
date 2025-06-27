@@ -38,6 +38,11 @@ services:
       - PS_JWKS_URL=${PS_JWKS_URL}
     ports:
       - "${PS_PORT}:${PS_PORT}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - default
       - supabase-net

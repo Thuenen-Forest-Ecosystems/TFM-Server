@@ -10,7 +10,7 @@ services:
       - mongo_storage:/data/db
     networks:
       - default
-      - supabase-net
+      - ${NETWORK_NAME}
 
   # Initializes the MongoDB replica set. This service will not usually be actively running
   mongo-rs-init:
@@ -24,7 +24,7 @@ services:
       - 'mongosh --host mongo:27017 --eval ''try{rs.status().ok && quit(0)} catch {} rs.initiate({_id: "rs0", version: 1, members: [{ _id: 0, host : "mongo:27017" }]})'''
     networks:
       - default
-      - supabase-net
+      - ${NETWORK_NAME}
 
 volumes:
   mongo_storage:
