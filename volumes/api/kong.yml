@@ -209,8 +209,7 @@ services:
       - name: cors
         config:
           origins:
-            - https://thuenen-forest-ecosystems.github.io # Production URL
-            - http://localhost:5173                      # Local dev URL
+            - "*"
           methods:
             - GET
             - POST
@@ -219,7 +218,6 @@ services:
             - Authorization
             - apikey
             - content-type
-          credentials: true
       - name: key-auth
         config:
           hide_credentials: false
@@ -250,9 +248,7 @@ services:
       - name: cors
         config:
           origins:
-            - https://thuenen-forest-ecosystems.github.io
-            - https://ci.thuenen.de
-            - http://localhost:5173
+            - "*"
           methods:
             - GET
             - POST
@@ -266,7 +262,6 @@ services:
             - Sec-WebSocket-Key
             - Sec-WebSocket-Version
             - Sec-WebSocket-Protocol
-          credentials: true
       - name: key-auth
         config:
           hide_credentials: false
