@@ -197,52 +197,11 @@ services:
     plugins:
       - name: cors
 
-  ## PowerSync WebSocket service - connects to root path
-  - name: powersync-ws
-    url: http://powersync:8181/
-    protocol: http
-    routes:
-      - name: powersync-ws-stream
-        strip_path: true
-        regex_priority: 2000
-        paths:
-          - /sync/stream$
-      # Route for external Apache that strips /sync prefix
-      - name: powersync-ws-external
-        strip_path: true
-        regex_priority: 2001
-        paths:
-          - /stream$
-    plugins:
-      - name: cors
-        config:
-          origins:
-            - "*"
-          methods:
-            - GET
-            - POST
-            - OPTIONS
-          headers:
-            - Authorization
-            - apikey
-            - content-type
-            - Upgrade
-            - Connection
-            - Sec-WebSocket-Key
-            - Sec-WebSocket-Version
-            - Sec-WebSocket-Protocol
-      - name: key-auth
-        config:
-          hide_credentials: false
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
+  
 
   ## Analytics routes
   - name: analytics-v1
+    _comment: 'Analytics: /analytics/v1/* -> http://logflare:4000/*'
     url: http://analytics:4000/
     routes:
       - name: analytics-v1-all
@@ -252,6 +211,7 @@ services:
 
   ## Secure Database routes
   - name: meta
+    _comment: 'pg-meta: /pg/* -> http://pg-meta:8080/*'
     url: http://meta:8080/
     routes:
       - name: meta-all
@@ -270,6 +230,7 @@ services:
 
   ## Protected Dashboard - catch all remaining routes
   - name: dashboard
+    _comment: 'Studio: /* -> http://studio:3000/*'
     url: http://studio:3000/
     routes:
       - name: dashboard-all
