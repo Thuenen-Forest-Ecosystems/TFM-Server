@@ -197,11 +197,62 @@ services:
     plugins:
       - name: cors
 
+  ## PowerSync routes
+  - name: powersync-stream
+    url: http://powersync:8181/
+    protocol: http
+    routes:
+      - name: powersync-stream
+        strip_path: true
+        paths:
+          - /sync/stream
+    plugins:
+      - name: cors
+        config:
+          origins: ["*"]
+          methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+          headers: ["Accept", "Accept-Version", "Content-Length", "Content-MD5", "Content-Type", "Date", "X-Api-Version", "Authorization"]
+          exposed_headers: ["X-Resource-Count"]
+          preflight_continue: false
+
+  - name: powersync-stream-stripped
+    url: http://powersync:8181/
+    protocol: http
+    routes:
+      - name: powersync-stream-stripped
+        strip_path: false
+        paths:
+          - /stream
+    plugins:
+      - name: cors
+        config:
+          origins: ["*"]
+          methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+          headers: ["Accept", "Accept-Version", "Content-Length", "Content-MD5", "Content-Type", "Date", "X-Api-Version", "Authorization"]
+          exposed_headers: ["X-Resource-Count"]
+          preflight_continue: false
+
+  - name: powersync-api
+    url: http://powersync:8181/
+    protocol: http
+    routes:
+      - name: powersync-api
+        strip_path: true
+        paths:
+          - /sync/
+    plugins:
+      - name: cors
+        config:
+          origins: ["*"]
+          methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+          headers: ["Accept", "Accept-Version", "Content-Length", "Content-MD5", "Content-Type", "Date", "X-Api-Version", "Authorization"]
+          exposed_headers: ["X-Resource-Count"]
+          preflight_continue: false
+
   
 
   ## Analytics routes
   - name: analytics-v1
-    _comment: 'Analytics: /analytics/v1/* -> http://logflare:4000/*'
     url: http://analytics:4000/
     routes:
       - name: analytics-v1-all
@@ -211,7 +262,6 @@ services:
 
   ## Secure Database routes
   - name: meta
-    _comment: 'pg-meta: /pg/* -> http://pg-meta:8080/*'
     url: http://meta:8080/
     routes:
       - name: meta-all
@@ -230,7 +280,6 @@ services:
 
   ## Protected Dashboard - catch all remaining routes
   - name: dashboard
-    _comment: 'Studio: /* -> http://studio:3000/*'
     url: http://studio:3000/
     routes:
       - name: dashboard-all
