@@ -28,6 +28,7 @@ bucket_definitions:
       - SELECT organization_id FROM "public"."users_profile" WHERE id = request.user_id()
     data:
       - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
+      - SELECT * FROM "public"."organizations_lose" WHERE organization_id = bucket.organization_id
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
       - SELECT * FROM "public"."records" WHERE responsible_administration = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_provider = bucket.organization_id
 
