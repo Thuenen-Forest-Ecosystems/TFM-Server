@@ -42,6 +42,17 @@ clean_sql_file tmp/inventory_archive.sql
 #
 #psql "postgres://postgres:$POSTGRES_PASSWORD@134.110.100.75:3389/$POSTGRES_DB" -f tmp/inventory_archive.sql
 
+# DUMMP inventory_archive schema
+docker exec -u postgres supabase_db_supabase pg_dump \
+    -h 127.0.0.1 \
+    -p 5432 \
+    -U postgres \
+    -d postgres \
+    -n lookup \
+    --schema-only \
+    --enable-row-security \
+    > tmp/lookup_schema.sql
+clean_sql_file tmp/lookup_schema.sql
 
 # DUMP lookup
 docker exec -u postgres supabase_db_supabase pg_dump \
