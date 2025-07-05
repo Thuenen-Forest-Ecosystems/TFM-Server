@@ -159,21 +159,21 @@ using (auth.uid() = created_by OR EXISTS (
 
 
 -- Function to check if the current user is a member of a troop
-CREATE OR REPLACE FUNCTION public.is_troop_member(troop_id uuid)
-RETURNS boolean
-LANGUAGE sql
-SECURITY DEFINER
-AS $$
-    SELECT EXISTS (
-        SELECT 1 
-        FROM public.troop
-        WHERE id = troop_id 
-        AND (
-            supervisor_id = auth.uid() 
-            OR auth.uid()::uuid = ANY(user_ids)
-        )
-    );
-$$;
+--CREATE OR REPLACE FUNCTION public.is_troop_member(troop_id uuid)
+--RETURNS boolean
+--LANGUAGE sql
+--SECURITY DEFINER
+--AS $$
+--    SELECT EXISTS (
+--        SELECT 1 
+--        FROM public.troop
+--        WHERE id = troop_id 
+--        AND (
+--            supervisor_id = auth.uid() 
+--            OR auth.uid()::uuid = ANY(user_ids)
+--        )
+--    );
+--$$;
 
 -- Enable RLS
 ALTER TABLE public.records ENABLE ROW LEVEL SECURITY;
@@ -216,14 +216,14 @@ DROP POLICY IF EXISTS "record_access_policy" ON public.records;
 
 -- Troop
 -- Create policy for supervisors to have full access to their troops
-CREATE POLICY "troop_supervisor_all_policy"
-ON public.troop
-FOR ALL
-USING (supervisor_id = auth.uid())
-WITH CHECK (supervisor_id = auth.uid());
+--CREATE POLICY "troop_supervisor_all_policy"
+--ON public.troop
+--FOR ALL
+--USING (supervisor_id = auth.uid())
+--WITH CHECK (supervisor_id = auth.uid());
 
 -- Create policy for troop members to read troops they belong to
 CREATE POLICY "troop_member_read_policy"
 ON public.troop
 FOR SELECT
-USING (auth.uid()::uuid = ANY(user_ids));
+USING (true);

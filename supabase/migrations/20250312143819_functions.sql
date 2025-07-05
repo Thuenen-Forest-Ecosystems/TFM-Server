@@ -202,10 +202,10 @@ end;
 $$;
 
 -- trigger the function every time a plot is updated
-DROP TRIGGER IF EXISTS on_record_updated ON records;
+DROP TRIGGER IF EXISTS on_record_updated ON public.records;
 create trigger on_record_updated
-  after update on records
-  for each row execute procedure handle_record_changes();
+  after update on public.records
+  for each row execute procedure public.handle_record_changes();
 
 
 
@@ -238,7 +238,7 @@ END;
 $$;
 
 -- Create trigger function to validate records and set is_valid flag
-CREATE OR REPLACE FUNCTION validate_record_properties()
+CREATE OR REPLACE FUNCTION public.validate_record_properties()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER

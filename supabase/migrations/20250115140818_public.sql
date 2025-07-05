@@ -44,6 +44,30 @@ alter table "public"."organizations" add column IF NOT EXISTS "type" text not nu
 
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
+
+create table "public"."users_permissions" (
+    "id" uuid not null default gen_random_uuid(),
+    "created_at" timestamp with time zone not null default now(),
+    "user_id" uuid not null,
+    "organization_id" uuid not null,
+    "write_access" boolean not null default false,
+    "created_by" uuid default auth.uid(),
+    "role" text
+);
+
+alter table "public"."users_permissions" enable row level security;
+
+-- Create a policy to allow authenticated users to access users_permissions
+DROP POLICY IF EXISTS "Enable users with own role equals organization_admin and same organization_id" ON "public"."users_permissions";
+CREATE POLICY "Enable users with own role equals organization_admin and same organization_id"
+ON "public"."users_permissions"
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+    true
+);
+
 DROP POLICY IF EXISTS "Enable all access for authenticated users with same parent_organization_id" ON organizations;
 CREATE POLICY "Enable all access for authenticated users with same parent_organization_id"
 ON organizations

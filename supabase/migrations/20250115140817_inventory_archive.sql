@@ -98,7 +98,7 @@ ALTER TABLE plot
 	ADD COLUMN terrain_slope SMALLINT NULL CHECK (terrain_slope >= 0 AND terrain_slope <= 90), -- gneig [Grad]
 	ADD COLUMN terrain_exposure SMALLINT NULL CHECK (terrain_exposure >= 0 AND terrain_exposure <= 399), -- gexp [Gon]
 	ADD COLUMN management_type INTEGER NULL, -- be - lookup_management_type
-	ADD COLUMN harvesting_method INTEGER NULL, -- ernte (x3_ernte) - lookup_harvesting_method
+	ADD COLUMN harvest_condition INTEGER NULL, -- ernte (x3_ernte) - lookup_harvest_condition
 	ADD COLUMN biotope INTEGER NULL, -- biotop (x3_biotop) - lookup_biotope
 	ADD COLUMN stand_structure INTEGER NULL, -- ab - lookup_stand_structure
 	ADD COLUMN stand_age SMALLINT NULL, -- al_best 
@@ -132,7 +132,9 @@ ALTER TABLE plot
 	ADD COLUMN harvest_restriction_private_conservation boolean NULL DEFAULT FALSE, -- NeEigenbin - Eigenbindung - Ursache der Nutzungseinschränkung 16-Schutzflächen in Eigenbindung (z.B. Naturreservate)
 	ADD COLUMN harvest_restriction_other_internalcause boolean NULL DEFAULT FALSE, -- NeSIBUrsach - s. innerbetriebl. Urs. - Ursache der Nutzungseinschränkung 19-sonstige innerbetriebliche Ursachen
 	
-	ADD COLUMN usage_type INTEGER NULL -- NutzArt
+	--ADD COLUMN usage_type INTEGER NULL -- NutzArt
+	ADD COLUMN harvest_method INTEGER NULL REFERENCES lookup.lookup_harvest_method (code), -- NutzArt
+	ADD COLUMN harvest_reason INTEGER NULL REFERENCES lookup.lookup_harvest_reason (code) -- Nutzursache
 	;
 
 
@@ -234,8 +236,8 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupManagementType FOREIGN KEY (manage
 	REFERENCES lookup.lookup_management_type (code) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupHarvestingMethod FOREIGN KEY (harvesting_method)
-	REFERENCES lookup.lookup_harvesting_method (code) MATCH SIMPLE
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupHarvestingMethod FOREIGN KEY (harvest_condition)
+	REFERENCES lookup.lookup_harvest_condition (code) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupBiotope FOREIGN KEY (biotope)
@@ -299,10 +301,10 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupTreesLess4meterLayer FOREIGN KEY (
 	ON DELETE NO ACTION;
 
 -- usage_type
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupUsageType FOREIGN KEY (usage_type)
-	REFERENCES lookup.lookup_usage_type (code) MATCH SIMPLE
-	ON UPDATE NO ACTION
-	ON DELETE NO ACTION;
+--ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupUsageType FOREIGN KEY (usage_type)
+--	REFERENCES lookup.lookup_usage_type (code) MATCH SIMPLE
+--	ON UPDATE NO ACTION
+--	ON DELETE NO ACTION;
 
 
 ------------------------------------------------- PLOT COORDINATES -------------------------------------------------
@@ -434,9 +436,11 @@ ALTER TABLE edges
 	ADD COLUMN edge_number INTEGER NULL CHECK (edge_number >= 1), -- NEU: Kanten-ID || ToDo: Welchen Mehrwert hat diese ID gegenüber der ID?
 	ADD COLUMN edge_status INTEGER NULL, --Rk
 	ADD COLUMN edge_type INTEGER NULL, --Rart
+	ADD COLUMN edge_type_deprecated INTEGER NULL REFERENCES lookup.lookup_edge_type_deprecated (code), --Rart_Alt
 	ADD COLUMN terrain INTEGER NULL, --Rterrain
 	ADD COLUMN edges JSONB NOT NULL, -- NEU: GeoJSON
-	ADD COLUMN geometry_edges public.GEOMETRY(LineString, 4326) NULL; -- NEU: Geometrie
+	ADD COLUMN geometry_edges public.GEOMETRY(LineString, 4326) NULL,
+	ADD COLUMN id_stand_differences_rows INTEGER NULL REFERENCES lookup.lookup_id_stand_differences_rows(code); -- NEU: Geometrie
 
 ALTER TABLE edges ADD CONSTRAINT FK_Edges_Plot FOREIGN KEY (plot_id)
 	REFERENCES plot (id)

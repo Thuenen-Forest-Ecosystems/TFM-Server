@@ -135,8 +135,7 @@ create table "public"."users_permissions" (
     "organization_id" uuid not null,
     "write_access" boolean not null default false,
     "created_by" uuid default auth.uid(),
-    "role" text,
-    "troop_id" uuid
+    "role" text
 );
 
 

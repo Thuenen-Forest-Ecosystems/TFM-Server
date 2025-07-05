@@ -115,13 +115,15 @@ COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_other_internalcause
 COMMENT ON COLUMN inventory_archive.plot.marker_status IS 'Permanente Trakteckenmarkierung gefunden/gesetzt';
 COMMENT ON COLUMN inventory_archive.plot.marker_azimuth IS 'Position (Azimut [gon]) der permanenten Trakteckenmarkierung';
 COMMENT ON COLUMN inventory_archive.plot.marker_distance IS 'Position (Horizontalentfernung [cm]) der permanenten Trakteckenmarkierung';
-COMMENT ON COLUMN inventory_archive.plot.usage_type IS 'Nutzungsart';
+
+--COMMENT ON COLUMN inventory_archive.plot.usage_type IS 'Nutzungsart';
+
 COMMENT ON COLUMN inventory_archive.plot.marker_profile IS 'Profil der permanenten Trakteckenmarkierung; fakultativ';
 COMMENT ON COLUMN inventory_archive.plot.terrain_form IS 'Geländeform';
 COMMENT ON COLUMN inventory_archive.plot.terrain_slope IS 'Geländeneigung [Grad]';
 COMMENT ON COLUMN inventory_archive.plot.terrain_exposure IS 'Geländeexposition [Gon]';
 COMMENT ON COLUMN inventory_archive.plot.management_type IS 'Betriebsart';
-COMMENT ON COLUMN inventory_archive.plot.harvesting_method IS 'Bedingungen für die Holzernte';
+COMMENT ON COLUMN inventory_archive.plot.harvest_condition IS 'Bedingungen für die Holzernte';
 COMMENT ON COLUMN inventory_archive.plot.biotope IS 'Geschütztes Waldbiotop bei Vorgängerinventur (BWI 2011-2014)';
 COMMENT ON COLUMN inventory_archive.plot.stand_development_phase IS 'Entwicklungsphase / Wuchsklasse / Dimensionsklasse';
 COMMENT ON COLUMN inventory_archive.plot.stand_layer_regeneration IS 'Bestandesschicht aller jungen Bäume der Probekreise r=1 / 2m (Baumgrößen 0-6)';
