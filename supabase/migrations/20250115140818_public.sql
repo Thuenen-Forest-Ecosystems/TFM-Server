@@ -16,8 +16,8 @@ create table IF NOT EXISTS "public"."schemas" (
 alter table "public"."schemas" enable row level security;
 
 -- add first schema
---insert into "public"."schemas" 
---("interval_name", "title", "description", "is_visible", "bucket_schema_file_name", "bucket_plausability_file_name") values ('ci2027', 'CI 2027', 'CI 2027', true, 'ci2027_schema_0.0.1.json', 'ci2027_plausability_0.0.1.js');
+insert into "public"."schemas" 
+("interval_name", "title", "description", "is_visible", "bucket_schema_file_name", "bucket_plausability_file_name") values ('ci2027', 'CI 2027', 'CI 2027', true, 'ci2027_schema_0.0.1.json', 'ci2027_plausability_0.0.1.js');
 
 
 

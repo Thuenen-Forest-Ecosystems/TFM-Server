@@ -22,6 +22,7 @@ SELECT
     COALESCE(sl.data, '[]'::json) AS structures_lt4m,
     COALESCE(ee.data, '[]'::json) AS edges
 FROM inventory_archive.plot p
+WHERE p.interval_name = 'bwi2022'
 LEFT JOIN p_coords pc ON p.id = pc.plot_id
 LEFT JOIN t_trees tt ON p.id = tt.plot_id
 LEFT JOIN d_woods dw ON p.id = dw.plot_id
