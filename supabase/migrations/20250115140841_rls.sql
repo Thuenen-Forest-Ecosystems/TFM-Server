@@ -39,12 +39,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT public.enable_rls_for_schema('inventory_archive', ARRAY['anon', 'ti_read', 'authenticated']);
+SELECT public.enable_rls_for_schema('inventory_archive', ARRAY['ti_read', 'authenticated']);
+SELECT public.enable_rls_for_schema('inventory_archive', ARRAY['anon']);
 SELECT public.enable_rls_for_schema('lookup', ARRAY['anon', 'ti_read', 'authenticated']);
 
 
 -- DROP SELECT ACCESS FOR ANON
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.edges;
+DROP POLICY IF EXISTS default_select_anon ON inventory_archive.edges_coordinates;
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.position;
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.plot_coordinates;
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.plot_landmark;

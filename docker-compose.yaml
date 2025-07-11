@@ -246,6 +246,8 @@ services:
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
+      PGRST_OPENAPI_SERVER_PROXY_URI: https://ci.thuenen.de/rest/v1/
+
     command: "postgrest"
 
   realtime:

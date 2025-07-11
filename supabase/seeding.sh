@@ -52,7 +52,7 @@ for table in cluster plot deadwood edges regeneration structure_lt4m structure_g
 
 done;
 
-for table in plot_coordinates plot_landmark position subplots_relative_position tree_coordinates
+for table in plot_coordinates plot_landmark position subplots_relative_position tree_coordinates edges_coordinates
     do docker exec -u postgres supabase_db_supabase pg_dump \
         -h 127.0.0.1 \
         -p 5432 \

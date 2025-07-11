@@ -74,15 +74,48 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Deprecated: This trigger is not needed anymore as we handle geometry updates in the update_edges_coordinates function.
 DROP TRIGGER IF EXISTS update_geom_trigger ON inventory_archive.edges;
+--CREATE TRIGGER update_geom_trigger
+--BEFORE UPDATE OR INSERT ON inventory_archive.edges
+--FOR EACH ROW
+--EXECUTE PROCEDURE update_geom_column();
 
-CREATE TRIGGER update_geom_trigger
-BEFORE UPDATE OR INSERT ON inventory_archive.edges
+-- EDGET_COORDINATES TRIGGER --
+CREATE OR REPLACE FUNCTION inventory_archive.update_edges_coordinates()
+RETURNS TRIGGER AS $$
+DECLARE
+    start_point public.geometry;
+    new_geometry public.geometry;
+BEGIN
+    -- Get the start point from the position table
+    SELECT position_mean INTO start_point
+    FROM inventory_archive.position
+    WHERE plot_id = NEW.plot_id;
+
+    IF start_point IS NULL THEN
+        RAISE NOTICE 'No start point found for plot_id: %', NEW.plot_id;
+        RETURN NEW;
+    END IF;
+
+    -- Calculate the new geometry using the edges data
+    new_geometry := create_linestring_from_edges(NEW.edges, start_point);
+
+    -- Insert or update the geometry in the edges_coordinates table
+    INSERT INTO inventory_archive.edges_coordinates (edge_id, geometry_edges)
+    VALUES (NEW.id, new_geometry)
+    ON CONFLICT (edge_id)
+    DO UPDATE SET geometry_edges = EXCLUDED.geometry_edges;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_edges_coordinates_trigger ON inventory_archive.edges;
+CREATE TRIGGER update_edges_coordinates_trigger
+AFTER INSERT OR UPDATE ON inventory_archive.edges
 FOR EACH ROW
-EXECUTE PROCEDURE update_geom_column();
-
-
-
+EXECUTE FUNCTION inventory_archive.update_edges_coordinates();
 
 -- UPDATE CICLE --
 

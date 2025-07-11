@@ -30,6 +30,11 @@ LEFT JOIN r_gens rg ON p.id = rg.plot_id
 LEFT JOIN s_lt4m sl ON p.id = sl.plot_id
 LEFT JOIN e_edges ee ON p.id = ee.plot_id;
 
+-- Revoke all permissions from public role to prevent access
+REVOKE ALL ON public.plot_nested_json FROM PUBLIC;
+REVOKE ALL ON public.plot_nested_json FROM anon;
+REVOKE ALL ON public.plot_nested_json FROM authenticated;
+
 --CREATE VIEW public.plot_nested_json AS
 --SELECT
 --    plot.*,
@@ -465,3 +470,6 @@ CREATE TRIGGER trg_update_records_responsible_provider
 AFTER UPDATE OF cluster_ids, responsible_organization_id, troop_id ON public.organizations_lose
 FOR EACH ROW
 EXECUTE FUNCTION public.update_records_responsible_provider();
+
+
+

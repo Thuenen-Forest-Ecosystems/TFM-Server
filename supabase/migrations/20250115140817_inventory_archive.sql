@@ -452,6 +452,13 @@ ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type)
 ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupTerrain FOREIGN KEY (terrain)
 	REFERENCES lookup.lookup_terrain (code);
 
+	------------------------------------------------- EDGES -------------------------------------------------
+CREATE TABLE edges_coordinates (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE edges_coordinates
+	ADD COLUMN edge_id uuid NOT NULL REFERENCES edges (id) UNIQUE,
+	ADD COLUMN geometry_edges public.GEOMETRY(LineString, 4326) NULL;
+
+
 ------------------------------------------------- REGENERATION -------------------------------------------------
 CREATE TABLE regeneration (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE regeneration
