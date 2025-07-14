@@ -3,4 +3,4 @@
 	url = https://git-dmz.thuenen.de/datenerfassungci2027/ci2027_datenerfassung/tfm-seed-intern.git
 [submodule "supabase/seeds/public"]
 	path = supabase/seeds/public
-	url = https://git-dmz.thuenen.de/datenerfassungci2027/ci2027_datenerfassung/TFM-Seed.git
+	url = https://git-dmz.thuenen.de/tfm-seeds/public.git

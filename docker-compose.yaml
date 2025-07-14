@@ -50,7 +50,7 @@ services:
     volumes:
       - ./supabase:/supabase
       - ./supabase/seed.sql:/docker-entrypoint-initdb.d/seed.sql
-    image: supabase/studio:2025.06.16-sha-c4316c3
+    image: supabase/studio:2025.06.30-sha-6f5982d
     restart: unless-stopped
     # healthcheck:
     #   test:
@@ -246,7 +246,7 @@ services:
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
-      PGRST_OPENAPI_SERVER_PROXY_URI: https://ci.thuenen.de/rest/v1/
+      PGRST_OPENAPI_SERVER_PROXY_URI: ${PGRST_OPENAPI_SERVER_PROXY_URI}
 
     command: "postgrest"
 
