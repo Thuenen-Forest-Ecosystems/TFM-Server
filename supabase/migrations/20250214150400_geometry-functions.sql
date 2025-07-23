@@ -144,7 +144,17 @@ BEGIN
     new_center_point := ST_Project(start_point, distance_m, azimuth_rad);
     
     -- Create buffer using geography type for true circular shape
-    NEW.center_location := ST_Buffer(new_center_point::geography, NEW.radius)::public.geometry;
+    --NEW.center_location := ST_Buffer(new_center_point::geography, NEW.radius)::public.geometry;
+
+    -- Create buffer using geography type for true circular shape
+    NEW.radius := NEW.radius; -- Ensure radius is passed correctly
+
+    -- Insert or update geometry in subplots_relative_position_coordinates table
+    INSERT INTO inventory_archive.subplots_relative_position_coordinates (subplots_relative_position_id, geometry_subplots_relative_position)
+    VALUES (NEW.id, ST_Buffer(new_center_point::geography, NEW.radius)::public.geometry)
+    ON CONFLICT (subplots_relative_position_id)
+    DO UPDATE SET geometry_subplots_relative_position = EXCLUDED.geometry_subplots_relative_position;
+
 
     RETURN NEW;
 END;

@@ -7,7 +7,7 @@ CHUNK_SIZE=50000
 set -a && source ../.env.local && set +a
 
 # Create directories if they don't exist
-mkdir -p seeds/public seeds/hidden
+mkdir -p seeds/public seeds/intern
 
 # Function to add replication role and remove transaction_timeout
 clean_sql_file() {
@@ -17,11 +17,18 @@ clean_sql_file() {
     echo "SET session_replication_role = replica;" | cat - "$file" > temp && mv temp "$file"
 }
 
+# Function to add "ON CONFLICT (code) DO NOTHING" to every insert
+add_on_conflict_clause() {
+    local file=$1
+    sed -i '' -e '/INSERT INTO/ s/$/ ON CONFLICT (code) DO NOTHING;/' "$file"
+}
+
 # Remove all sql files in folder
 rm -f seeds/public/*.sql
-rm -f seeds/hidden/*.sql
+rm -f seeds/intern/*.sql
 
 # Dump lookup schema
+# Add "ON CONFLICT (code) DO NOTHING" to every insert in lookup.sql
 docker exec -u postgres supabase_db_supabase pg_dump \
     -h 127.0.0.1 \
     -p 5432 \
@@ -34,9 +41,13 @@ docker exec -u postgres supabase_db_supabase pg_dump \
     --enable-row-security \
     > seeds/public/lookup.sql
 clean_sql_file seeds/public/lookup.sql
+# Modify the lookup.sql file to include "ON CONFLICT (code) DO NOTHING"
+add_on_conflict_clause seeds/public/lookup.sql
 
 
-for table in cluster plot deadwood edges regeneration structure_lt4m structure_gt4m tree
+
+
+for table in cluster plot deadwood edges regeneration structure_lt4m structure_gt4m tree subplots_relative_position
     do docker exec -u postgres supabase_db_supabase pg_dump \
         -h 127.0.0.1 \
         -p 5432 \
@@ -52,7 +63,7 @@ for table in cluster plot deadwood edges regeneration structure_lt4m structure_g
 
 done;
 
-for table in plot_coordinates plot_landmark position subplots_relative_position tree_coordinates edges_coordinates
+for table in plot_coordinates plot_landmark position tree_coordinates edges_coordinates subplots_relative_position_coordinates
     do docker exec -u postgres supabase_db_supabase pg_dump \
         -h 127.0.0.1 \
         -p 5432 \
@@ -63,8 +74,8 @@ for table in plot_coordinates plot_landmark position subplots_relative_position 
         --inserts \
         --data-only \
         --enable-row-security \
-        > seeds/hidden/$table.sql
-    clean_sql_file seeds/hidden/$table.sql
+        > seeds/intern/$table.sql
+    clean_sql_file seeds/intern/$table.sql
 
 done;
 

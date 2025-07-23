@@ -22,13 +22,13 @@ SELECT
     COALESCE(sl.data, '[]'::json) AS structures_lt4m,
     COALESCE(ee.data, '[]'::json) AS edges
 FROM inventory_archive.plot p
-WHERE p.interval_name = 'bwi2022'
 LEFT JOIN p_coords pc ON p.id = pc.plot_id
 LEFT JOIN t_trees tt ON p.id = tt.plot_id
 LEFT JOIN d_woods dw ON p.id = dw.plot_id
 LEFT JOIN r_gens rg ON p.id = rg.plot_id
 LEFT JOIN s_lt4m sl ON p.id = sl.plot_id
-LEFT JOIN e_edges ee ON p.id = ee.plot_id;
+LEFT JOIN e_edges ee ON p.id = ee.plot_id
+WHERE p.interval_name = 'bwi2022';
 
 -- Revoke all permissions from public role to prevent access
 REVOKE ALL ON public.plot_nested_json FROM PUBLIC;
@@ -349,127 +349,359 @@ END;
 $$;
 
 
--- Update responsibility based on organizations_lose
--- function+trigger: if public.organizations_lose.record_ids array change add public.organizations_lose.organization_id to all records.responsible_provider where record.id in public.organizations_lose.record_ids and set null where records.responsible_provider=public.organizations_lose.organization_id and not in public.organizations_lose.record_ids
-CREATE OR REPLACE FUNCTION public.update_records_responsible_provider()
+-- If organizations_lose.responsible_organization_id inserted or updates set records.administration_los, records.state_los, records.provider_los, records.troop_los based on organizations.type
+-- Function to update records when organizations_lose responsible_organization_id changes
+DROP TRIGGER IF EXISTS trg_update_records_from_organizations_lose_changes ON public.organizations_lose;
+DROP FUNCTION IF EXISTS public.update_records_from_organizations_lose_changes;
+
+CREATE OR REPLACE FUNCTION public.update_records_from_organizations_lose_changes()
 RETURNS TRIGGER AS $$
 DECLARE
-    removed_ids uuid[];
-    new_organization_type text;
-    old_organization_type text;
+    org_type text;
 BEGIN
-    -- Handle when responsible_organization_id changes
-    IF OLD.responsible_organization_id IS DISTINCT FROM NEW.responsible_organization_id THEN
-        -- Get the type of the NEW responsible organization
-        SELECT type INTO new_organization_type
-        FROM organizations
-        WHERE id = NEW.responsible_organization_id;
-
-        -- Update all records in this lose with the new responsible organization
-        IF array_length(NEW.cluster_ids, 1) > 0 THEN
-            IF new_organization_type = 'country' THEN
-                UPDATE records
-                SET responsible_state = NEW.responsible_organization_id
-                WHERE cluster_id = ANY(NEW.cluster_ids);
-            ELSIF new_organization_type = 'provider' THEN
-                UPDATE records
-                SET responsible_provider = NEW.responsible_organization_id
-                WHERE cluster_id = ANY(NEW.cluster_ids);
-            END IF;
-        END IF;
-
-        -- Clear the old responsible organization from records (if it existed)
-        IF OLD.responsible_organization_id IS NOT NULL AND array_length(NEW.cluster_ids, 1) > 0 THEN
-            SELECT type INTO old_organization_type
+    -- Handle when responsible_organization_id is changed
+    IF NEW.responsible_organization_id IS DISTINCT FROM OLD.responsible_organization_id THEN
+        -- If NEW.responsible_organization_id is NULL, clear the appropriate los fields
+        IF NEW.responsible_organization_id IS NULL THEN
+            -- Get the old organization type to know which field to clear
+            SELECT type INTO org_type
             FROM organizations
-            WHERE id = OLD.responsible_organization_id;
-
-            IF old_organization_type = 'country' THEN
-                UPDATE records
-                SET responsible_state = NULL
-                WHERE cluster_id = ANY(NEW.cluster_ids)
-                  AND responsible_state = OLD.responsible_organization_id;
-            ELSIF old_organization_type = 'provider' THEN
-                UPDATE records
-                SET responsible_provider = NULL
-                WHERE cluster_id = ANY(NEW.cluster_ids)
-                  AND responsible_provider = OLD.responsible_organization_id;
-            END IF;
-        END IF;
-    END IF;
-
-    -- Handle when cluster_ids array changes (existing logic)
-    IF OLD.cluster_ids IS DISTINCT FROM NEW.cluster_ids THEN
-        -- 1. Handle clusters being ADDED to the 'cluster_ids' array.
-        IF array_length(NEW.cluster_ids, 1) > 0 AND NEW.responsible_organization_id IS NOT NULL THEN
-            -- Get the type of the organization for the NEW cluster.
-            SELECT type INTO new_organization_type
+            WHERE id = OLD.organization_id;
+            
+            -- Clear the appropriate los field based on old organization type
+            CASE org_type
+                WHEN 'root' THEN
+                    UPDATE records
+                    SET responsible_state =  NULL
+                    WHERE administration_los = NEW.id;
+                    
+                WHEN 'country' THEN
+                    UPDATE records
+                    SET responsible_state = NULL
+                    WHERE state_los = NEW.id;
+                    
+                WHEN 'provider' THEN
+                    UPDATE records
+                    SET responsible_provider = NULL
+                    WHERE provider_los = NEW.id;
+                    
+                ELSE
+                    -- Handle unknown organization types or do nothing
+                    NULL;
+            END CASE;
+        ELSE
+            -- Get the new organization type
+            SELECT type INTO org_type
             FROM organizations
-            WHERE id = NEW.responsible_organization_id;
-
-            -- Update the appropriate 'responsible' column based on the organization's type.
-            IF new_organization_type = 'country' THEN
-                UPDATE records
-                SET responsible_state = NEW.responsible_organization_id
-                WHERE cluster_id = ANY(NEW.cluster_ids);
-            ELSIF new_organization_type = 'provider' THEN
-                UPDATE records
-                SET responsible_provider = NEW.responsible_organization_id
-                WHERE cluster_id = ANY(NEW.cluster_ids);
-            END IF;
+            WHERE id = NEW.organization_id;
+            
+            -- Update records based on new organization type
+            CASE org_type
+                WHEN 'root' THEN
+                    UPDATE records
+                    --SET administration_los = NEW.id
+                    SET responsible_state = NEW.responsible_organization_id, responsible_troop = NULL
+                    WHERE administration_los = OLD.id;
+                    
+                WHEN 'country' THEN
+                    UPDATE records
+                    SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL
+                    WHERE state_los = OLD.id;
+                    
+                WHEN 'provider' THEN
+                    UPDATE records
+                    SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL
+                    WHERE provider_los = OLD.id;
+                    
+                ELSE
+                    -- Handle unknown organization types or do nothing
+                    NULL;
+            END CASE;
         END IF;
-
-        -- 2. Handle clusters being REMOVED from the 'cluster_ids' array.
-        SELECT array_agg(id) INTO removed_ids
-        FROM unnest(OLD.cluster_ids) as id
-        WHERE id <> ALL(NEW.cluster_ids);
-
-        IF array_length(removed_ids, 1) > 0 AND OLD.responsible_organization_id IS NOT NULL THEN
-            -- Get the type of the organization for the OLD cluster to know which column to nullify.
-            SELECT type INTO old_organization_type
-            FROM organizations
-            WHERE id = OLD.responsible_organization_id;
-
-            -- Nullify the appropriate 'responsible' column for the removed clusters.
-            IF old_organization_type = 'country' THEN
-                UPDATE records
-                SET responsible_state = NULL
-                WHERE cluster_id = ANY(removed_ids)
-                  AND responsible_state = OLD.responsible_organization_id;
-            ELSIF old_organization_type = 'provider' THEN
-                UPDATE records
-                SET responsible_provider = NULL
-                WHERE cluster_id = ANY(removed_ids)
-                  AND responsible_provider = OLD.responsible_organization_id;
-            END IF;
-        END IF;
-    END IF;
-
-    -- SET records.responsible_troop to organizations_lose.troop_id (for all records)
-    IF NEW.troop_id IS NOT NULL AND array_length(NEW.cluster_ids, 1) > 0 THEN
-        UPDATE records
-        SET responsible_troop = NEW.troop_id
-        WHERE cluster_id = ANY(NEW.cluster_ids);
-    END IF;
-
-    -- Clear responsible_troop if troop_id was removed
-    IF OLD.troop_id IS NOT NULL AND NEW.troop_id IS NULL AND array_length(NEW.cluster_ids, 1) > 0 THEN
-        UPDATE records
-        SET responsible_troop = NULL
-        WHERE cluster_id = ANY(NEW.cluster_ids)
-          AND responsible_troop = OLD.troop_id;
     END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Update the trigger to fire on changes to both columns
-DROP TRIGGER IF EXISTS trg_update_records_responsible_provider ON public.organizations_lose;
-CREATE TRIGGER trg_update_records_responsible_provider
-AFTER UPDATE OF cluster_ids, responsible_organization_id, troop_id ON public.organizations_lose
+-- Create trigger to fire only on responsible_organization_id changes
+-- UPDATE LOS information in Records
+
+CREATE TRIGGER trg_update_records_from_organizations_lose_changes
+AFTER UPDATE OF responsible_organization_id ON public.organizations_lose
 FOR EACH ROW
-EXECUTE FUNCTION public.update_records_responsible_provider();
+EXECUTE FUNCTION public.update_records_from_organizations_lose_changes();
+
+
+-- If update organizations_lose.responsible_organization_id changes or update responsible_state and/or responsible_provider of records where administration_los, state_los or provider_los is equal id
+
+-- Function to update responsible_state and responsible_provider based on organizations_lose changes
+CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_organizations_lose()
+RETURNS TRIGGER AS $$
+DECLARE
+    org_type text;
+BEGIN
+    -- Handle when responsible_organization_id is changed
+    IF NEW.responsible_organization_id IS DISTINCT FROM OLD.responsible_organization_id THEN
+        -- Get the organization type from the organizations_lose record's organization_id
+        SELECT o.type INTO org_type
+        FROM organizations o
+        WHERE o.id = NEW.organization_id;
+        
+        -- Update records based on which los field matches this organizations_lose id
+        -- and set the appropriate responsible field based on organization type
+        
+        -- For administration_los matches
+        IF org_type = 'root' THEN
+            UPDATE records
+            SET responsible_state = NEW.responsible_organization_id
+            WHERE administration_los = NEW.id;
+        END IF;
+        
+        -- For state_los matches  
+        IF org_type = 'country' THEN
+            UPDATE records
+            SET responsible_state = NEW.responsible_organization_id
+            WHERE state_los = NEW.id;
+        END IF;
+        
+        -- For provider_los matches
+        IF org_type = 'provider' THEN
+            UPDATE records
+            SET responsible_provider = NEW.responsible_organization_id
+            WHERE provider_los = NEW.id;
+        END IF;
+        
+        -- For troop_los matches (if troop type exists)
+        IF org_type = 'troop' THEN
+            UPDATE records
+            SET responsible_troop = NEW.responsible_organization_id
+            WHERE troop_los = NEW.id;
+        END IF;
+        
+        -- If responsible_organization_id is set to NULL, clear the corresponding responsible fields
+        IF NEW.responsible_organization_id IS NULL THEN
+            CASE org_type
+                WHEN 'root' THEN
+                    UPDATE records
+                    SET responsible_state = NULL
+                    WHERE administration_los = NEW.id;
+                    
+                WHEN 'country' THEN
+                    UPDATE records
+                    SET responsible_state = NULL
+                    WHERE state_los = NEW.id;
+                    
+                WHEN 'provider' THEN
+                    UPDATE records
+                    SET responsible_provider = NULL
+                    WHERE provider_los = NEW.id;
+                    
+                WHEN 'troop' THEN
+                    UPDATE records
+                    SET responsible_troop = NULL
+                    WHERE troop_los = NEW.id;
+                ELSE
+                    -- Handle unknown organization types or do nothing
+                    NULL;
+            END CASE;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to fire on responsible_organization_id changes in organizations_lose
+-- UPDATES Responsible
+--DROP TRIGGER IF EXISTS trg_update_records_responsible_fields_from_organizations_lose ON public.organizations_lose;
+--CREATE TRIGGER trg_update_records_responsible_fields_from_organizations_lose
+--AFTER UPDATE OF responsible_organization_id ON public.organizations_lose
+--FOR EACH ROW
+--EXECUTE FUNCTION public.update_records_responsible_fields_from_organizations_lose();
+
+-- Function to update responsible fields when los fields in records are updated
+CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_los_changes()
+RETURNS TRIGGER AS $$
+DECLARE
+    org_type text;
+    responsible_org_id uuid;
+BEGIN
+    -- Handle administration_los changes
+    IF NEW.administration_los IS DISTINCT FROM OLD.administration_los THEN
+        -- If administration_los changes, set state_los and provider_los to NULL
+        NEW.state_los := NULL;
+        NEW.provider_los := NULL;
+        NEW.troop_los := NULL;
+        
+        IF NEW.administration_los IS NOT NULL THEN
+            -- Get responsible_organization_id from organizations_lose
+            SELECT ol.responsible_organization_id INTO responsible_org_id
+            FROM organizations_lose ol
+            WHERE ol.id = NEW.administration_los;
+            
+            -- Update responsible_state
+            NEW.responsible_state := responsible_org_id;
+        ELSE
+            -- Clear responsible_state if administration_los is set to NULL
+            NEW.responsible_state := NULL;
+        END IF;
+    END IF;
+    
+    -- Handle state_los changes
+    IF NEW.state_los IS DISTINCT FROM OLD.state_los THEN
+        -- If state_los changes, set provider_los to NULL
+        NEW.provider_los := NULL;
+        NEW.troop_los := NULL;
+        
+        IF NEW.state_los IS NOT NULL THEN
+            -- Get responsible_organization_id from organizations_lose
+            SELECT ol.responsible_organization_id INTO responsible_org_id
+            FROM organizations_lose ol
+            WHERE ol.id = NEW.state_los;
+            
+            -- Update responsible_state
+            NEW.responsible_state := responsible_org_id;
+        ELSE
+            -- Clear responsible_state if state_los is set to NULL
+            NEW.responsible_state := NULL;
+        END IF;
+    END IF;
+    
+    -- Handle provider_los changes
+    IF NEW.provider_los IS DISTINCT FROM OLD.provider_los THEN
+        IF NEW.provider_los IS NOT NULL THEN
+            -- Get responsible_organization_id from organizations_lose
+            SELECT ol.responsible_organization_id INTO responsible_org_id
+            FROM organizations_lose ol
+            WHERE ol.id = NEW.provider_los;
+            
+            -- Update responsible_provider
+            NEW.responsible_provider := responsible_org_id;
+        ELSE
+            -- Clear responsible_provider if provider_los is set to NULL
+            NEW.responsible_provider := NULL;
+        END IF;
+    END IF;
+    
+    -- Handle troop_los changes (if applicable)
+    IF NEW.troop_los IS DISTINCT FROM OLD.troop_los THEN
+        IF NEW.troop_los IS NOT NULL THEN
+            -- Get responsible_organization_id from organizations_lose
+            SELECT ol.responsible_organization_id INTO responsible_org_id
+            FROM organizations_lose ol
+            WHERE ol.id = NEW.troop_los;
+            
+            -- Update responsible_troop
+            NEW.responsible_troop := responsible_org_id;
+        ELSE
+            -- Clear responsible_troop if troop_los is set to NULL
+            NEW.responsible_troop := NULL;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to fire on los field changes in records
+DROP TRIGGER IF EXISTS trg_update_records_responsible_fields_from_los_changes ON public.records;
+CREATE TRIGGER trg_update_records_responsible_fields_from_los_changes
+BEFORE UPDATE OF administration_los, state_los, provider_los, troop_los ON public.records
+FOR EACH ROW
+EXECUTE FUNCTION public.update_records_responsible_fields_from_los_changes();
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+-- Function to update responsible_state based on administration_los changes
+CREATE OR REPLACE FUNCTION public.update_records_responsible_state_from_admin_los()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Handle when administration_los is added or changed
+    IF NEW.administration_los IS NOT NULL AND NEW.administration_los IS DISTINCT FROM OLD.administration_los THEN
+        -- First try to update responsible_state if responsible_organization_id exists
+        UPDATE records
+        SET responsible_state = ol.responsible_organization_id
+        FROM organizations_lose ol
+        WHERE ol.id = NEW.administration_los
+          AND records.id = NEW.id
+          AND ol.responsible_organization_id IS NOT NULL;
+        
+        -- If responsible_organization_id is null, check for troop_id and update responsible_troop
+        UPDATE records
+        SET responsible_troop = ol.troop_id
+        FROM organizations_lose ol
+        WHERE ol.id = NEW.administration_los
+          AND records.id = NEW.id
+          AND ol.responsible_organization_id IS NULL
+          AND ol.troop_id IS NOT NULL;
+    END IF;
+    
+    -- Handle when administration_los is removed (set to NULL)
+    IF OLD.administration_los IS NOT NULL AND NEW.administration_los IS NULL THEN
+        -- Clear the responsible_state that was set by the old administration_los
+        UPDATE records
+        SET responsible_state = NULL
+        FROM organizations_lose ol
+        WHERE ol.id = OLD.administration_los
+          AND records.id = NEW.id
+          AND records.responsible_state = ol.responsible_organization_id;
+          
+        -- Clear the responsible_troop that was set by the old administration_los
+        UPDATE records
+        SET responsible_troop = NULL
+        FROM organizations_lose ol
+        WHERE ol.id = OLD.administration_los
+          AND records.id = NEW.id
+          AND records.responsible_troop = ol.troop_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to fire on administration_los changes
+DROP TRIGGER IF EXISTS trg_update_responsible_state_from_admin_los ON public.records;
+CREATE TRIGGER trg_update_responsible_state_from_admin_los
+AFTER UPDATE OF administration_los ON public.records
+FOR EACH ROW
+EXECUTE FUNCTION public.update_records_responsible_state_from_admin_los();
+
+
+
+DROP VIEW IF EXISTS public.view_records_details;
+CREATE OR REPLACE VIEW public.view_records_details AS
+SELECT 
+    r.*,
+    p_bwi.federal_state,
+    p_bwi.growth_district,
+    p_bwi.forest_status AS forest_status_bwi2022,
+    p_bwi.accessibility,
+    p_bwi.forest_office,
+    p_bwi.ffh_forest_type_field,
+    p_bwi.property_type,
+    p_ci2017.forest_status AS forest_status_ci2017,
+    p_ci2012.forest_status AS forest_status_ci2012
+FROM public.records r
+LEFT JOIN inventory_archive.plot p_bwi 
+    ON r.plot_id = p_bwi.id AND p_bwi.interval_name = 'bwi2022'
+LEFT JOIN inventory_archive.plot p_ci2017 
+    ON p_bwi.plot_name = p_ci2017.plot_name AND p_bwi.cluster_name = p_ci2017.cluster_name AND p_ci2017.interval_name = 'ci2017'
+LEFT JOIN inventory_archive.plot p_ci2012 
+    ON p_bwi.plot_name = p_ci2012.plot_name AND p_bwi.cluster_name = p_ci2012.cluster_name AND p_ci2012.interval_name = 'bwi2012';
+
+-- Only authenticated users can access this view
+REVOKE ALL ON public.view_records_details FROM PUBLIC;
+GRANT SELECT ON public.view_records_details TO authenticated;

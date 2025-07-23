@@ -436,19 +436,19 @@ ALTER TABLE edges
 	ADD COLUMN edge_number INTEGER NULL CHECK (edge_number >= 1), -- NEU: Kanten-ID || ToDo: Welchen Mehrwert hat diese ID gegenüber der ID?
 	ADD COLUMN edge_status INTEGER NULL, --Rk
 	ADD COLUMN edge_type INTEGER NULL, --Rart
-	ADD COLUMN edge_type_deprecated INTEGER NULL REFERENCES lookup.lookup_edge_type_deprecated (code), --Rart_Alt
+	ADD COLUMN edge_type_deprecated INTEGER NULL, -- REFERENCES lookup.lookup_edge_type_deprecated (code), --Rart_Alt
 	ADD COLUMN terrain INTEGER NULL, --Rterrain
 	ADD COLUMN edges JSONB NOT NULL, -- NEU: GeoJSON
-	ADD COLUMN geometry_edges public.GEOMETRY(LineString, 4326) NULL,
-	ADD COLUMN id_stand_differences_rows INTEGER NULL REFERENCES lookup.lookup_id_stand_differences_rows(code); -- NEU: Geometrie
+	ADD COLUMN id_stand_differences_rows INTEGER NULL REFERENCES lookup.lookup_id_stand_differences_rows(code),
+	ADD COLUMN modified_at timestamp NOT NULL DEFAULT now(); -- NEU: Geometrie
 
 ALTER TABLE edges ADD CONSTRAINT FK_Edges_Plot FOREIGN KEY (plot_id)
 	REFERENCES plot (id)
 	ON DELETE CASCADE;
 ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeStatus FOREIGN KEY (edge_status)
 	REFERENCES lookup.lookup_edge_status (code);
-ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type)
-	REFERENCES lookup.lookup_edge_type (code);
+--ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type)
+--	REFERENCES lookup.lookup_edge_type (code);
 ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupTerrain FOREIGN KEY (terrain)
 	REFERENCES lookup.lookup_terrain (code);
 
@@ -552,10 +552,16 @@ ALTER TABLE subplots_relative_position
 	ADD COLUMN azimuth smallint NOT NULL CHECK (azimuth >= 0 AND azimuth <= 399), -- Azimuth (Gon) NEU
     ADD COLUMN distance smallint NOT NULL  DEFAULT 500 CHECK (distance >= 0 AND distance <= 1000), -- Distance (cm) NEU
     ADD COLUMN radius smallint NOT NULL DEFAULT 100 CHECK (radius >= 1 AND radius <= 1000), -- Radius (cm) NEU
-    ADD COLUMN has_entities BOOLEAN DEFAULT TRUE,
-	ADD COLUMN center_location public.GEOMETRY(Polygon, 4326) NULL;
+    ADD COLUMN has_entities BOOLEAN DEFAULT TRUE;
 
 
 ALTER TABLE subplots_relative_position ADD CONSTRAINT FK_SubplotRelativePosition_Plot FOREIGN KEY (plot_id)
 	REFERENCES plot (id)
 	ON DELETE CASCADE;
+
+	------------------------------------------------- subplots_relative_position_coordinates -------------------------------------------------
+DROP TABLE IF EXISTS subplots_relative_position_coordinates;
+CREATE TABLE IF NOT EXISTS subplots_relative_position_coordinates (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE subplots_relative_position_coordinates
+	ADD COLUMN subplots_relative_position_id uuid NOT NULL REFERENCES subplots_relative_position (id) UNIQUE,
+	ADD COLUMN geometry_subplots_relative_position public.GEOMETRY(Polygon, 4326) NULL;
