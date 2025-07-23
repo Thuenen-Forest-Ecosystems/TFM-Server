@@ -4,3 +4,6 @@
 [submodule "supabase/seeds/public"]
 	path = supabase/seeds/public
 	url = https://git-dmz.thuenen.de/tfm-seeds/public.git
+[submodule "supabase/seeds/intern"]
+	path = supabase/seeds/intern
+	url = https://git-dmz.thuenen.de/tfm-seeds/intern.git
