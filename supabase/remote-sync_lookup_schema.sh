@@ -39,8 +39,3 @@ sleep 1
 # Tables already exist, so we skip schema creation and go directly to data insertion
 # Add all data in lookup schema from lookup.sql
 psql "postgres://postgres:$POSTGRES_PASSWORD@134.110.100.75:3389/$POSTGRES_DB" -f tmp/lookup.sql
-psql "postgres://postgres:$POSTGRES_PASSWORD@134.110.100.75:3389/$POSTGRES_DB" -f tmp/lookup.sql
-
-
-
-# Start 18:44

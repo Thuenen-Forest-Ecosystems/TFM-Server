@@ -17,10 +17,13 @@ clean_sql_file() {
     echo "SET session_replication_role = replica;" | cat - "$file" > temp && mv temp "$file"
 }
 
-# Function to add "ON CONFLICT (code) DO NOTHING" to every insert
+# Function to add ON CONFLICT clause to INSERT INTO statements
 add_on_conflict_clause() {
     local file=$1
-    sed -i '' -e '/INSERT INTO/ s/$/ ON CONFLICT (code) DO NOTHING;/' "$file"
+    local conflict_column=${2:-"code"}  # Default to 'code', but allow override
+
+    # Add ON CONFLICT clause only to lines starting with INSERT INTO
+    sed -i '' -E "/^INSERT INTO/ s/;([[:space:]]*$)/ ON CONFLICT (${conflict_column}) DO NOTHING;\1/g" "$file"
 }
 
 # Remove all sql files in folder
@@ -42,7 +45,7 @@ docker exec -u postgres supabase_db_supabase pg_dump \
     > seeds/public/lookup.sql
 clean_sql_file seeds/public/lookup.sql
 # Modify the lookup.sql file to include "ON CONFLICT (code) DO NOTHING"
-add_on_conflict_clause seeds/public/lookup.sql
+add_on_conflict_clause seeds/public/lookup.sql "code"
 
 
 
@@ -85,6 +88,8 @@ split -l $CHUNK_SIZE seeds/public/plot.sql seeds/public/plot_part_
 # Add necessary PostgreSQL headers to each chunk
 for file in seeds/public/plot_part_*; do
     clean_sql_file $file
+    # Add ON CONFLICT clause to plot chunks
+    #add_on_conflict_clause_pk $file
     mv "$file" "$file.sql"
 done;
 # remove base file
@@ -96,6 +101,8 @@ split -l $CHUNK_SIZE seeds/public/tree.sql seeds/public/tree_part_
 # Add necessary PostgreSQL headers to each chunk
 for file in seeds/public/tree_part_*; do
     clean_sql_file $file
+    # Add ON CONFLICT clause to tree chunks
+    #add_on_conflict_clause_pk $file
     mv "$file" "$file.sql"
 done;
 # remove base file

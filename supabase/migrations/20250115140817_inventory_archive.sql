@@ -375,7 +375,7 @@ ALTER TABLE tree
 	ADD COLUMN tree_top_drought boolean NULL DEFAULT false, -- Uralt
 	ADD COLUMN bark_pocket boolean NULL DEFAULT false, -- Rindentaschen
 	ADD COLUMN biotope_marked boolean NULL DEFAULT false,
-	ADD COLUMN bark_condition smallint NULL,
+	ADD COLUMN bark_condition smallint NULL REFERENCES lookup.lookup_bark_condition (code), -- Rindenzustand
 	ADD COLUMN deadwood_used BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE tree ADD CONSTRAINT FK_Tree_Plot_Unique UNIQUE (plot_id, tree_number);

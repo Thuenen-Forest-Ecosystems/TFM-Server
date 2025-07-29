@@ -41,7 +41,12 @@ CREATE TABLE IF NOT EXISTS lookup_forest_office (LIKE lookup.lookup_TEMPLATE INC
 CREATE TABLE IF NOT EXISTS lookup_forest_status (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_gnss_quality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_grid_density (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+
+CREATE TABLE IF NOT EXISTS lookup_growth_region (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_growth_district (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+-- Add growth_region reference to lookup_growth_district
+ALTER TABLE lookup.lookup_growth_district ADD COLUMN growth_region smallint NULL REFERENCES lookup.lookup_growth_region (code);
+
 CREATE TABLE IF NOT EXISTS lookup_harvest_condition (LIKE lookup.lookup_TEMPLATE INCLUDING ALL); -- formerly lookup_harvesting_method
 CREATE TABLE IF NOT EXISTS lookup_harvest_method (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_harvest_reason (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -83,6 +88,7 @@ CREATE TABLE IF NOT EXISTS lookup_harvest_restriction (LIKE lookup.lookup_TEMPLA
 CREATE TABLE IF NOT EXISTS lookup_accessibility (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_biotope (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_damage_peel (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_bark_condition (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
 -- External Lookup Tables
 CREATE TABLE lookup_ffh (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -99,7 +105,6 @@ CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_gemeinde (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
 --CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-
 
 CREATE TABLE lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 -- change code to type text
