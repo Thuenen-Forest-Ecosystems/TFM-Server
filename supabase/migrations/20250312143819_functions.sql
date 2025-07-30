@@ -108,12 +108,14 @@ AS $$
 DECLARE
     result jsonb;
 BEGIN
+
     SELECT row_to_json(t)::jsonb
     INTO result
     FROM public.plot_nested_json t
     WHERE t.id = p_plot_id;
 
     RETURN result;
+    
 END;
 $$;
 

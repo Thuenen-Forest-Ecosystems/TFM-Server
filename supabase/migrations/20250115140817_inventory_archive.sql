@@ -160,10 +160,6 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupState
     FOREIGN KEY (federal_state)
     REFERENCES lookup.lookup_state (code);
 
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster FOREIGN KEY (cluster_name)
-	REFERENCES cluster (cluster_name) MATCH SIMPLE
-	ON DELETE CASCADE;
-
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupGrowthDistrict FOREIGN KEY (growth_district)
         REFERENCES lookup.lookup_growth_district (code) MATCH SIMPLE
         ON UPDATE NO ACTION
