@@ -12,4 +12,6 @@ volumes/api
 volumes/logs
 volumes/pooler
 volumes/db
+volumes/storage
+
 supabase/tmp
