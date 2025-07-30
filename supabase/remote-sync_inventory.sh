@@ -23,9 +23,9 @@ docker exec -u postgres supabase_db_supabase pg_dump \
 clean_sql_file tmp/inventory_archive_schema.sql
 
 # DUMP inventory_archive
-PGPASSWORD=postgres pg_dump \
+docker exec -u postgres supabase_db_supabase pg_dump \
     -h 127.0.0.1 \
-    -p 54322 \
+    -p 5432 \
     -U postgres \
     -d postgres \
     -n inventory_archive \

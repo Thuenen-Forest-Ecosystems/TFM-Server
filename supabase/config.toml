@@ -45,7 +45,7 @@ enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory. For example:
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']
-sql_paths = ['./seeds/public/*.sql', './seeds/hidden/*.sql']
+sql_paths = ['./seeds/public/*.sql', './seeds/intern/*.sql']
 
 [db.migrations]
 # https://www.youtube.com/watch?v=EALkUlOKvAs
@@ -285,3 +285,14 @@ entrypoint = "./functions/invite-user/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/invite-user/*.html" ]
+
+[functions.validation]
+enabled = true
+verify_jwt = true
+import_map = "./functions/validation/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/validation/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/validation/*.html" ]

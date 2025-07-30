@@ -8,6 +8,8 @@ tmp/
 
 .DS_Store
 
-volumes
-
+volumes/api
+volumes/logs
+volumes/pooler
+volumes/db
 supabase/tmp

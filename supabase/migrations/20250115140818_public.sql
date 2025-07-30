@@ -45,7 +45,7 @@ alter table "public"."organizations" add column IF NOT EXISTS "type" text not nu
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
 
-create table "public"."users_permissions" (
+create table if not exists "public"."users_permissions" (
     "id" uuid not null default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "user_id" uuid not null,
@@ -323,6 +323,10 @@ ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "message" text NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_id" uuid NULL REFERENCES inventory_archive.cluster(id);
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_name" integer NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "plot_name" smallint NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "administration_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "state_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "provider_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "troop_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
 
 -- Add indexes to the records table for common query fields
 CREATE INDEX IF NOT EXISTS idx_records_plot_id ON records(plot_id);
@@ -381,6 +385,17 @@ AS PERMISSIVE
 FOR update
 TO authenticated
 USING (
+    -- check if one of the organizations in public.users_permissions user has access to is type organizations.type = 'root'
+    EXISTS (
+        SELECT 1
+        FROM public.organizations org
+        WHERE org.id IN (
+            SELECT organization_id
+            FROM public.users_permissions
+            WHERE user_id = auth.uid()
+        )
+    AND org.type = 'root'
+    ) OR
     EXISTS (
         SELECT 1
         FROM public.users_profile prof
@@ -398,12 +413,27 @@ USING (
         WHERE user_id = auth.uid()
     ) OR
     responsible_troop IN (
-        SELECT organization_id
-        FROM public.users_permissions
-        WHERE user_id = auth.uid()
+        SELECT t.id
+        FROM public.troop t
+        WHERE t.organization_id IN (
+            SELECT organization_id
+            FROM public.users_permissions
+            WHERE user_id = auth.uid()
+        )
     )
 )
 WITH CHECK (
+    -- check if one of the organizations in public.users_permissions user has access to is type organizations.type = 'root'
+    EXISTS (
+        SELECT 1
+        FROM public.organizations org
+        WHERE org.id IN (
+            SELECT organization_id
+            FROM public.users_permissions
+            WHERE user_id = auth.uid()
+        )
+    AND org.type = 'root'
+    ) OR
     EXISTS (
         SELECT 1
         FROM public.users_profile prof
@@ -421,15 +451,20 @@ WITH CHECK (
         WHERE user_id = auth.uid()
     ) OR
     responsible_troop IN (
-       SELECT organization_id
-        FROM public.users_permissions
-        WHERE user_id = auth.uid()
+        SELECT t.id
+        FROM public.troop t
+        WHERE t.organization_id IN (
+            SELECT organization_id
+            FROM public.users_permissions
+            WHERE user_id = auth.uid()
+        )
     )
 );           
- 
 
 
-create table "record_changes" (
+
+
+create table if not exists "record_changes" (
     "id" uuid primary key default gen_random_uuid(),
     "created_at" timestamp with time zone not null default now(),
     "updated_by" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
