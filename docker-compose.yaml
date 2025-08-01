@@ -398,8 +398,13 @@ services:
       SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       # TODO: Allow configuring VERIFY_JWT per function. This PR might help: https://github.com/supabase/cli/pull/786
       VERIFY_JWT: "${FUNCTIONS_VERIFY_JWT}"
+      WEBHOOK_SECRET: your-webhook-secret-here
+      DEPLOY_SCRIPT_PATH: /home/deno/deploy.sh
     volumes:
       - ./volumes/functions:/home/deno/functions:Z
+      - ./deploy.sh:/home/deno/deploy.sh:Z  # Mount the deployment script
+      - .:/home/deno/project:Z  # Mount project root
+      - /var/run/docker.sock:/var/run/docker.sock  # Allow Docker commands
     command:
       - start
       - --main-service
