@@ -1,5 +1,5 @@
-DROP VIEW IF EXISTS public.plot_nested_json;
-CREATE VIEW public.plot_nested_json AS
+--DROP VIEW IF EXISTS public.plot_nested_json;
+CREATE OR REPLACE VIEW public.plot_nested_json AS
 WITH p_coords AS (
     SELECT plot_id, json_agg(row_to_json(pc.*)) as data FROM inventory_archive.plot_coordinates pc GROUP BY plot_id
 ), t_trees AS (
@@ -12,6 +12,10 @@ WITH p_coords AS (
     SELECT plot_id, json_agg(row_to_json(s.*)) as data FROM inventory_archive.structure_lt4m s GROUP BY plot_id
 ), e_edges AS (
     SELECT plot_id, json_agg(row_to_json(e.*)) as data FROM inventory_archive.edges e GROUP BY plot_id
+), s_gt4m AS (
+    SELECT plot_id, json_agg(row_to_json(gt4m.*)) as data FROM inventory_archive.structure_gt4m gt4m GROUP BY plot_id
+), p_landmarks AS (
+    SELECT plot_id, json_agg(row_to_json(pl.*)) as data FROM inventory_archive.plot_landmark pl GROUP BY plot_id
 )
 SELECT
     p.*,
@@ -20,7 +24,9 @@ SELECT
     COALESCE(dw.data, '[]'::json) AS deadwoods,
     COALESCE(rg.data, '[]'::json) AS regenerations,
     COALESCE(sl.data, '[]'::json) AS structures_lt4m,
-    COALESCE(ee.data, '[]'::json) AS edges
+    COALESCE(ee.data, '[]'::json) AS edges,
+    COALESCE(s_gt4m.data, '[]'::json) AS structures_gt4m,
+    COALESCE(pl.data, '[]'::json) AS landmarks
 FROM inventory_archive.plot p
 LEFT JOIN p_coords pc ON p.id = pc.plot_id
 LEFT JOIN t_trees tt ON p.id = tt.plot_id
@@ -28,6 +34,8 @@ LEFT JOIN d_woods dw ON p.id = dw.plot_id
 LEFT JOIN r_gens rg ON p.id = rg.plot_id
 LEFT JOIN s_lt4m sl ON p.id = sl.plot_id
 LEFT JOIN e_edges ee ON p.id = ee.plot_id
+LEFT JOIN s_gt4m ON p.id = s_gt4m.plot_id
+LEFT JOIN p_landmarks pl ON p.id = pl.plot_id
 WHERE p.interval_name = 'bwi2022';
 
 -- Revoke all permissions from public role to prevent access
@@ -155,6 +163,7 @@ BEGIN
             END IF;
         EXCEPTION WHEN OTHERS THEN
             RAISE NOTICE 'Error fetching plot data: %', SQLERRM;
+            NEW.message := 'Error fetching plot data: ' || SQLERRM;
             -- previous_properties already has default value
         END;
     ELSE
@@ -287,7 +296,7 @@ CREATE TRIGGER before_record_insert_update
 
 -- ADD RECORDS
 
--- Example: SELECT public.add_plot_ids_to_records('10cf8993-0190-4a9c-b135-111d8009f7b4'); // ci2027
+-- Example: SELECT public.add_plot_ids_to_records('79a571c5-e128-4bef-bead-954d9426ae97'); // ci2027
 -- Function to get all id from inventory_archive.plot and add one row to public.records (if exists do nothing)
 DROP FUNCTION IF EXISTS public.add_plot_ids_to_records;
 CREATE OR REPLACE FUNCTION public.add_plot_ids_to_records(p_schema_id UUID, p_batch_size INTEGER DEFAULT 1000)
@@ -311,15 +320,20 @@ BEGIN
     LOOP
         -- Insert a batch of missing plots
         WITH missing_plots AS (
+
             SELECT p.id, p.plot_name, p.cluster_name, p.cluster_id
             FROM inventory_archive.plot p
             JOIN inventory_archive.cluster c ON p.cluster_id = c.id
-            WHERE c.cluster_situation = 1 AND p.interval_name = 'bwi2022'
+            WHERE ((c.grid_density in (64, 256) and p.federal_state in (1, 2, 4, 8, 9, 13)) -- SH, HH, BB, BW, BY, MV
+                or (c.grid_density in (16, 32, 64, 256) and p.federal_state in (5, 6, 7, 10, 16)) -- NW, HE, RP, SL, TH
+                or (c.grid_density in (4, 8, 16, 32, 64, 256) and p.federal_state in (11, 12, 14, 15)) -- BE, BB, SN, ST
+                or p.sampling_stratum  in (308, 316)) AND p.interval_name = 'bwi2022'
             AND NOT EXISTS (
                 SELECT 1 FROM public.records r 
                 WHERE r.plot_id = p.id
             )
             LIMIT p_batch_size
+
         )
         INSERT INTO public.records (plot_id, schema_id, plot_name, cluster_name, cluster_id)
         SELECT id, p_schema_id, plot_name, cluster_name, cluster_id FROM missing_plots;

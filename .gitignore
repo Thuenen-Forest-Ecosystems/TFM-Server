@@ -15,3 +15,5 @@ volumes/db
 volumes/storage
 
 supabase/tmp
+
+.utils
