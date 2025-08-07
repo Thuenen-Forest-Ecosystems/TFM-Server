@@ -1,5 +1,8 @@
 #! /bin/bash
 
+# run seed-to-temp.sh first
+./seed-to-temp.sh
+
 # Set the chunk size (e.g., 50MB = 50000000 bytes)
 CHUNK_SIZE=50000
 

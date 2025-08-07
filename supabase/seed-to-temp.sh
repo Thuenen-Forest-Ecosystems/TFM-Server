@@ -1,3 +1,10 @@
+#!/bin/bash
+
+# create tmp directory if it doesn't exist
+mkdir -p tmp
+# clean up tmp directory
+rm -f tmp/*.sql
+
 clean_sql_file() {
     local file=$1
     # Remove transaction_timeout line and add replication role setting
