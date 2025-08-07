@@ -14,10 +14,12 @@ cd TFM-Server
 cp .env.example .env
 ```
 
-### For Thünen Employees
-If you are a Thünen employee, you can add the Thünen GitLab repository as a remote:
+### Thünen internal seeds repository
+
+For ***Thünen employees only*** with access to *DMZ*, you can clone the internal seeds repository:
+
 ```bash
-git submodule add https://gitlab.thuenen.de/Thuenen-Forest-Ecosystems/TFM-Server.git
+git submodule add -f https://git-dmz.thuenen.de/tfm-seeds/intern.git supabase/seeds/intern
 ```
 
 ## Local development

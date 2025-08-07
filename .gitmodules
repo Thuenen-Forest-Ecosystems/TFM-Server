@@ -10,3 +10,6 @@
 [submodule "volumes/functions"]
 	path = volumes/functions
 	url = https://github.com/Thuenen-Forest-Ecosystems/TFM-edge-functions.git
+[submodule "supabase/seeds/intern"]
+	path = supabase/seeds/intern
+	url = https://git-dmz.thuenen.de/tfm-seeds/intern.git
