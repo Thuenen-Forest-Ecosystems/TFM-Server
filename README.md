@@ -19,7 +19,7 @@ cp .env.example .env
 For ***Thünen employees only*** with access to *DMZ*, you can clone the internal seeds repository:
 
 ```bash
-git submodule add -f https://git-dmz.thuenen.de/tfm-seeds/intern.git supabase/seeds/intern
+git clone https://git-dmz.thuenen.de/tfm-seeds/intern.git supabase/seeds/intern
 ```
 
 ## Local development
