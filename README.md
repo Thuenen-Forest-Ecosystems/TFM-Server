@@ -7,10 +7,17 @@ Make sure you have the following installed:
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
 
 ## Clone Repository
+
 ```bash
 git clone --recurse-submodules -j8 https://github.com/Thuenen-Forest-Ecosystems/TFM-Server.git
 cd TFM-Server
 cp .env.example .env
+```
+
+### For Thünen Employees
+If you are a Thünen employee, you can add the Thünen GitLab repository as a remote:
+```bash
+git submodule add https://gitlab.thuenen.de/Thuenen-Forest-Ecosystems/TFM-Server.git
 ```
 
 ## Local development
@@ -25,6 +32,8 @@ supabase start
 supabase stop
 ```
 
+## Sync Service
+
 ### Start Powersync
 ```bash
 docker compose --env-file .env.local -f docker-compose.local.yaml up 
@@ -35,24 +44,8 @@ docker compose --env-file .env.local -f docker-compose.local.yaml up
 docker compose --env-file .env.local -f docker-compose.local.yaml down 
 ```
 
-## Start Server
+## Remote Server
 
 ```bash
 docker compose start
-```
-
-
-## Make Changes
-```bash
-supabase db diff -f [migration-file-name]
-```
-
-## Pull from production
-```bash
-supabase db pull --db-url postgres://[user]:[password]@[host]:[port]/[database]
-```
-
-## Push to production
-```bash
-supabase db push --include-all --db-url postgres://[user]:[password]@[host]:[port]/[database]
 ```

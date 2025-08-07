@@ -15,5 +15,6 @@ volumes/db
 volumes/storage
 
 supabase/tmp
+supabase/seeds/intern
 
 .utils
