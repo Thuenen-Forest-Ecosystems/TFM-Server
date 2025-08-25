@@ -55,6 +55,8 @@ create table if not exists "public"."users_permissions" (
     "role" text
 );
 
+ALTER TABLE public.users_permissions ADD CONSTRAINT unique_user_organization UNIQUE (user_id, organization_id);
+
 alter table "public"."users_permissions" enable row level security;
 
 -- Create a policy to allow authenticated users to access users_permissions
@@ -328,6 +330,15 @@ ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "state_los" uuid NULL REFERENCES 
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "provider_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "troop_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
 
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_troop" timestamp with time zone NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_state" timestamp with time zone NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_administration" timestamp with time zone NULL;
+
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone NULL;
+
+create trigger handle_updated_at before update on records
+  for each row execute procedure moddatetime (updated_at);
+
 -- Add indexes to the records table for common query fields
 CREATE INDEX IF NOT EXISTS idx_records_plot_id ON records(plot_id);
 CREATE INDEX IF NOT EXISTS idx_records_schema_id ON records(schema_id);
@@ -464,28 +475,71 @@ WITH CHECK (
 
 
 
-create table if not exists "record_changes" (
-    "id" uuid primary key default gen_random_uuid(),
-    "created_at" timestamp with time zone not null default now(),
-    "updated_by" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
-    "properties" jsonb not null default '{}'::jsonb,
-    "previous_properties" jsonb not null default '{}'::jsonb,
-    "previous_properties_updated_at" timestamp with time zone not null default now(),
-    "is_valid" boolean null default null,
-    --"supervisor_id" uuid not null DEFAULT auth.uid() REFERENCES auth.users(id),
-    "plot_id" uuid NULL REFERENCES inventory_archive.plot(id),
-    "troop_id" uuid NULL REFERENCES troop(id),
-    "schema_id" uuid NULL REFERENCES public.schemas(id),
-    "schema_name" text NULL DEFAULT 'ci2027'
+
+-- Create a copy of the "records" table structure only, named "record_changes"
+DROP TABLE IF EXISTS public.record_changes;
+CREATE TABLE public.record_changes (LIKE public.records INCLUDING ALL);
+
+-- Correctly define the foreign key reference for record_id
+ALTER TABLE public.record_changes ADD COLUMN record_id UUID;
+
+-- Add a comment to the new table
+COMMENT ON TABLE public.record_changes IS 'Copy of the records table structure for tracking changes.';
+
+-- Enable row-level security for the new table
+ALTER TABLE public.record_changes ENABLE ROW LEVEL SECURITY;
+
+-- Add indexes to the new table for common query fields
+CREATE INDEX IF NOT EXISTS idx_record_changes_plot_id ON public.record_changes(plot_id);
+CREATE INDEX IF NOT EXISTS idx_record_changes_schema_id ON public.record_changes(schema_id);
+CREATE INDEX IF NOT EXISTS idx_record_changes_responsible_state ON public.record_changes(responsible_state);
+CREATE INDEX IF NOT EXISTS idx_record_changes_responsible_provider ON public.record_changes(responsible_provider);
+CREATE INDEX IF NOT EXISTS idx_record_changes_responsible_troop ON public.record_changes(responsible_troop);
+CREATE INDEX IF NOT EXISTS idx_record_changes_cluster_id ON public.record_changes(cluster_id);
+CREATE INDEX IF NOT EXISTS idx_record_changes_schema_name ON public.record_changes(schema_name);
+
+-- Add a comment to the new table
+COMMENT ON TABLE public.record_changes IS 'Copy of the records table for tracking changes.';
+
+-- Remove UNIQUE constraint on plot_id in record_changes table
+ALTER TABLE public.record_changes DROP CONSTRAINT IF EXISTS record_changes_plot_id_key;
+
+-- Create a policy to allow "update" and "select" only users_permissions with the same organization_id of responsible_state, responsible_provider or responsible_troop
+DROP POLICY IF EXISTS "record_changes: Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "record_changes";
+CREATE POLICY "record_changes: Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop"
+ON "record_changes"
+AS PERMISSIVE
+FOR select
+TO authenticated
+USING (
+    -- check if one of the organizations in public.users_permissions user has access to is type organizations.type = 'root'
+    EXISTS (
+        SELECT 1
+        FROM public.organizations org
+        WHERE org.id IN (
+            SELECT organization_id
+            FROM public.users_permissions
+            WHERE user_id = auth.uid()
+        )
+    AND org.type = 'root'
+    ) OR
+
+    responsible_state IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_provider IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    ) OR
+    responsible_troop IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
 );
-
-COMMENT ON TABLE "record_changes" IS 'Änderungen an Plots';
-
-alter table "record_changes" enable row level security;
-
-
-
-
 
 
 -- Invitation table
