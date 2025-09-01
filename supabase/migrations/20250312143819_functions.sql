@@ -20,13 +20,13 @@ WITH p_coords AS (
 SELECT
     p.*,
     COALESCE(pc.data, '[]'::json) AS plot_coordinates,
-    COALESCE(tt.data, '[]'::json) AS trees,
-    COALESCE(dw.data, '[]'::json) AS deadwoods,
-    COALESCE(rg.data, '[]'::json) AS regenerations,
-    COALESCE(sl.data, '[]'::json) AS structures_lt4m,
+    COALESCE(tt.data, '[]'::json) AS tree,
+    COALESCE(dw.data, '[]'::json) AS deadwood,
+    COALESCE(rg.data, '[]'::json) AS regeneration,
+    COALESCE(sl.data, '[]'::json) AS structure_lt4m,
     COALESCE(ee.data, '[]'::json) AS edges,
-    COALESCE(s_gt4m.data, '[]'::json) AS structures_gt4m,
-    COALESCE(pl.data, '[]'::json) AS landmarks
+    COALESCE(s_gt4m.data, '[]'::json) AS structure_gt4m,
+    COALESCE(pl.data, '[]'::json) AS plot_landmark
 FROM inventory_archive.plot p
 LEFT JOIN p_coords pc ON p.id = pc.plot_id
 LEFT JOIN t_trees tt ON p.id = tt.plot_id
@@ -60,67 +60,6 @@ REVOKE ALL ON plot_nested_json_cached FROM authenticated;
 GRANT SELECT ON plot_nested_json_cached TO postgres;
 GRANT SELECT ON plot_nested_json_cached TO service_role;
 
-
---CREATE VIEW public.plot_nested_json AS
---SELECT
---    plot.*,
---    
---    -- Use COALESCE to return an empty array ('[]'::json) if no rows are found
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(plot_coordinates.*))
---            FROM inventory_archive.plot_coordinates
---            WHERE plot_coordinates.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS plot_coordinates,
---
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(tree.*))
---            FROM inventory_archive.tree
---            WHERE tree.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS trees,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(deadwood.*))
---            FROM inventory_archive.deadwood
---            WHERE deadwood.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS deadwoods,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(regeneration.*))
---            FROM inventory_archive.regeneration
---            WHERE regeneration.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS regenerations,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(structure_lt4m.*))
---            FROM inventory_archive.structure_lt4m
---            WHERE structure_lt4m.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS structures_lt4m,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(edges.*))
---            FROM inventory_archive.edges
---            WHERE edges.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS edges
---        
---FROM inventory_archive.plot;
 
 
 
@@ -728,40 +667,41 @@ REVOKE ALL ON public.view_records_details FROM anon;
 GRANT SELECT ON public.view_records_details TO authenticated;
 
 
-
-CREATE OR REPLACE FUNCTION batch_update_records(batch_size INTEGER)
+DROP FUNCTION IF EXISTS public.batch_update_records;
+CREATE OR REPLACE FUNCTION public.batch_update_records(batch_size INTEGER)
 RETURNS VOID AS $$
 DECLARE
     processed INTEGER := 0;
     rows_updated INTEGER;
 BEGIN
     LOOP
-        UPDATE public.records 
+        -- Update only rows that have not yet been processed in previous runs
+        UPDATE public.records
         SET previous_properties_updated_at = NOW(),
             plot_id = plot_id
         WHERE id IN (
-            SELECT id 
-            FROM public.records 
-            WHERE previous_properties = '{}'::jsonb
-            ORDER BY id 
+            SELECT id
+            FROM public.records
+            --WHERE previous_properties_updated_at IS NULL
+            ORDER BY id
             LIMIT batch_size
-            -- Remove OFFSET processed - this was the problem!
         );
-        
+
         GET DIAGNOSTICS rows_updated = ROW_COUNT;
-        
+
         IF rows_updated = 0 THEN
             EXIT;
         END IF;
-        
+
         processed := processed + rows_updated;
         RAISE NOTICE 'Processed % records total', processed;
-        
+
         PERFORM pg_sleep(0.1);
     END LOOP;
-    
+
     RAISE NOTICE 'Finished processing % records total', processed;
-END $$ LANGUAGE plpgsql;
+END;
+$$ LANGUAGE plpgsql;
 
 
-SELECT batch_update_records(100);
+SELECT public.batch_update_records(1000);
