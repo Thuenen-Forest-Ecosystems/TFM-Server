@@ -337,7 +337,7 @@ ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_administration" tim
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone NULL;
 
 create trigger handle_updated_at before update on records
-  for each row execute procedure moddatetime (updated_at);
+  for each row execute procedure extensions.moddatetime (updated_at);
 
 -- Add indexes to the records table for common query fields
 CREATE INDEX IF NOT EXISTS idx_records_plot_id ON records(plot_id);
