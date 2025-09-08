@@ -454,6 +454,7 @@ services:
   # https://supabase.com/docs/guides/self-hosting/docker#exposing-your-postgres-database
   db:
     container_name: supabase-db
+    shm_size: '1g'  # Increase shared memory to 1 GB
     networks:
       - supabase-net
     image: supabase/postgres:15.6.1.146

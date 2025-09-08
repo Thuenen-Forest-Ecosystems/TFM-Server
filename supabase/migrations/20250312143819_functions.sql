@@ -644,6 +644,8 @@ DROP VIEW IF EXISTS public.view_records_details;
 CREATE OR REPLACE VIEW public.view_records_details AS
 SELECT 
     r.*,
+    -- Add the plot_coordinates to the view
+    p_coordinates.center_location,
     p_bwi.federal_state,
     p_bwi.growth_district,
     p_bwi.forest_status AS forest_status_bwi2022,
@@ -656,6 +658,8 @@ SELECT
 FROM public.records r
 LEFT JOIN inventory_archive.plot p_bwi 
     ON r.plot_id = p_bwi.id AND p_bwi.interval_name = 'bwi2022'
+LEFT JOIN inventory_archive.plot_coordinates p_coordinates 
+    ON r.plot_id = p_coordinates.plot_id
 LEFT JOIN inventory_archive.plot p_ci2017 
     ON p_bwi.plot_name = p_ci2017.plot_name AND p_bwi.cluster_name = p_ci2017.cluster_name AND p_ci2017.interval_name = 'ci2017'
 LEFT JOIN inventory_archive.plot p_ci2012 
