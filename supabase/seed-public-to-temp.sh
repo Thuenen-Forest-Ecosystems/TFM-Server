@@ -3,6 +3,8 @@
 #set -e  # Exit on error
 set -a && source ../.env && set +a
 
+# Export password for pg_dump to use
+export PGPASSWORD=$REMOTE_PASSWORD
 
 # #create tmp directory if it doesn't exist
 mkdir -p tmp
@@ -47,6 +49,8 @@ psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres"  -f "tmp/publi
 sleep 1
 
 psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres"  -f "tmp/public.sql"
+
+unset PGPASSWORD
 
 
 
