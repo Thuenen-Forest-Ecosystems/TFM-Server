@@ -143,27 +143,27 @@ BEGIN
     -- Use ST_Project which handles geodetic calculations
     new_center_point := ST_Project(start_point, distance_m, azimuth_rad);
     
-    -- Create buffer using geography type for true circular shape
-    --NEW.center_location := ST_Buffer(new_center_point::geography, NEW.radius)::public.geometry;
+    -- Remove the unnecessary line
+    -- NEW.radius := NEW.radius; 
 
-    -- Create buffer using geography type for true circular shape
-    NEW.radius := NEW.radius; -- Ensure radius is passed correctly
-
-    -- Insert or update geometry in subplots_relative_position_coordinates table
-    INSERT INTO inventory_archive.subplots_relative_position_coordinates (subplots_relative_position_id, geometry_subplots_relative_position)
-    VALUES (NEW.id, ST_Buffer(new_center_point::geography, NEW.radius)::public.geometry)
-    ON CONFLICT (subplots_relative_position_id)
-    DO UPDATE SET geometry_subplots_relative_position = EXCLUDED.geometry_subplots_relative_position;
-
+    -- Ensure the record exists in subplots_relative_position before inserting
+    IF EXISTS (SELECT 1 FROM inventory_archive.subplots_relative_position WHERE id = NEW.id) THEN
+        -- Insert or update geometry in subplots_relative_position_coordinates table
+        INSERT INTO inventory_archive.subplots_relative_position_coordinates (intkey, subplots_relative_position_id, geometry_subplots_relative_position)
+        VALUES (NEW.intkey, NEW.id, ST_Buffer(new_center_point::geography, NEW.radius)::public.geometry)
+        ON CONFLICT (subplots_relative_position_id)
+        DO UPDATE SET geometry_subplots_relative_position = EXCLUDED.geometry_subplots_relative_position;
+    ELSE
+        RAISE NOTICE 'subplots_relative_position record with id % does not exist', NEW.id;
+    END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS update_subplot_trigger ON inventory_archive.subplots_relative_position;
-
 CREATE TRIGGER update_subplot_trigger
-BEFORE UPDATE OR INSERT ON inventory_archive.subplots_relative_position
+AFTER INSERT OR UPDATE ON inventory_archive.subplots_relative_position
 FOR EACH ROW
 EXECUTE FUNCTION update_circle_geometry();
 

@@ -151,7 +151,7 @@ ALTER TABLE plot ADD COLUMN IF NOT EXISTS plot_name integer NOT NULL CHECK (plot
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL; -- REFERENCES cluster (cluster_name);
 ALTER TABLE plot ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL REFERENCES cluster (id);
 ALTER TABLE plot ADD CONSTRAINT FK_Plot_Unique UNIQUE (cluster_name, plot_name, interval_name);
---ALTER TABLE plot ADD CONSTRAINT FK_Plot_Cluster_Unique UNIQUE (cluster_name, plot_name);
+ALTER TABLE plot ADD COLUMN IF NOT EXISTS acquisition_date date NULL; -- Datum der Aufnahme
 
 
 

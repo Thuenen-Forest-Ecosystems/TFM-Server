@@ -1,5 +1,5 @@
-DROP VIEW IF EXISTS public.plot_nested_json;
-CREATE VIEW public.plot_nested_json AS
+--DROP VIEW IF EXISTS public.plot_nested_json;
+CREATE OR REPLACE VIEW public.plot_nested_json AS
 WITH p_coords AS (
     SELECT plot_id, json_agg(row_to_json(pc.*)) as data FROM inventory_archive.plot_coordinates pc GROUP BY plot_id
 ), t_trees AS (
@@ -12,15 +12,21 @@ WITH p_coords AS (
     SELECT plot_id, json_agg(row_to_json(s.*)) as data FROM inventory_archive.structure_lt4m s GROUP BY plot_id
 ), e_edges AS (
     SELECT plot_id, json_agg(row_to_json(e.*)) as data FROM inventory_archive.edges e GROUP BY plot_id
+), s_gt4m AS (
+    SELECT plot_id, json_agg(row_to_json(gt4m.*)) as data FROM inventory_archive.structure_gt4m gt4m GROUP BY plot_id
+), p_landmarks AS (
+    SELECT plot_id, json_agg(row_to_json(pl.*)) as data FROM inventory_archive.plot_landmark pl GROUP BY plot_id
 )
 SELECT
     p.*,
     COALESCE(pc.data, '[]'::json) AS plot_coordinates,
-    COALESCE(tt.data, '[]'::json) AS trees,
-    COALESCE(dw.data, '[]'::json) AS deadwoods,
-    COALESCE(rg.data, '[]'::json) AS regenerations,
-    COALESCE(sl.data, '[]'::json) AS structures_lt4m,
-    COALESCE(ee.data, '[]'::json) AS edges
+    COALESCE(tt.data, '[]'::json) AS tree,
+    COALESCE(dw.data, '[]'::json) AS deadwood,
+    COALESCE(rg.data, '[]'::json) AS regeneration,
+    COALESCE(sl.data, '[]'::json) AS structure_lt4m,
+    COALESCE(ee.data, '[]'::json) AS edges,
+    COALESCE(s_gt4m.data, '[]'::json) AS structure_gt4m,
+    COALESCE(pl.data, '[]'::json) AS plot_landmark
 FROM inventory_archive.plot p
 LEFT JOIN p_coords pc ON p.id = pc.plot_id
 LEFT JOIN t_trees tt ON p.id = tt.plot_id
@@ -28,6 +34,8 @@ LEFT JOIN d_woods dw ON p.id = dw.plot_id
 LEFT JOIN r_gens rg ON p.id = rg.plot_id
 LEFT JOIN s_lt4m sl ON p.id = sl.plot_id
 LEFT JOIN e_edges ee ON p.id = ee.plot_id
+LEFT JOIN s_gt4m ON p.id = s_gt4m.plot_id
+LEFT JOIN p_landmarks pl ON p.id = pl.plot_id
 WHERE p.interval_name = 'bwi2022';
 
 -- Revoke all permissions from public role to prevent access
@@ -35,66 +43,23 @@ REVOKE ALL ON public.plot_nested_json FROM PUBLIC;
 REVOKE ALL ON public.plot_nested_json FROM anon;
 REVOKE ALL ON public.plot_nested_json FROM authenticated;
 
---CREATE VIEW public.plot_nested_json AS
---SELECT
---    plot.*,
---    
---    -- Use COALESCE to return an empty array ('[]'::json) if no rows are found
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(plot_coordinates.*))
---            FROM inventory_archive.plot_coordinates
---            WHERE plot_coordinates.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS plot_coordinates,
---
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(tree.*))
---            FROM inventory_archive.tree
---            WHERE tree.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS trees,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(deadwood.*))
---            FROM inventory_archive.deadwood
---            WHERE deadwood.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS deadwoods,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(regeneration.*))
---            FROM inventory_archive.regeneration
---            WHERE regeneration.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS regenerations,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(structure_lt4m.*))
---            FROM inventory_archive.structure_lt4m
---            WHERE structure_lt4m.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS structures_lt4m,
---    
---    COALESCE(
---        (
---            SELECT json_agg(row_to_json(edges.*))
---            FROM inventory_archive.edges
---            WHERE edges.plot_id = plot.id
---        ),
---        '[]'::json
---    ) AS edges
---        
---FROM inventory_archive.plot;
+GRANT SELECT ON public.plot_nested_json TO postgres;
+GRANT SELECT ON public.plot_nested_json TO service_role;
+
+-- Create materialized view for better performance
+CREATE MATERIALIZED VIEW IF NOT EXISTS plot_nested_json_cached AS
+SELECT * FROM public.plot_nested_json;
+
+-- Create unique index for fast lookups
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plot_nested_json_cached_id ON plot_nested_json_cached (id);
+
+-- Grant permissions
+REVOKE ALL ON plot_nested_json_cached FROM PUBLIC;
+REVOKE ALL ON plot_nested_json_cached FROM anon;
+REVOKE ALL ON plot_nested_json_cached FROM authenticated;
+GRANT SELECT ON plot_nested_json_cached TO postgres;
+GRANT SELECT ON plot_nested_json_cached TO service_role;
+
 
 
 
@@ -111,7 +76,7 @@ BEGIN
 
     SELECT row_to_json(t)::jsonb
     INTO result
-    FROM public.plot_nested_json t
+    FROM public.plot_nested_json_cached t
     WHERE t.id = p_plot_id;
 
     RETURN result;
@@ -129,50 +94,29 @@ AS $$
 DECLARE
     plot_data jsonb;
 BEGIN
-    RAISE NOTICE 'Trigger firing for % on record with plot_id: %', TG_OP, NEW.plot_id;
-
     NEW.message := COALESCE(NEW.message, '') || 'Trigger fired for ' || TG_OP || ' operation';
-
-    -- Always ensure previous_properties has a default value
     NEW.previous_properties := '{}'::jsonb;
     
-    -- Attempt to get the plot data
     IF NEW.plot_id IS NOT NULL THEN
-
         BEGIN
-            SELECT row_to_json(pnj)::jsonb
-            INTO plot_data  -- Missing INTO clause
-            FROM public.plot_nested_json pnj
-            WHERE pnj.id = NEW.plot_id;
-
+            -- Use the function instead of direct view query for better caching
+            SELECT public.get_plot_nested_json_by_id(NEW.plot_id) INTO plot_data;
             
             IF plot_data IS NOT NULL THEN
                 NEW.previous_properties := plot_data;
-                NEW.message := 'Plot data found and set in previous_properties';
+                NEW.message := 'Plot data found and set';
             ELSE
                 NEW.message := 'No plot data found';
-                RAISE NOTICE 'No plot data found for plot_id: %', NEW.plot_id;
             END IF;
         EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE 'Error fetching plot data: %', SQLERRM;
-            -- previous_properties already has default value
+            NEW.message := 'Error: ' || SQLERRM;
+            RAISE NOTICE 'Error fetching plot data for %: %', NEW.plot_id, SQLERRM;
         END;
     ELSE
-        NEW.message := 'NEW.plot_id IS NULL';
+        NEW.message := 'plot_id IS NULL';
     END IF;
-    
-    -- Set state_responsible if needed (won't override existing value)
-    --IF NEW.state_responsible IS NULL THEN
-    --    SELECT state_responsible INTO NEW.state_responsible
-    --    FROM inventory_archive.cluster c
-    --    JOIN inventory_archive.plot p ON p.cluster_id = c.id
-    --    WHERE p.id = NEW.plot_id;
-    --END IF;
 
     RETURN NEW;
-EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'Error in trigger: % %', SQLSTATE, SQLERRM;
-    RETURN NEW; -- Still allow the operation to proceed
 END;
 $$;
 
@@ -186,34 +130,38 @@ CREATE TRIGGER before_record_insert_or_update
 
 --- Backout plot to backup_changes every time plot updates
 CREATE OR REPLACE FUNCTION public.handle_record_changes()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  -- only if is_valid change and old is_valid exists
-  if new.is_valid != old.is_valid and old.is_valid then
-    -- Check if the new properties are different from the old properties
-    if new.properties IS DISTINCT FROM old.properties 
-       AND new.properties IS NOT NULL 
-       AND new.properties != '{}'::jsonb 
-       AND jsonb_typeof(new.properties) = 'object'
-       AND jsonb_object_keys(new.properties) IS NOT NULL then
-      -- Insert a record into the record_changes table
-      INSERT INTO public.record_changes (updated_by, properties, schema_name, previous_properties, previous_properties_updated_at, is_valid, supervisor_id, plot_id, troop_id, schema_id)
-      VALUES (NEW.updated_by, NEW.properties, NEW.schema_name, OLD.properties, OLD.previous_properties_updated_at, OLD.is_valid, OLD.supervisor_id, OLD.plot_id, OLD.troop_id, OLD.schema_id);
-    end if;
-  end if;
-  return new;
-end;
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    -- Insert a record into the record_changes table
+    INSERT INTO public.record_changes (
+        id, created_at, updated_by, properties, previous_properties, previous_properties_updated_at,
+        is_valid, plot_id, schema_id, schema_name, responsible_administration, responsible_state,
+        responsible_provider, responsible_troop, validated_at, message, cluster_id, cluster_name,
+        plot_name, administration_los, state_los, provider_los, troop_los, completed_at_troop,
+        completed_at_state, completed_at_administration, updated_at, record_id
+    )
+    VALUES (
+        gen_random_uuid(), NOW(), OLD.updated_by, OLD.properties, OLD.previous_properties, OLD.previous_properties_updated_at,
+        OLD.is_valid, OLD.plot_id, OLD.schema_id, OLD.schema_name, OLD.responsible_administration, OLD.responsible_state,
+        OLD.responsible_provider, OLD.responsible_troop, OLD.validated_at, OLD.message, OLD.cluster_id, OLD.cluster_name,
+        OLD.plot_name, OLD.administration_los, OLD.state_los, OLD.provider_los, OLD.troop_los, OLD.completed_at_troop,
+        OLD.completed_at_state, OLD.completed_at_administration, OLD.updated_at, OLD.id
+    );
+
+    RETURN NEW;
+END;
 $$;
 
 -- trigger the function every time a plot is updated
 DROP TRIGGER IF EXISTS on_record_updated ON public.records;
-create trigger on_record_updated
-  after update on public.records
-  for each row execute procedure public.handle_record_changes();
+CREATE TRIGGER on_record_updated
+AFTER UPDATE OF is_valid, completed_at_troop, completed_at_state, completed_at_administration, responsible_administration, responsible_state, responsible_provider, responsible_troop ON public.records
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_record_changes();
 
 
 
@@ -287,7 +235,7 @@ CREATE TRIGGER before_record_insert_update
 
 -- ADD RECORDS
 
--- Example: SELECT public.add_plot_ids_to_records('10cf8993-0190-4a9c-b135-111d8009f7b4'); // ci2027
+-- Example: SELECT public.add_plot_ids_to_records('79a571c5-e128-4bef-bead-954d9426ae97'); // ci2027
 -- Function to get all id from inventory_archive.plot and add one row to public.records (if exists do nothing)
 DROP FUNCTION IF EXISTS public.add_plot_ids_to_records;
 CREATE OR REPLACE FUNCTION public.add_plot_ids_to_records(p_schema_id UUID, p_batch_size INTEGER DEFAULT 1000)
@@ -311,15 +259,20 @@ BEGIN
     LOOP
         -- Insert a batch of missing plots
         WITH missing_plots AS (
+
             SELECT p.id, p.plot_name, p.cluster_name, p.cluster_id
             FROM inventory_archive.plot p
             JOIN inventory_archive.cluster c ON p.cluster_id = c.id
-            WHERE c.cluster_situation = 1 AND p.interval_name = 'bwi2022'
+            WHERE ((c.grid_density in (64, 256) and p.federal_state in (1, 2, 4, 8, 9, 13)) -- SH, HH, BB, BW, BY, MV
+                or (c.grid_density in (16, 32, 64, 256) and p.federal_state in (5, 6, 7, 10, 16)) -- NW, HE, RP, SL, TH
+                or (c.grid_density in (4, 8, 16, 32, 64, 256) and p.federal_state in (11, 12, 14, 15)) -- BE, BB, SN, ST
+                or p.sampling_stratum  in (308, 316)) AND p.interval_name = 'bwi2022'
             AND NOT EXISTS (
                 SELECT 1 FROM public.records r 
                 WHERE r.plot_id = p.id
             )
             LIMIT p_batch_size
+
         )
         INSERT INTO public.records (plot_id, schema_id, plot_name, cluster_name, cluster_id)
         SELECT id, p_schema_id, plot_name, cluster_name, cluster_id FROM missing_plots;
@@ -350,7 +303,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
-
 -- If organizations_lose.responsible_organization_id inserted or updates set records.administration_los, records.state_los, records.provider_los, records.troop_los based on organizations.type
 -- Function to update records when organizations_lose responsible_organization_id changes
 DROP TRIGGER IF EXISTS trg_update_records_from_organizations_lose_changes ON public.organizations_lose;
@@ -374,19 +326,19 @@ BEGIN
             CASE org_type
                 WHEN 'root' THEN
                     UPDATE records
-                    SET responsible_state =  NULL
-                    WHERE administration_los = NEW.id;
-                    
-                WHEN 'country' THEN
+                    SET responsible_state = NULL, responsible_provider = NULL, responsible_troop = NULL, state_los = NULL, provider_los = NULL, troop_los = NULL
+                    WHERE administration_los = OLD.id;
+
+                WHEN 'country' THEN --state
                     UPDATE records
-                    SET responsible_state = NULL
-                    WHERE state_los = NEW.id;
-                    
+                    SET responsible_provider = NULL, responsible_troop = NULL, provider_los = NULL, troop_los = NULL
+                    WHERE state_los = OLD.id;
+
                 WHEN 'provider' THEN
                     UPDATE records
-                    SET responsible_provider = NULL
-                    WHERE provider_los = NEW.id;
-                    
+                    SET responsible_troop = NULL, troop_los = NULL
+                    WHERE provider_los = OLD.id;
+
                 ELSE
                     -- Handle unknown organization types or do nothing
                     NULL;
@@ -402,19 +354,20 @@ BEGIN
                 WHEN 'root' THEN
                     UPDATE records
                     --SET administration_los = NEW.id
-                    SET responsible_state = NEW.responsible_organization_id, responsible_troop = NULL
+                    SET responsible_state = NEW.responsible_organization_id, responsible_provider = NULL, responsible_troop = NULL,
+                        state_los = NULL, provider_los = NULL, troop_los = NULL
                     WHERE administration_los = OLD.id;
-                    
+
                 WHEN 'country' THEN
                     UPDATE records
-                    SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL
+                    SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL, provider_los = NULL, troop_los = NULL
                     WHERE state_los = OLD.id;
-                    
+
                 WHEN 'provider' THEN
                     UPDATE records
-                    SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL
+                    SET responsible_troop = NEW.troop_id, troop_los = NULL
                     WHERE provider_los = OLD.id;
-                    
+
                 ELSE
                     -- Handle unknown organization types or do nothing
                     NULL;
@@ -422,21 +375,49 @@ BEGIN
         END IF;
     END IF;
 
+    IF NEW.troop_id IS DISTINCT FROM OLD.troop_id THEN
+        SELECT type INTO org_type
+        FROM organizations
+        WHERE id = NEW.organization_id;
+        
+        -- Update records based on new organization type
+        CASE org_type
+            WHEN 'root' THEN
+                UPDATE records
+                SET responsible_troop = NEW.troop_id
+                WHERE administration_los = NEW.id;
+
+            WHEN 'country' THEN
+                UPDATE records
+                SET responsible_troop = NEW.troop_id
+                WHERE state_los = NEW.id;
+
+            WHEN 'provider' THEN
+                UPDATE records
+                SET responsible_troop = NEW.troop_id
+                WHERE provider_los = NEW.id;
+
+            ELSE
+                -- Handle unknown organization types or do nothing
+                NULL;
+        END CASE;
+        
+    END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to fire only on responsible_organization_id changes
 -- UPDATE LOS information in Records
 
 CREATE TRIGGER trg_update_records_from_organizations_lose_changes
-AFTER UPDATE OF responsible_organization_id ON public.organizations_lose
+AFTER UPDATE OF responsible_organization_id, troop_id ON public.organizations_lose
 FOR EACH ROW
 EXECUTE FUNCTION public.update_records_from_organizations_lose_changes();
 
 
 -- If update organizations_lose.responsible_organization_id changes or update responsible_state and/or responsible_provider of records where administration_los, state_los or provider_los is equal id
-
+-- on change organizations_lose
 -- Function to update responsible_state and responsible_provider based on organizations_lose changes
 CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_organizations_lose()
 RETURNS TRIGGER AS $$
@@ -456,22 +437,16 @@ BEGIN
         -- For administration_los matches
         IF org_type = 'root' THEN
             UPDATE records
-            SET responsible_state = NEW.responsible_organization_id
+            SET responsible_state = NEW.responsible_organization_id, responsible_provider = NULL, responsible_troop = NULL
             WHERE administration_los = NEW.id;
+
         END IF;
         
         -- For state_los matches  
         IF org_type = 'country' THEN
             UPDATE records
-            SET responsible_state = NEW.responsible_organization_id
+            SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL
             WHERE state_los = NEW.id;
-        END IF;
-        
-        -- For provider_los matches
-        IF org_type = 'provider' THEN
-            UPDATE records
-            SET responsible_provider = NEW.responsible_organization_id
-            WHERE provider_los = NEW.id;
         END IF;
         
         -- For troop_los matches (if troop type exists)
@@ -486,18 +461,13 @@ BEGIN
             CASE org_type
                 WHEN 'root' THEN
                     UPDATE records
-                    SET responsible_state = NULL
+                    SET responsible_state = NULL, responsible_provider = NULL, responsible_troop = NULL
                     WHERE administration_los = NEW.id;
-                    
+
                 WHEN 'country' THEN
                     UPDATE records
-                    SET responsible_state = NULL
+                    SET responsible_provider = NULL, responsible_troop = NULL
                     WHERE state_los = NEW.id;
-                    
-                WHEN 'provider' THEN
-                    UPDATE records
-                    SET responsible_provider = NULL
-                    WHERE provider_los = NEW.id;
                     
                 WHEN 'troop' THEN
                     UPDATE records
@@ -533,9 +503,12 @@ BEGIN
     IF NEW.administration_los IS DISTINCT FROM OLD.administration_los THEN
         -- If administration_los changes, set state_los and provider_los to NULL
         NEW.state_los := NULL;
+        NEW.responsible_state := NULL;
         NEW.provider_los := NULL;
+        NEW.responsible_provider := NULL;
         NEW.troop_los := NULL;
-        
+        NEW.responsible_troop := NULL;
+
         IF NEW.administration_los IS NOT NULL THEN
             -- Get responsible_organization_id from organizations_lose
             SELECT ol.responsible_organization_id INTO responsible_org_id
@@ -544,9 +517,6 @@ BEGIN
             
             -- Update responsible_state
             NEW.responsible_state := responsible_org_id;
-        ELSE
-            -- Clear responsible_state if administration_los is set to NULL
-            NEW.responsible_state := NULL;
         END IF;
     END IF;
     
@@ -554,8 +524,10 @@ BEGIN
     IF NEW.state_los IS DISTINCT FROM OLD.state_los THEN
         -- If state_los changes, set provider_los to NULL
         NEW.provider_los := NULL;
+        NEW.responsible_provider := NULL;
         NEW.troop_los := NULL;
-        
+        NEW.responsible_troop := NULL;
+
         IF NEW.state_los IS NOT NULL THEN
             -- Get responsible_organization_id from organizations_lose
             SELECT ol.responsible_organization_id INTO responsible_org_id
@@ -563,44 +535,42 @@ BEGIN
             WHERE ol.id = NEW.state_los;
             
             -- Update responsible_state
-            NEW.responsible_state := responsible_org_id;
-        ELSE
-            -- Clear responsible_state if state_los is set to NULL
-            NEW.responsible_state := NULL;
+            NEW.responsible_provider := responsible_org_id;
+            --NEW.responsible_state := responsible_org_id;
         END IF;
     END IF;
     
     -- Handle provider_los changes
     IF NEW.provider_los IS DISTINCT FROM OLD.provider_los THEN
+
+        NEW.responsible_troop := NULL;
+
         IF NEW.provider_los IS NOT NULL THEN
             -- Get responsible_organization_id from organizations_lose
-            SELECT ol.responsible_organization_id INTO responsible_org_id
+            SELECT ol.troop_id INTO responsible_org_id
             FROM organizations_lose ol
             WHERE ol.id = NEW.provider_los;
             
             -- Update responsible_provider
-            NEW.responsible_provider := responsible_org_id;
-        ELSE
-            -- Clear responsible_provider if provider_los is set to NULL
-            NEW.responsible_provider := NULL;
+            NEW.responsible_troop := responsible_org_id;
         END IF;
     END IF;
     
     -- Handle troop_los changes (if applicable)
-    IF NEW.troop_los IS DISTINCT FROM OLD.troop_los THEN
-        IF NEW.troop_los IS NOT NULL THEN
-            -- Get responsible_organization_id from organizations_lose
-            SELECT ol.responsible_organization_id INTO responsible_org_id
-            FROM organizations_lose ol
-            WHERE ol.id = NEW.troop_los;
-            
-            -- Update responsible_troop
-            NEW.responsible_troop := responsible_org_id;
-        ELSE
-            -- Clear responsible_troop if troop_los is set to NULL
-            NEW.responsible_troop := NULL;
-        END IF;
-    END IF;
+    --IF NEW.troop_los IS DISTINCT FROM OLD.troop_los THEN
+    --    IF NEW.troop_los IS NOT NULL THEN
+    --        -- Get responsible_organization_id from organizations_lose
+    --        SELECT ol.responsible_organization_id INTO responsible_org_id
+    --        FROM organizations_lose ol
+    --        WHERE ol.id = NEW.troop_los;
+    --        
+    --        -- Update responsible_troop
+    --        NEW.responsible_troop := responsible_org_id;
+    --    ELSE
+    --        -- Clear responsible_troop if troop_los is set to NULL
+    --        NEW.responsible_troop := NULL;
+    --    END IF;
+    --END IF;
 
     RETURN NEW;
 END;
@@ -612,19 +582,6 @@ CREATE TRIGGER trg_update_records_responsible_fields_from_los_changes
 BEFORE UPDATE OF administration_los, state_los, provider_los, troop_los ON public.records
 FOR EACH ROW
 EXECUTE FUNCTION public.update_records_responsible_fields_from_los_changes();
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 -- Function to update responsible_state based on administration_los changes
@@ -675,11 +632,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger to fire on administration_los changes
-DROP TRIGGER IF EXISTS trg_update_responsible_state_from_admin_los ON public.records;
-CREATE TRIGGER trg_update_responsible_state_from_admin_los
-AFTER UPDATE OF administration_los ON public.records
-FOR EACH ROW
-EXECUTE FUNCTION public.update_records_responsible_state_from_admin_los();
+--DROP TRIGGER IF EXISTS trg_update_responsible_state_from_admin_los ON public.records;
+--CREATE TRIGGER trg_update_responsible_state_from_admin_los
+--AFTER UPDATE OF administration_los ON public.records
+--FOR EACH ROW
+--EXECUTE FUNCTION public.update_records_responsible_state_from_admin_los();
 
 
 
@@ -687,6 +644,8 @@ DROP VIEW IF EXISTS public.view_records_details;
 CREATE OR REPLACE VIEW public.view_records_details AS
 SELECT 
     r.*,
+    -- Add the plot_coordinates to the view
+    p_coordinates.center_location,
     p_bwi.federal_state,
     p_bwi.growth_district,
     p_bwi.forest_status AS forest_status_bwi2022,
@@ -699,6 +658,8 @@ SELECT
 FROM public.records r
 LEFT JOIN inventory_archive.plot p_bwi 
     ON r.plot_id = p_bwi.id AND p_bwi.interval_name = 'bwi2022'
+LEFT JOIN inventory_archive.plot_coordinates p_coordinates 
+    ON r.plot_id = p_coordinates.plot_id
 LEFT JOIN inventory_archive.plot p_ci2017 
     ON p_bwi.plot_name = p_ci2017.plot_name AND p_bwi.cluster_name = p_ci2017.cluster_name AND p_ci2017.interval_name = 'ci2017'
 LEFT JOIN inventory_archive.plot p_ci2012 
@@ -706,4 +667,45 @@ LEFT JOIN inventory_archive.plot p_ci2012
 
 -- Only authenticated users can access this view
 REVOKE ALL ON public.view_records_details FROM PUBLIC;
+REVOKE ALL ON public.view_records_details FROM anon;
 GRANT SELECT ON public.view_records_details TO authenticated;
+
+
+DROP FUNCTION IF EXISTS public.batch_update_records;
+CREATE OR REPLACE FUNCTION public.batch_update_records(batch_size INTEGER)
+RETURNS VOID AS $$
+DECLARE
+    processed INTEGER := 0;
+    rows_updated INTEGER;
+BEGIN
+    LOOP
+        -- Update only rows that have not yet been processed in previous runs
+        UPDATE public.records
+        SET previous_properties_updated_at = NOW(),
+            plot_id = plot_id
+        WHERE id IN (
+            SELECT id
+            FROM public.records
+            --WHERE previous_properties_updated_at IS NULL
+            ORDER BY id
+            LIMIT batch_size
+        );
+
+        GET DIAGNOSTICS rows_updated = ROW_COUNT;
+
+        IF rows_updated = 0 THEN
+            EXIT;
+        END IF;
+
+        processed := processed + rows_updated;
+        RAISE NOTICE 'Processed % records total', processed;
+
+        PERFORM pg_sleep(0.1);
+    END LOOP;
+
+    RAISE NOTICE 'Finished processing % records total', processed;
+END;
+$$ LANGUAGE plpgsql;
+
+
+SELECT public.batch_update_records(1000);

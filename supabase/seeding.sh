@@ -1,5 +1,8 @@
 #! /bin/bash
 
+# run seed-to-temp.sh first
+./seed-to-temp.sh
+
 # Set the chunk size (e.g., 50MB = 50000000 bytes)
 CHUNK_SIZE=50000
 
@@ -22,8 +25,16 @@ add_on_conflict_clause() {
     local file=$1
     local conflict_column=${2:-"code"}  # Default to 'code', but allow override
 
-    # Add ON CONFLICT clause only to lines starting with INSERT INTO
-    sed -i '' -E "/^INSERT INTO/ s/;([[:space:]]*$)/ ON CONFLICT (${conflict_column}) DO NOTHING;\1/g" "$file"
+    # Use awk to process INSERT statements and add ON CONFLICT clause
+    # This approach correctly identifies INSERT statement blocks and only modifies their ending semicolons
+    awk -v conflict_col="$conflict_column" '
+    /^INSERT INTO.*VALUES/ { in_insert = 1 }
+    in_insert && /;[[:space:]]*$/ { 
+        gsub(/;[[:space:]]*$/, " ON CONFLICT (" conflict_col ") DO NOTHING;")
+        in_insert = 0
+    }
+    { print }
+    ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
 # Remove all sql files in folder
