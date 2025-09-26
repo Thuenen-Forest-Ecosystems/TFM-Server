@@ -708,4 +708,155 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-SELECT public.batch_update_records(1000);
+-- SELECT public.batch_update_records(1000);
+
+
+-- Function to get all clusters a user has access to based on their permissions
+DROP FUNCTION IF EXISTS public.get_user_clusters;
+CREATE OR REPLACE FUNCTION public.get_user_clusters()
+RETURNS TABLE (
+    id UUID,
+    cluster_name INTEGER,
+    state_responsible INTEGER,
+    grid_density INTEGER,
+    states_affected INTEGER[],
+    cluster_status INTEGER,
+    cluster_situation INTEGER
+    -- Add any other columns from the `inventory_archive.cluster` table here
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT DISTINCT
+        c.id,
+        c.cluster_name,
+        c.state_responsible,
+        c.grid_density,
+        c.states_affected,
+        c.cluster_status,
+        c.cluster_situation
+        -- Add any other columns you want to return here
+    FROM inventory_archive.cluster c
+    JOIN inventory_archive.plot p ON c.id = p.cluster_id
+    JOIN public.records r ON p.id = r.plot_id
+    JOIN public.users_permissions up ON (
+        up.user_id = auth.uid()
+        AND (
+            r.responsible_state = up.organization_id
+            OR r.responsible_provider = up.organization_id
+        )
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+
+--------- -- Trigger and function to call Supabase Edge Function on validation_version change
+
+-- Create function to call Supabase Edge Function for validation
+CREATE OR REPLACE FUNCTION public.call_validation_function(
+    p_properties jsonb,
+    p_previous_properties jsonb,
+    p_validation_version uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    validation_result jsonb;
+    function_url text;
+    payload text;
+    response record;
+    debug text;
+BEGIN
+    -- Construct the Edge Function URL
+    function_url := current_setting('app.settings.supabase_functions_url', true) || '/validate-record';
+    
+    -- If the setting is not available, use a default (adjust as needed)
+    IF function_url IS NULL OR function_url = '/validate-record' THEN
+        function_url := 'https://ci.thuenen.de/functions/v1/validate-record';
+    END IF;
+
+    -- Prepare the payload as a JSON string
+    payload := jsonb_build_object(
+        'properties', p_properties,
+        'previous_properties', p_previous_properties,
+        'validation_version', 'v32'
+    )::text;
+
+    -- Call the Edge Function using http extension with correct signature
+    SELECT * INTO response FROM http_post(
+        function_url,
+        payload,
+        'application/json'
+    );
+
+    -- Check if the request was successful
+    IF response.status >= 200 AND response.status < 300 THEN
+        validation_result := response.content::jsonb;
+    ELSE
+        -- Handle HTTP errors
+        debug := format('HTTP Error %s: %s', response.status, response.content);
+        RAISE NOTICE 'HTTP request failed: %', debug;
+        
+        RETURN jsonb_build_object(
+            'validation_errors', jsonb_build_object('error', 'HTTP request failed', 'debug', debug),
+            'plausibility_errors', jsonb_build_object('error', 'HTTP request failed', 'debug', debug)
+        );
+    END IF;
+
+    RETURN validation_result;
+
+EXCEPTION WHEN OTHERS THEN
+    -- Capture the error message and debug information
+    debug := 'Error calling Edge Function: ' || SQLERRM;
+
+    -- Log the error for debugging purposes
+    RAISE NOTICE 'Validation function error: %', debug;
+
+    -- Return error response if the function call fails
+    RETURN jsonb_build_object(
+        'validation_errors', jsonb_build_object('error', 'Validation service unavailable', 'debug', debug),
+        'plausibility_errors', jsonb_build_object('error', 'Plausibility service unavailable', 'debug', debug)
+    );
+END;
+$$;
+
+-- Create the trigger function
+CREATE OR REPLACE FUNCTION public.handle_validation_version_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    validation_result jsonb;
+BEGIN
+    -- Only proceed if validation_version has actually changed
+    IF OLD.validation_version IS DISTINCT FROM NEW.validation_version THEN
+        
+        -- Call the validation function
+        SELECT public.call_validation_function(
+            NEW.properties,
+            NEW.previous_properties,
+            NEW.validation_version
+        ) INTO validation_result;
+
+        -- Update the validation and plausibility errors
+        IF validation_result IS NOT NULL THEN
+            NEW.validation_errors := validation_result->'validation_errors';
+            NEW.plausibility_errors := validation_result->'plausibility_errors';
+        END IF;
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- Create the trigger
+DROP TRIGGER IF EXISTS trigger_validation_version_change ON public.records;
+
+CREATE TRIGGER trigger_validation_version_change
+    BEFORE UPDATE OF validation_version ON public.records
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_validation_version_change();

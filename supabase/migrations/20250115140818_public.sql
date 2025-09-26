@@ -9,7 +9,9 @@ create table IF NOT EXISTS "public"."schemas" (
     "bucket_schema_file_name" text,
     "bucket_plausability_file_name" text,
     "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL,
-    "schema" json
+    "schema" json,
+    "version" integer,
+    "directory" text
 );
 
 
@@ -33,6 +35,8 @@ CREATE TABLE IF NOT EXISTS organizations (
     can_admin_troop boolean NOT NULL DEFAULT false,
     can_admin_organization boolean NOT NULL DEFAULT false
 );
+
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS "deleted" boolean NOT NULL DEFAULT false;
 
 alter table "public"."organizations" add column IF NOT EXISTS "entityName" text;
 
@@ -333,8 +337,12 @@ ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "troop_los" uuid NULL REFERENCES 
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_troop" timestamp with time zone NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_state" timestamp with time zone NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_administration" timestamp with time zone NULL;
-
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone NULL;
+
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "validation_errors" jsonb NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "plausibility_errors" jsonb NULL;
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "validation_version" uuid NULL;
+
 
 create trigger handle_updated_at before update on records
   for each row execute procedure extensions.moddatetime (updated_at);
