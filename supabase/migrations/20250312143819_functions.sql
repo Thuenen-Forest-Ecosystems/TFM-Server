@@ -982,7 +982,17 @@ BEGIN
         'property_size_class', p.property_size_class,
         'protected_landscape', p.protected_landscape,
         'forest_community_field', p.forest_community_field,
-        'biogeographische_region', p.biogeographische_region
+        'biogeographische_region', p.biogeographische_region,
+        'harvest_restriction_nature_reserve', p.harvest_restriction_nature_reserve,
+        'harvest_restriction_protection_forest', p.harvest_restriction_protection_forest,
+        'harvest_restriction_recreational_forest', p.harvest_restriction_recreational_forest,
+        'harvest_restriction_scattered', p.harvest_restriction_scattered,
+        'harvest_restriction_fragmented', p.harvest_restriction_fragmented,
+        'harvest_restriction_insufficient_access', p.harvest_restriction_insufficient_access,
+        'harvest_restriction_wetness', p.harvest_restriction_wetness,
+        'harvest_restriction_low_yield', p.harvest_restriction_low_yield,
+        'harvest_restriction_private_conservation', p.harvest_restriction_private_conservation,
+        'harvest_restriction_other_internalcause', p.harvest_restriction_other_internalcause
     )
     FROM inventory_archive.plot p
     WHERE r.plot_id = p.id
