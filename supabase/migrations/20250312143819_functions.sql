@@ -934,3 +934,61 @@ CREATE TRIGGER trigger_validation_version_change
     BEFORE UPDATE OF schema_id, properties, previous_properties ON public.records
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_validation_version_change();
+
+
+
+-- SET subgroup of previous monitoring to current monitoring in properties
+-- https://github.com/Thuenen-Forest-Ecosystems/TFM-Documentation/issues/79
+DROP FUNCTION IF EXISTS public.set_preliminary;
+CREATE OR REPLACE FUNCTION public.set_preliminary()
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Update records.properties with values from inventory_archive.plot
+    UPDATE public.records r
+    SET properties = jsonb_build_object(
+        'ffh', p.ffh,
+        'coast', p.coast,
+        'sandy', p.sandy,
+        'biotope', p.biotope,
+        'histwald', p.histwald,
+        'land_use', p.land_use,
+        'plot_name', p.plot_name,
+        'biosphaere', p.biosphaere,
+        'natur_park', p.natur_park,
+        'cluster_name', p.cluster_name,
+        'terrain_form', p.terrain_form,
+        'accessibility', p.accessibility,
+        'federal_state', p.federal_state,
+        'forest_office', p.forest_office,
+        'forest_status', p.forest_status,
+        'interval_name', p.interval_name,
+        'marker_status', p.marker_status,
+        'national_park', p.national_park,
+        'property_type', p.property_type,
+        'terrain_slope', p.terrain_slope,
+        'marker_azimuth', p.marker_azimuth,
+        'marker_profile', p.marker_profile,
+        'elevation_level', p.elevation_level,
+        'ffh_forest_type', p.ffh_forest_type,
+        'growth_district', p.growth_district,
+        'marker_distance', p.marker_distance,
+        'forest_community', p.forest_community,
+        'sampling_stratum', p.sampling_stratum,
+        'terrain_exposure', p.terrain_exposure,
+        'natur_schutzgebiet', p.natur_schutzgebiet,
+        'vogel_schutzgebiet', p.vogel_schutzgebiet,
+        'property_size_class', p.property_size_class,
+        'protected_landscape', p.protected_landscape,
+        'forest_community_field', p.forest_community_field,
+        'biogeographische_region', p.biogeographische_region
+    )
+    FROM inventory_archive.plot p
+    WHERE r.plot_id = p.id
+      AND r.properties = '{}'::jsonb; -- Only update if properties is empty
+END;
+$$;
+
+-- run once
+-- SELECT public.set_preliminary();
