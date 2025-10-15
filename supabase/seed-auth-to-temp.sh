@@ -6,9 +6,6 @@ set -a && source ../.env && set +a
 # Export password for pg_dump to use
 export PGPASSWORD=$POSTGRES_PASSWORD
 
-# Print the POSTGRES_PASSWORD for debugging
-echo "POSTGRES_PASSWORD: $PGPASSWORD"
-
 # #create tmp directory if it doesn't exist
 mkdir -p tmp
 # clean up tmp directory
@@ -23,12 +20,14 @@ clean_sql_file() {
 # Export schema and data from remote supabase instance
 #need  password file (windows %appdata%\postgresql\pgpass.conf) (linux ~/.pgpass) otherwise it will prompt for password
 
+pg_dump -h 134.110.100.75 -p 3389 -U postgres -d postgres -n auth --no-owner > tmp/auth.sql
+clean_sql_file tmp/auth.sql
 
-pg_dump -h 134.110.100.75 -p 3389  -U postgres  -d postgres -n public  --schema-only --enable-row-security > tmp/public_schema.sql
-clean_sql_file tmp/public_schema.sql
-
-pg_dump -h 134.110.100.75 -p 3389  -U postgres  -d postgres -n public  --data-only --enable-row-security > tmp/public.sql
-clean_sql_file tmp/public.sql
+#pg_dump -h 134.110.100.75 -p 3389  -U postgres  -d postgres -n public  --schema-only --jobs=4 > tmp/public_schema.sql
+#clean_sql_file tmp/public_schema.sql
+#
+#pg_dump -h 134.110.100.75 -p 3389  -U postgres  -d postgres -n public  --data-only --jobs=4 --exclude-table=record_changes > tmp/public.sql
+#clean_sql_file tmp/public.sql
 
 
 
@@ -38,21 +37,23 @@ clean_sql_file tmp/public.sql
 # Remove all tables in inventory_archive schema
 psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
   -t \
-  -c "SELECT 'DROP TABLE \"public\".\"' || tablename || '\" CASCADE;' 
+  -c "SELECT 'DROP TABLE \"auth\".\"' || tablename || '\" CASCADE;' 
       FROM pg_tables 
-      WHERE schemaname = 'public';" | \
+      WHERE schemaname = 'auth';" | \
 while read cmd; do
   psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -c "$cmd"
 done
 
 sleep 1
 
-psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres"  -f "tmp/public_schema.sql"
+psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f "tmp/auth.sql"
 
-sleep 1
-
-psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres"  -f "tmp/public.sql"
-
+#psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres"  -f "tmp/public_schema.sql"
+#
+#sleep 1
+#
+#psql -d "postgresql://postgres:postgres@127.0.0.1:54322/postgres"  -f "tmp/public.sql"
+#
 unset PGPASSWORD
 
 

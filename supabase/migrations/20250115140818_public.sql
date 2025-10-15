@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     state_responsible smallint NULL REFERENCES lookup.lookup_state (code),
     parent_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name text NULL,
+    description text NULL,
     can_admin_troop boolean NOT NULL DEFAULT false,
     can_admin_organization boolean NOT NULL DEFAULT false
 );
@@ -60,6 +61,7 @@ create table if not exists "public"."users_permissions" (
 );
 
 ALTER TABLE public.users_permissions ADD CONSTRAINT unique_user_organization UNIQUE (user_id, organization_id);
+ALTER TABLE public.users_permissions ADD CONSTRAINT fk_users_permissions_users_profile FOREIGN KEY (user_id) REFERENCES public.users_profile(id) ON DELETE CASCADE;
 
 alter table "public"."users_permissions" enable row level security;
 
@@ -148,7 +150,7 @@ CREATE TABLE IF NOT EXISTS public.users_profile (
     email text NOT NULL
 );
 ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS "is_database_admin" boolean NOT NULL DEFAULT false;
-
+ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS "name" text;
 Alter Table public.users_profile enable row level security;
 
 -- Create a policy to allow authenticated users to access their own profile and user with same organization_id from users_permissions
@@ -164,47 +166,55 @@ USING (
 );
 
 -- inserts a row into public.profiles
-DROP FUNCTION IF EXISTS public.handle_new_user_profile CASCADE;
+DROP FUNCTION IF EXISTS public.handle_new_user_profile();
 CREATE OR REPLACE FUNCTION public.handle_new_user_profile()
-returns trigger
-language plpgsql
-security definer set search_path = ''
-as $$
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
 DECLARE
   domain_part text;
   org_id uuid;
-begin
+  user_full_name text;
+BEGIN
+  -- Get the organization_id and name from auth.users.raw_user_meta_data
+  IF new.raw_user_meta_data IS NOT NULL THEN
+    SELECT (new.raw_user_meta_data::jsonb ->> 'organization_id')::uuid, 
+           (new.raw_user_meta_data::jsonb ->> 'name') 
+    INTO org_id, user_full_name;
 
-  -- Get the organization_id from auth.users.raw_user_meta_data
-  if new.raw_user_meta_data is not null then
-    select (new.raw_user_meta_data::jsonb ->> 'organization_id')::uuid into org_id;
-  else
-    -- If no organization found
-    org_id := null;
-  end if;
+    -- Validate organization_id
+    IF org_id IS NOT NULL THEN
+      PERFORM 1 FROM public.organizations WHERE id = org_id;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'Invalid organization_id: %', org_id;
+      END IF;
+    END IF;
+  ELSE
+    org_id := NULL;
+    user_full_name := NULL;
+  END IF;
 
-  insert into public.users_profile (id, email, organization_id) values (new.id, new.email, org_id)
-  on conflict (id) do update set email = new.email;
-
-  -- Check if the user is an admin - FIXED duplicate check
-  if new.email like '%@thuenen.de' then
-    update public.users_profile set is_admin = true where id = new.id;
-  else
-    update public.users_profile set is_admin = false where id = new.id;
-  end if;
-  -- Check if the user is a state responsible
-  return new;
-end;
+  -- Insert or update the user's profile
+  INSERT INTO public.users_profile (id, email, organization_id, user_name) 
+  VALUES (new.id, new.email, org_id, user_full_name)
+  ON CONFLICT (id) DO UPDATE 
+  SET email = EXCLUDED.email,
+      organization_id = EXCLUDED.organization_id,
+      user_name = EXCLUDED.user_name;
+  RETURN new;
+END;
 $$;
 
 -- trigger the function every time a user is created
 -- trigger the function only when a user's email is confirmed
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
-  after update of email_confirmed_at on auth.users
-  for each row
-  when (old.email_confirmed_at is null and new.email_confirmed_at is not null)
-  execute procedure public.handle_new_user_profile();
+after update of email_confirmed_at on auth.users
+for each row
+when (old.email_confirmed_at is null and new.email_confirmed_at is not null)
+execute procedure public.handle_new_user_profile();
 
  
 -- CREATE troop table
@@ -329,10 +339,10 @@ ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "message" text NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_id" uuid NULL REFERENCES inventory_archive.cluster(id);
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "cluster_name" integer NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "plot_name" smallint NULL;
-ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "administration_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
-ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "state_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
-ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "provider_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
-ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "troop_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
+--ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "administration_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
+--ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "state_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
+--ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "provider_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
+--ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "troop_los" uuid NULL REFERENCES organizations_lose(id) ON DELETE SET NULL;
 
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_troop" timestamp with time zone NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "completed_at_state" timestamp with time zone NULL;
@@ -341,8 +351,9 @@ ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time 
 
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "validation_errors" jsonb NULL;
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "plausibility_errors" jsonb NULL;
-ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "validation_version" uuid NULL;
-
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "is_plausible" boolean NULL DEFAULT NULL;
+-- Add note
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "note" text NULL;
 
 create trigger handle_updated_at before update on records
   for each row execute procedure extensions.moddatetime (updated_at);
@@ -358,7 +369,9 @@ CREATE INDEX IF NOT EXISTS idx_records_schema_name ON records(schema_name);
 
 COMMENT ON TABLE "records" IS 'Plots';
 
-alter table "records" enable row level security;
+ALTER TABLE public.records ADD CONSTRAINT unique_cluster_plot UNIQUE (cluster_name, plot_name);
+
+ALTER TABLE public.records ENABLE ROW LEVEL SECURITY;
 
 -- Create a policy to allow "update" and "select" only users_permissions with the same organization_id of responsible_state, responsible_provider or responsible_troop
 DROP POLICY IF EXISTS "Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "records";
@@ -488,6 +501,9 @@ WITH CHECK (
 DROP TABLE IF EXISTS public.record_changes;
 CREATE TABLE public.record_changes (LIKE public.records INCLUDING ALL);
 
+-- Make id unique
+ALTER TABLE public.record_changes ADD CONSTRAINT record_changes_id UNIQUE (id);
+
 -- Correctly define the foreign key reference for record_id
 ALTER TABLE public.record_changes ADD COLUMN record_id UUID;
 
@@ -548,6 +564,10 @@ USING (
         WHERE user_id = auth.uid()
     )
 );
+
+
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "record_changes_id" uuid NULL REFERENCES public.record_changes(id) ON DELETE SET NULL;
+
 
 
 -- Invitation table

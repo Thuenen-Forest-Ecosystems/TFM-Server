@@ -37,7 +37,7 @@ ALTER TABLE cluster
 	ADD COLUMN grid_density INTEGER NULL, -- lookup_grid_density
 	ADD COLUMN cluster_status INTEGER NULL, -- lookup_state
 	ADD COLUMN cluster_situation INTEGER NULL,
-	ADD COLUMN inspire_grid_cell TEXT NOT NULL; -- lookup_cluster_status
+	ADD COLUMN inspire_grid_cell TEXT NULL; -- lookup_cluster_status
 
 --ALTER TABLE cluster ADD CONSTRAINT FK_cluster_ModifiedBy
 --    FOREIGN KEY (modified_by)
@@ -47,6 +47,7 @@ ALTER TABLE cluster
 --    REFERENCES auth.users (id);
 
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_Unique UNIQUE (cluster_name);
+ALTER TABLE cluster ADD COLUMN IF NOT EXISTS is_training BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupStateResponsible
 	FOREIGN KEY (state_responsible)
@@ -82,8 +83,7 @@ ALTER TABLE plot
 	ADD COLUMN forest_community_field INTEGER NULL, -- natwg -- lookup_forest_community
 	ADD COLUMN ffh_forest_type INTEGER NULL, -- wlt_v -- lookup_ffh_forest_type
 	ADD COLUMN ffh_forest_type_field INTEGER NULL, --wlt -- lookup_ffh_forest_type
-	ADD COLUMN land_use_before INTEGER NULL, -- lanu -- lookup_land_use
-	ADD COLUMN land_use_after INTEGER NULL, -- lanu -- lookup_land_use
+	ADD COLUMN land_use INTEGER NULL, -- lanu -- lookup_land_use
 	ADD COLUMN coast BOOLEAN NULL DEFAULT FALSE, --kueste
 	ADD COLUMN sandy BOOLEAN NULL DEFAULT FALSE, -- gestein
 	ADD COLUMN protected_landscape BOOLEAN DEFAULT FALSE, -- lsg
@@ -207,11 +207,7 @@ ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupHarvestRestriction FOREIGN KEY (ha
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;
 
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupLandUseBefore FOREIGN KEY (land_use_before)
-	REFERENCES lookup.lookup_land_use (code) MATCH SIMPLE
-	ON UPDATE NO ACTION
-	ON DELETE NO ACTION;
-ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupLandUseAfter FOREIGN KEY (land_use_after)
+ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupLandUseAfter FOREIGN KEY (land_use)
 	REFERENCES lookup.lookup_land_use (code) MATCH SIMPLE
 	ON UPDATE NO ACTION
 	ON DELETE NO ACTION;

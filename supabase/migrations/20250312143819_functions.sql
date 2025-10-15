@@ -1,42 +1,73 @@
 --DROP VIEW IF EXISTS public.plot_nested_json;
 CREATE OR REPLACE VIEW public.plot_nested_json AS
-WITH p_coords AS (
-    SELECT plot_id, json_agg(row_to_json(pc.*)) as data FROM inventory_archive.plot_coordinates pc GROUP BY plot_id
-), t_trees AS (
-    SELECT plot_id, json_agg(row_to_json(t.*)) as data FROM inventory_archive.tree t GROUP BY plot_id
-), d_woods AS (
-    SELECT plot_id, json_agg(row_to_json(d.*)) as data FROM inventory_archive.deadwood d GROUP BY plot_id
-), r_gens AS (
-    SELECT plot_id, json_agg(row_to_json(r.*)) as data FROM inventory_archive.regeneration r GROUP BY plot_id
-), s_lt4m AS (
-    SELECT plot_id, json_agg(row_to_json(s.*)) as data FROM inventory_archive.structure_lt4m s GROUP BY plot_id
-), e_edges AS (
-    SELECT plot_id, json_agg(row_to_json(e.*)) as data FROM inventory_archive.edges e GROUP BY plot_id
-), s_gt4m AS (
-    SELECT plot_id, json_agg(row_to_json(gt4m.*)) as data FROM inventory_archive.structure_gt4m gt4m GROUP BY plot_id
-), p_landmarks AS (
-    SELECT plot_id, json_agg(row_to_json(pl.*)) as data FROM inventory_archive.plot_landmark pl GROUP BY plot_id
+WITH base_plots AS (
+    -- Filter plots first to reduce working set
+    SELECT *
+    FROM inventory_archive.plot 
+    WHERE interval_name = 'bwi2022'
+),
+-- Use LATERAL joins for better performance with smaller result sets
+nested_data AS (
+    SELECT 
+        p.*,
+        -- Optimized aggregations using LATERAL joins
+        COALESCE(
+            (SELECT row_to_json(pc)
+            FROM inventory_archive.plot_coordinates pc 
+            WHERE pc.plot_id = p.id), 
+            '{}'::json
+        ) AS plot_coordinates,
+        COALESCE(
+            (SELECT json_agg(row_to_json(t.*))
+             FROM inventory_archive.tree t 
+             WHERE t.plot_id = p.id), 
+            '[]'::json
+        ) AS tree,
+        COALESCE(
+            (SELECT json_agg(row_to_json(d.*))
+             FROM inventory_archive.deadwood d 
+             WHERE d.plot_id = p.id), 
+            '[]'::json
+        ) AS deadwood,
+        COALESCE(
+            (SELECT json_agg(row_to_json(r.*))
+             FROM inventory_archive.regeneration r 
+             WHERE r.plot_id = p.id), 
+            '[]'::json
+        ) AS regeneration,
+        COALESCE(
+            (SELECT json_agg(row_to_json(s.*))
+             FROM inventory_archive.structure_lt4m s 
+             WHERE s.plot_id = p.id), 
+            '[]'::json
+        ) AS structure_lt4m,
+        COALESCE(
+            (SELECT json_agg(row_to_json(e.*))
+             FROM inventory_archive.edges e 
+             WHERE e.plot_id = p.id), 
+            '[]'::json
+        ) AS edges,
+        COALESCE(
+            (SELECT json_agg(row_to_json(gt4m.*))
+             FROM inventory_archive.structure_gt4m gt4m 
+             WHERE gt4m.plot_id = p.id), 
+            '[]'::json
+        ) AS structure_gt4m,
+        COALESCE(
+            (SELECT json_agg(row_to_json(pl.*))
+             FROM inventory_archive.plot_landmark pl 
+             WHERE pl.plot_id = p.id), 
+            '[]'::json
+        ) AS plot_landmark,
+        COALESCE(
+            (SELECT row_to_json(pos)
+             FROM inventory_archive.position pos 
+             WHERE pos.plot_id = p.id), 
+            '{}'::json
+        ) AS position
+    FROM base_plots p
 )
-SELECT
-    p.*,
-    COALESCE(pc.data, '[]'::json) AS plot_coordinates,
-    COALESCE(tt.data, '[]'::json) AS tree,
-    COALESCE(dw.data, '[]'::json) AS deadwood,
-    COALESCE(rg.data, '[]'::json) AS regeneration,
-    COALESCE(sl.data, '[]'::json) AS structure_lt4m,
-    COALESCE(ee.data, '[]'::json) AS edges,
-    COALESCE(s_gt4m.data, '[]'::json) AS structure_gt4m,
-    COALESCE(pl.data, '[]'::json) AS plot_landmark
-FROM inventory_archive.plot p
-LEFT JOIN p_coords pc ON p.id = pc.plot_id
-LEFT JOIN t_trees tt ON p.id = tt.plot_id
-LEFT JOIN d_woods dw ON p.id = dw.plot_id
-LEFT JOIN r_gens rg ON p.id = rg.plot_id
-LEFT JOIN s_lt4m sl ON p.id = sl.plot_id
-LEFT JOIN e_edges ee ON p.id = ee.plot_id
-LEFT JOIN s_gt4m ON p.id = s_gt4m.plot_id
-LEFT JOIN p_landmarks pl ON p.id = pl.plot_id
-WHERE p.interval_name = 'bwi2022';
+SELECT * FROM nested_data;
 
 -- Revoke all permissions from public role to prevent access
 REVOKE ALL ON public.plot_nested_json FROM PUBLIC;
@@ -47,11 +78,12 @@ GRANT SELECT ON public.plot_nested_json TO postgres;
 GRANT SELECT ON public.plot_nested_json TO service_role;
 
 -- Create materialized view for better performance
-CREATE MATERIALIZED VIEW IF NOT EXISTS plot_nested_json_cached AS
-SELECT * FROM public.plot_nested_json;
+CREATE MATERIALIZED VIEW IF NOT EXISTS plot_nested_json_cached AS SELECT * FROM public.plot_nested_json;
 
--- Create unique index for fast lookups
-CREATE UNIQUE INDEX IF NOT EXISTS idx_plot_nested_json_cached_id ON plot_nested_json_cached (id);
+-- Create better indexes on the materialized view
+CREATE UNIQUE INDEX idx_plot_nested_json_cached_id ON plot_nested_json_cached (id);
+CREATE INDEX idx_plot_nested_json_cached_cluster ON plot_nested_json_cached (cluster_id);
+CREATE INDEX idx_plot_nested_json_cached_name ON plot_nested_json_cached (plot_name, cluster_name);
 
 -- Grant permissions
 REVOKE ALL ON plot_nested_json_cached FROM PUBLIC;
@@ -60,10 +92,21 @@ REVOKE ALL ON plot_nested_json_cached FROM authenticated;
 GRANT SELECT ON plot_nested_json_cached TO postgres;
 GRANT SELECT ON plot_nested_json_cached TO service_role;
 
+-- Add a function to refresh the materialized view efficiently
+CREATE OR REPLACE FUNCTION public.refresh_plot_nested_json_cached()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW plot_nested_json_cached;
+END;
+$$;
 
 
 
 
+-- Example: SELECT public.get_plot_nested_json_by_id('8e30e974-3e52-4a9a-8046-08efca2ccae4'); // ci2027
 CREATE OR REPLACE FUNCTION public.get_plot_nested_json_by_id(p_plot_id UUID)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -141,14 +184,14 @@ BEGIN
         id, created_at, updated_by, properties, previous_properties, previous_properties_updated_at,
         is_valid, plot_id, schema_id, schema_name, responsible_administration, responsible_state,
         responsible_provider, responsible_troop, validated_at, message, cluster_id, cluster_name,
-        plot_name, administration_los, state_los, provider_los, troop_los, completed_at_troop,
+        plot_name, completed_at_troop,
         completed_at_state, completed_at_administration, updated_at, record_id
     )
     VALUES (
         gen_random_uuid(), NOW(), OLD.updated_by, OLD.properties, OLD.previous_properties, OLD.previous_properties_updated_at,
         OLD.is_valid, OLD.plot_id, OLD.schema_id, OLD.schema_name, OLD.responsible_administration, OLD.responsible_state,
         OLD.responsible_provider, OLD.responsible_troop, OLD.validated_at, OLD.message, OLD.cluster_id, OLD.cluster_name,
-        OLD.plot_name, OLD.administration_los, OLD.state_los, OLD.provider_los, OLD.troop_los, OLD.completed_at_troop,
+        OLD.plot_name, OLD.completed_at_troop,
         OLD.completed_at_state, OLD.completed_at_administration, OLD.updated_at, OLD.id
     );
 
@@ -159,7 +202,7 @@ $$;
 -- trigger the function every time a plot is updated
 DROP TRIGGER IF EXISTS on_record_updated ON public.records;
 CREATE TRIGGER on_record_updated
-AFTER UPDATE OF is_valid, completed_at_troop, completed_at_state, completed_at_administration, responsible_administration, responsible_state, responsible_provider, responsible_troop ON public.records
+AFTER UPDATE OF is_valid, completed_at_troop, completed_at_state, completed_at_administration, responsible_administration, responsible_state, responsible_provider, responsible_troop, record_changes_id ON public.records
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_record_changes();
 
@@ -167,7 +210,7 @@ EXECUTE FUNCTION public.handle_record_changes();
 
 
 
--- First, create a function to validate JSON against schema
+-- First, create a function to validate JSON against schema (deprecated)
 CREATE OR REPLACE FUNCTION public.validate_json_properties_by_schema(schema_id uuid, properties jsonb)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -193,7 +236,7 @@ BEGIN
 END;
 $$;
 
--- Create trigger function to validate records and set is_valid flag
+-- Create trigger function to validate records and set is_valid flag (deprecated)
 CREATE OR REPLACE FUNCTION public.validate_record_properties()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -227,10 +270,10 @@ END;
 $$;
 
 -- Create or replace the trigger
-DROP TRIGGER IF EXISTS before_record_insert_update ON public.records;
-CREATE TRIGGER before_record_insert_update
-    BEFORE INSERT OR UPDATE ON public.records
-    FOR EACH ROW EXECUTE FUNCTION public.validate_record_properties();
+-- DROP TRIGGER IF EXISTS before_record_insert_update ON public.records;
+--CREATE TRIGGER before_record_insert_update
+--    BEFORE INSERT OR UPDATE ON public.records
+--    FOR EACH ROW EXECUTE FUNCTION public.validate_record_properties();
 
 
 -- ADD RECORDS
@@ -254,7 +297,7 @@ BEGIN
     RAISE NOTICE 'Disabling user triggers...';
     ALTER TABLE public.records DISABLE TRIGGER before_record_insert_or_update;
     ALTER TABLE public.records DISABLE TRIGGER on_record_updated;
-    ALTER TABLE public.records DISABLE TRIGGER before_record_insert_update;
+    --ALTER TABLE public.records DISABLE TRIGGER before_record_insert_update;
 
     LOOP
         -- Insert a batch of missing plots
@@ -263,10 +306,13 @@ BEGIN
             SELECT p.id, p.plot_name, p.cluster_name, p.cluster_id
             FROM inventory_archive.plot p
             JOIN inventory_archive.cluster c ON p.cluster_id = c.id
-            WHERE ((c.grid_density in (64, 256) and p.federal_state in (1, 2, 4, 8, 9, 13)) -- SH, HH, BB, BW, BY, MV
+            WHERE (
+                (c.grid_density in (64, 256) and p.federal_state in (1, 2, 4, 8, 9, 13)) -- SH, HH, BB, BW, BY, MV
                 or (c.grid_density in (16, 32, 64, 256) and p.federal_state in (5, 6, 7, 10, 16)) -- NW, HE, RP, SL, TH
                 or (c.grid_density in (4, 8, 16, 32, 64, 256) and p.federal_state in (11, 12, 14, 15)) -- BE, BB, SN, ST
-                or p.sampling_stratum  in (308, 316)) AND p.interval_name = 'bwi2022'
+                or p.sampling_stratum  in (308, 316)
+                or c.is_training = true
+                ) AND p.interval_name = 'bwi2022'
             AND NOT EXISTS (
                 SELECT 1 FROM public.records r 
                 WHERE r.plot_id = p.id
@@ -275,7 +321,9 @@ BEGIN
 
         )
         INSERT INTO public.records (plot_id, schema_id, plot_name, cluster_name, cluster_id)
-        SELECT id, p_schema_id, plot_name, cluster_name, cluster_id FROM missing_plots;
+        SELECT id, p_schema_id, plot_name, cluster_name, cluster_id
+        FROM missing_plots
+        ON CONFLICT (plot_id) DO NOTHING;
 
         GET DIAGNOSTICS batch_count = ROW_COUNT;
 
@@ -292,7 +340,7 @@ BEGIN
     RAISE NOTICE 'Re-enabling user triggers...';
     ALTER TABLE public.records ENABLE TRIGGER before_record_insert_or_update;
     ALTER TABLE public.records ENABLE TRIGGER on_record_updated;
-    ALTER TABLE public.records ENABLE TRIGGER before_record_insert_update;
+    --ALTER TABLE public.records ENABLE TRIGGER before_record_insert_update;
 
     RAISE NOTICE 'Bulk insert completed: % records inserted', inserted_count;
     RETURN inserted_count;
@@ -305,7 +353,8 @@ $$;
 
 -- If organizations_lose.responsible_organization_id inserted or updates set records.administration_los, records.state_los, records.provider_los, records.troop_los based on organizations.type
 -- Function to update records when organizations_lose responsible_organization_id changes
-DROP TRIGGER IF EXISTS trg_update_records_from_organizations_lose_changes ON public.organizations_lose;
+/* 
+DROP TRIGGER IF EXISTS trg_update_records_from_organizations_lose ON public.organizations_lose;
 DROP FUNCTION IF EXISTS public.update_records_from_organizations_lose_changes;
 
 CREATE OR REPLACE FUNCTION public.update_records_from_organizations_lose_changes()
@@ -413,12 +462,13 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_update_records_from_organizations_lose_changes
 AFTER UPDATE OF responsible_organization_id, troop_id ON public.organizations_lose
 FOR EACH ROW
-EXECUTE FUNCTION public.update_records_from_organizations_lose_changes();
+ EXECUTE FUNCTION public.update_records_from_organizations_lose_changes();*/
 
 
 -- If update organizations_lose.responsible_organization_id changes or update responsible_state and/or responsible_provider of records where administration_los, state_los or provider_los is equal id
 -- on change organizations_lose
 -- Function to update responsible_state and responsible_provider based on organizations_lose changes
+/*
 CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_organizations_lose()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -452,8 +502,8 @@ BEGIN
         -- For troop_los matches (if troop type exists)
         IF org_type = 'troop' THEN
             UPDATE records
-            SET responsible_troop = NEW.responsible_organization_id
-            WHERE troop_los = NEW.id;
+            SET responsible_troop = NEW.troop_id, troop_los = NULL
+            WHERE troop_los = OLD.id;
         END IF;
         
         -- If responsible_organization_id is set to NULL, clear the corresponding responsible fields
@@ -482,7 +532,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;*/
 
 -- Create trigger to fire on responsible_organization_id changes in organizations_lose
 -- UPDATES Responsible
@@ -493,7 +543,7 @@ $$ LANGUAGE plpgsql;
 --EXECUTE FUNCTION public.update_records_responsible_fields_from_organizations_lose();
 
 -- Function to update responsible fields when los fields in records are updated
-CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_los_changes()
+/*CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_los_changes()
 RETURNS TRIGGER AS $$
 DECLARE
     org_type text;
@@ -581,11 +631,11 @@ DROP TRIGGER IF EXISTS trg_update_records_responsible_fields_from_los_changes ON
 CREATE TRIGGER trg_update_records_responsible_fields_from_los_changes
 BEFORE UPDATE OF administration_los, state_los, provider_los, troop_los ON public.records
 FOR EACH ROW
-EXECUTE FUNCTION public.update_records_responsible_fields_from_los_changes();
+EXECUTE FUNCTION public.update_records_responsible_fields_from_los_changes();*/
 
 
 -- Function to update responsible_state based on administration_los changes
-CREATE OR REPLACE FUNCTION public.update_records_responsible_state_from_admin_los()
+/*CREATE OR REPLACE FUNCTION public.update_records_responsible_state_from_admin_los()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Handle when administration_los is added or changed
@@ -629,7 +679,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;*/
 
 -- Create trigger to fire on administration_los changes
 --DROP TRIGGER IF EXISTS trg_update_responsible_state_from_admin_los ON public.records;
@@ -686,7 +736,9 @@ BEGIN
         WHERE id IN (
             SELECT id
             FROM public.records
-            --WHERE previous_properties_updated_at IS NULL
+            WHERE previous_properties IS NULL OR -- empty
+                  previous_properties = '{}'::jsonb OR -- empty
+                  previous_properties_updated_at IS NULL
             ORDER BY id
             LIMIT batch_size
         );
@@ -750,13 +802,14 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 
---------- -- Trigger and function to call Supabase Edge Function on validation_version change
+--------- Trigger and function to call Supabase Edge Function on validation_version change
 
 -- Create function to call Supabase Edge Function for validation
+DROP FUNCTION IF EXISTS public.call_validation_function;
 CREATE OR REPLACE FUNCTION public.call_validation_function(
     p_properties jsonb,
     p_previous_properties jsonb,
-    p_validation_version uuid
+    p_schema_id uuid
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -767,7 +820,9 @@ DECLARE
     function_url text;
     payload text;
     response record;
+    version_directory text;
     debug text;
+    service_role_key text;
 BEGIN
     -- Construct the Edge Function URL
     function_url := current_setting('app.settings.supabase_functions_url', true) || '/validate-record';
@@ -777,19 +832,35 @@ BEGIN
         function_url := 'https://ci.thuenen.de/functions/v1/validate-record';
     END IF;
 
+    -- Get the Supabase service role key for authorization
+    service_role_key := current_setting('app.settings.service_role_key', true);
+
+    -- get public.schema.directory from p_schema_id First
+    SELECT directory INTO version_directory FROM public.schemas WHERE id = p_schema_id;
+
     -- Prepare the payload as a JSON string
     payload := jsonb_build_object(
         'properties', p_properties,
         'previous_properties', p_previous_properties,
-        'validation_version', 'v32'
+        'validation_version', version_directory
     )::text;
 
     -- Call the Edge Function using http extension with correct signature
-    SELECT * INTO response FROM http_post(
+    --SELECT * INTO response FROM http_post(
+    --    function_url,
+    --    payload,
+    --    'application/json'
+    --);
+    -- Call the Edge Function using http() with headers
+    SELECT * INTO response FROM http((
+        'POST',
         function_url,
-        payload,
-        'application/json'
-    );
+        ARRAY[
+            http_header('Authorization', 'Bearer ' || COALESCE(service_role_key, ''))
+        ],
+        'application/json',
+        payload
+    )::http_request);
 
     -- Check if the request was successful
     IF response.status >= 200 AND response.status < 300 THEN
@@ -822,7 +893,11 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- Create the trigger
+DROP TRIGGER IF EXISTS trigger_validation_version_change ON public.records;
+
 -- Create the trigger function
+DROP FUNCTION IF EXISTS public.handle_validation_version_change;
 CREATE OR REPLACE FUNCTION public.handle_validation_version_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -832,19 +907,21 @@ DECLARE
     validation_result jsonb;
 BEGIN
     -- Only proceed if validation_version has actually changed
-    IF OLD.validation_version IS DISTINCT FROM NEW.validation_version THEN
+    IF OLD.schema_id IS DISTINCT FROM NEW.schema_id THEN
         
         -- Call the validation function
         SELECT public.call_validation_function(
             NEW.properties,
             NEW.previous_properties,
-            NEW.validation_version
+            NEW.schema_id -- assuming schema_id is used as validation_version uuid
         ) INTO validation_result;
 
         -- Update the validation and plausibility errors
         IF validation_result IS NOT NULL THEN
             NEW.validation_errors := validation_result->'validation_errors';
+            NEW.is_valid := (NEW.validation_errors = '{}'::jsonb); -- Set is_valid based on validation_errors
             NEW.plausibility_errors := validation_result->'plausibility_errors';
+            NEW.is_plausible := (NEW.plausibility_errors = '{}'::jsonb); -- Set is_plausible based on plausibility_errors
         END IF;
 
     END IF;
@@ -853,10 +930,7 @@ BEGIN
 END;
 $$;
 
--- Create the trigger
-DROP TRIGGER IF EXISTS trigger_validation_version_change ON public.records;
-
 CREATE TRIGGER trigger_validation_version_change
-    BEFORE UPDATE OF validation_version ON public.records
+    BEFORE UPDATE OF schema_id, properties, previous_properties ON public.records
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_validation_version_change();
