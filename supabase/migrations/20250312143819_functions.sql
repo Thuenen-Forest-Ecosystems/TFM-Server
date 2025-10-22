@@ -704,7 +704,14 @@ SELECT
     p_bwi.ffh_forest_type_field,
     p_bwi.property_type,
     p_ci2017.forest_status AS forest_status_ci2017,
-    p_ci2012.forest_status AS forest_status_ci2012
+    p_ci2012.forest_status AS forest_status_ci2012,
+    -- Add cluster_status from inventory_archive.cluster
+    c.cluster_status,
+    c.cluster_situation,
+    c.state_responsible,
+    c.states_affected,
+    c.is_training,
+    c.grid_density
 FROM public.records r
 LEFT JOIN inventory_archive.plot p_bwi 
     ON r.plot_id = p_bwi.id AND p_bwi.interval_name = 'bwi2022'
@@ -713,7 +720,22 @@ LEFT JOIN inventory_archive.plot_coordinates p_coordinates
 LEFT JOIN inventory_archive.plot p_ci2017 
     ON p_bwi.plot_name = p_ci2017.plot_name AND p_bwi.cluster_name = p_ci2017.cluster_name AND p_ci2017.interval_name = 'ci2017'
 LEFT JOIN inventory_archive.plot p_ci2012 
-    ON p_bwi.plot_name = p_ci2012.plot_name AND p_bwi.cluster_name = p_ci2012.cluster_name AND p_ci2012.interval_name = 'bwi2012';
+    ON p_bwi.plot_name = p_ci2012.plot_name AND p_bwi.cluster_name = p_ci2012.cluster_name AND p_ci2012.interval_name = 'bwi2012'
+LEFT JOIN inventory_archive.cluster c
+    ON r.cluster_id = c.id;
+
+-- add indexes for better performance
+-- Indexes for view_records_details performance
+CREATE INDEX IF NOT EXISTS idx_records_responsible_administration ON public.records (responsible_administration);
+CREATE INDEX IF NOT EXISTS idx_records_responsible_state ON public.records (responsible_state);
+CREATE INDEX IF NOT EXISTS idx_records_responsible_provider ON public.records (responsible_provider);
+CREATE INDEX IF NOT EXISTS idx_records_responsible_troop ON public.records (responsible_troop);
+CREATE INDEX IF NOT EXISTS idx_records_cluster_id ON public.records (cluster_id);
+CREATE INDEX IF NOT EXISTS idx_records_plot_id ON public.records (plot_id);
+CREATE INDEX IF NOT EXISTS idx_plot_id_interval ON inventory_archive.plot (id, interval_name);
+CREATE INDEX IF NOT EXISTS idx_plot_cluster_name ON inventory_archive.plot (cluster_name, plot_name, interval_name);
+CREATE INDEX IF NOT EXISTS idx_cluster_id ON inventory_archive.cluster (id);
+CREATE INDEX IF NOT EXISTS idx_plot_coordinates_plot_id ON inventory_archive.plot_coordinates (plot_id);
 
 -- Only authenticated users can access this view
 REVOKE ALL ON public.view_records_details FROM PUBLIC;
