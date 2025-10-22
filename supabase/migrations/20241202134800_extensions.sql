@@ -1,4 +1,6 @@
 CREATE EXTENSION postgis;
+create extension http with schema extensions;
+
 CREATE SCHEMA IF NOT EXISTS topology;
 CREATE EXTENSION IF NOT EXISTS postgis_topology WITH SCHEMA topology;
 
