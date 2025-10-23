@@ -61,7 +61,6 @@ create table if not exists "public"."users_permissions" (
 );
 
 ALTER TABLE public.users_permissions ADD CONSTRAINT unique_user_organization UNIQUE (user_id, organization_id);
-ALTER TABLE public.users_permissions ADD CONSTRAINT fk_users_permissions_users_profile FOREIGN KEY (user_id) REFERENCES public.users_profile(id) ON DELETE CASCADE;
 
 alter table "public"."users_permissions" enable row level security;
 
@@ -153,6 +152,9 @@ ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS "is_database_admin" bo
 ALTER TABLE public.users_profile ADD COLUMN IF NOT EXISTS "name" text;
 Alter Table public.users_profile enable row level security;
 
+ALTER TABLE public.users_permissions ADD CONSTRAINT fk_users_permissions_users_profile FOREIGN KEY (user_id) REFERENCES public.users_profile(id) ON DELETE CASCADE;
+
+
 -- Create a policy to allow authenticated users to access their own profile and user with same organization_id from users_permissions
 DROP POLICY IF EXISTS "Enable all access for authenticated users with same organization_id" ON public.users_profile;
 CREATE POLICY "Enable all access for authenticated users with same organization_id"
@@ -233,6 +235,8 @@ CREATE TABLE IF NOT EXISTS troop (
 
 -- add user_ids array
 ALTER TABLE troop ADD COLUMN IF NOT EXISTS user_ids uuid[] NOT NULL DEFAULT '{}';
+-- add soft delete column
+ALTER TABLE troop ADD COLUMN IF NOT EXISTS "deleted" boolean NOT NULL DEFAULT false;
 
 
 ALTER TABLE troop ENABLE ROW LEVEL SECURITY;
