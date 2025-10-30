@@ -1,3 +1,10 @@
+-- ============================================================================
+-- VIEW: plot_nested_json
+-- ============================================================================
+-- Creates a nested JSON view of plots with all related data (trees, deadwood, etc.)
+-- Optimized using CTEs and subqueries for better performance
+-- ============================================================================
+
 --DROP VIEW IF EXISTS public.plot_nested_json;
 CREATE OR REPLACE VIEW public.plot_nested_json AS
 WITH base_plots AS (
@@ -6,7 +13,7 @@ WITH base_plots AS (
     FROM inventory_archive.plot 
     WHERE interval_name = 'bwi2022'
 ),
--- Use LATERAL joins for better performance with smaller result sets
+-- Use subqueries for better performance with smaller result sets
 nested_data AS (
     SELECT 
         p.*,
@@ -69,7 +76,10 @@ nested_data AS (
 )
 SELECT * FROM nested_data;
 
--- Revoke all permissions from public role to prevent access
+-- ============================================================================
+-- PERMISSIONS: plot_nested_json
+-- ============================================================================
+-- Restrict access to postgres and service_role only
 REVOKE ALL ON public.plot_nested_json FROM PUBLIC;
 REVOKE ALL ON public.plot_nested_json FROM anon;
 REVOKE ALL ON public.plot_nested_json FROM authenticated;
@@ -77,22 +87,40 @@ REVOKE ALL ON public.plot_nested_json FROM authenticated;
 GRANT SELECT ON public.plot_nested_json TO postgres;
 GRANT SELECT ON public.plot_nested_json TO service_role;
 
--- Create materialized view for better performance
+-- ============================================================================
+-- MATERIALIZED VIEW: plot_nested_json_cached
+-- ============================================================================
+-- Cached version of plot_nested_json for faster queries
+-- Must be refreshed manually using refresh_plot_nested_json_cached()
+-- ============================================================================
+
 CREATE MATERIALIZED VIEW IF NOT EXISTS plot_nested_json_cached AS SELECT * FROM public.plot_nested_json;
 
--- Create better indexes on the materialized view
-CREATE UNIQUE INDEX idx_plot_nested_json_cached_id ON plot_nested_json_cached (id);
-CREATE INDEX idx_plot_nested_json_cached_cluster ON plot_nested_json_cached (cluster_id);
-CREATE INDEX idx_plot_nested_json_cached_name ON plot_nested_json_cached (plot_name, cluster_name);
+-- ============================================================================
+-- INDEXES: plot_nested_json_cached
+-- ============================================================================
 
--- Grant permissions
+CREATE UNIQUE INDEX IF NOT EXISTS  idx_plot_nested_json_cached_id ON plot_nested_json_cached (id);
+CREATE INDEX IF NOT EXISTS  idx_plot_nested_json_cached_cluster ON plot_nested_json_cached (cluster_id);
+CREATE INDEX IF NOT EXISTS  idx_plot_nested_json_cached_name ON plot_nested_json_cached (plot_name, cluster_name);
+
+-- ============================================================================
+-- PERMISSIONS: plot_nested_json_cached
+-- ============================================================================
+-- Restrict access to postgres and service_role only
 REVOKE ALL ON plot_nested_json_cached FROM PUBLIC;
 REVOKE ALL ON plot_nested_json_cached FROM anon;
 REVOKE ALL ON plot_nested_json_cached FROM authenticated;
 GRANT SELECT ON plot_nested_json_cached TO postgres;
 GRANT SELECT ON plot_nested_json_cached TO service_role;
 
--- Add a function to refresh the materialized view efficiently
+-- ============================================================================
+-- FUNCTION: refresh_plot_nested_json_cached
+-- ============================================================================
+-- Refreshes the materialized view with latest data
+-- Usage: SELECT public.refresh_plot_nested_json_cached();
+-- ============================================================================
+
 CREATE OR REPLACE FUNCTION public.refresh_plot_nested_json_cached()
 RETURNS void
 LANGUAGE plpgsql
@@ -103,11 +131,21 @@ BEGIN
 END;
 $$;
 
+-- Permissions for refresh_plot_nested_json_cached
+REVOKE ALL ON FUNCTION public.refresh_plot_nested_json_cached() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.refresh_plot_nested_json_cached() FROM anon;
+REVOKE ALL ON FUNCTION public.refresh_plot_nested_json_cached() FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.refresh_plot_nested_json_cached() TO postgres;
+GRANT EXECUTE ON FUNCTION public.refresh_plot_nested_json_cached() TO service_role;
 
+-- ============================================================================
+-- FUNCTION: get_plot_nested_json_by_id
+-- ============================================================================
+-- Retrieves nested JSON data for a specific plot from the cached view
+-- Usage: SELECT public.get_plot_nested_json_by_id('plot-uuid', 123, 456);
+-- ============================================================================
 
-
--- Example: SELECT public.get_plot_nested_json_by_id('8e30e974-3e52-4a9a-8046-08efca2ccae4'); // ci2027
-CREATE OR REPLACE FUNCTION public.get_plot_nested_json_by_id(p_plot_id UUID)
+CREATE OR REPLACE FUNCTION public.get_plot_nested_json_by_id(p_plot_id UUID, p_cluster_name INTEGER DEFAULT NULL, p_plot_name INTEGER DEFAULT NULL)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -120,14 +158,27 @@ BEGIN
     SELECT row_to_json(t)::jsonb
     INTO result
     FROM public.plot_nested_json_cached t
-    WHERE t.id = p_plot_id;
+    WHERE t.cluster_name = p_cluster_name
+      AND t.plot_name = p_plot_name;
 
     RETURN result;
-    
 END;
 $$;
 
--- Create or replace the trigger function
+-- Permissions for get_plot_nested_json_by_id
+REVOKE ALL ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) FROM anon;
+REVOKE ALL ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) TO postgres;
+GRANT EXECUTE ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) TO service_role;
+
+-- ============================================================================
+-- FUNCTION: fill_previous_properties (TRIGGER FUNCTION)
+-- ============================================================================
+-- Automatically fills previous_properties field with plot data when a record
+-- is inserted or updated. Uses the cached plot_nested_json view for performance.
+-- ============================================================================
+
 CREATE OR REPLACE FUNCTION fill_previous_properties()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -143,7 +194,7 @@ BEGIN
     IF NEW.plot_id IS NOT NULL THEN
         BEGIN
             -- Use the function instead of direct view query for better caching
-            SELECT public.get_plot_nested_json_by_id(NEW.plot_id) INTO plot_data;
+            SELECT public.get_plot_nested_json_by_id(NEW.plot_id, NEW.cluster_name, NEW.plot_name) INTO plot_data;
             
             IF plot_data IS NOT NULL THEN
                 NEW.previous_properties := plot_data;
@@ -163,15 +214,25 @@ BEGIN
 END;
 $$;
 
--- Create trigger that fires on INSERT or UPDATE of specific columns
+-- ============================================================================
+-- TRIGGER: before_record_insert_or_update
+-- ============================================================================
+-- Fires before INSERT or UPDATE to populate previous_properties field
+-- ============================================================================
+
 DROP TRIGGER IF EXISTS before_record_insert_or_update ON public.records;
 CREATE TRIGGER before_record_insert_or_update
     BEFORE INSERT OR UPDATE OF previous_properties_updated_at, plot_id ON public.records
     FOR EACH ROW
     EXECUTE FUNCTION fill_previous_properties();
 
+-- ============================================================================
+-- FUNCTION: handle_record_changes (TRIGGER FUNCTION)
+-- ============================================================================
+-- Backs up record data to record_changes table every time a record is updated
+-- Preserves history of all changes for audit purposes
+-- ============================================================================
 
---- Backout plot to backup_changes every time plot updates
 CREATE OR REPLACE FUNCTION public.handle_record_changes()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -199,18 +260,25 @@ BEGIN
 END;
 $$;
 
--- trigger the function every time a plot is updated
+-- ============================================================================
+-- TRIGGER: on_record_updated
+-- ============================================================================
+-- Archives record changes to record_changes table on specific field updates
+-- ============================================================================
+
 DROP TRIGGER IF EXISTS on_record_updated ON public.records;
 CREATE TRIGGER on_record_updated
 AFTER UPDATE OF is_valid, completed_at_troop, completed_at_state, completed_at_administration, responsible_administration, responsible_state, responsible_provider, responsible_troop, record_changes_id ON public.records
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_record_changes();
 
+-- ============================================================================
+-- FUNCTION: validate_json_properties_by_schema (DEPRECATED)
+-- ============================================================================
+-- Validates properties JSON against a schema definition
+-- NOTE: This function is deprecated and kept for backward compatibility
+-- ============================================================================
 
-
-
-
--- First, create a function to validate JSON against schema (deprecated)
 CREATE OR REPLACE FUNCTION public.validate_json_properties_by_schema(schema_id uuid, properties jsonb)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -236,7 +304,13 @@ BEGIN
 END;
 $$;
 
--- Create trigger function to validate records and set is_valid flag (deprecated)
+-- ============================================================================
+-- FUNCTION: validate_record_properties (TRIGGER FUNCTION - DEPRECATED)
+-- ============================================================================
+-- Validates record properties and sets is_valid flag
+-- NOTE: This function is deprecated and kept for backward compatibility
+-- ============================================================================
+
 CREATE OR REPLACE FUNCTION public.validate_record_properties()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -269,17 +343,15 @@ BEGIN
 END;
 $$;
 
--- Create or replace the trigger
--- DROP TRIGGER IF EXISTS before_record_insert_update ON public.records;
---CREATE TRIGGER before_record_insert_update
---    BEFORE INSERT OR UPDATE ON public.records
---    FOR EACH ROW EXECUTE FUNCTION public.validate_record_properties();
+-- ============================================================================
+-- FUNCTION: add_plot_ids_to_records
+-- ============================================================================
+-- Populates the records table with plots from inventory_archive
+-- Filters plots based on grid_density, federal_state, sampling_stratum, and training status
+-- Processes in batches to avoid performance issues
+-- Usage: SELECT public.add_plot_ids_to_records('schema-uuid', 1000);
+-- ============================================================================
 
-
--- ADD RECORDS
-
--- Example: SELECT public.add_plot_ids_to_records('79a571c5-e128-4bef-bead-954d9426ae97'); // ci2027
--- Function to get all id from inventory_archive.plot and add one row to public.records (if exists do nothing)
 DROP FUNCTION IF EXISTS public.add_plot_ids_to_records;
 CREATE OR REPLACE FUNCTION public.add_plot_ids_to_records(p_schema_id UUID, p_batch_size INTEGER DEFAULT 1000)
 RETURNS INTEGER
@@ -288,407 +360,89 @@ SECURITY DEFINER
 SET search_path = public, inventory_archive
 AS $$
 DECLARE
-    inserted_count INTEGER := 0;
     batch_count INTEGER := 0;
+    root_org_id uuid;
+    total_processed INTEGER := 0;
 BEGIN
-    RAISE NOTICE 'Starting bulk insert of missing plot records...';
+    RAISE NOTICE 'Starting bulk insert/update of plot records...';
 
-    -- Disable specific user-defined triggers to speed up the insert and avoid permission errors.
-    RAISE NOTICE 'Disabling user triggers...';
     ALTER TABLE public.records DISABLE TRIGGER before_record_insert_or_update;
     ALTER TABLE public.records DISABLE TRIGGER on_record_updated;
-    --ALTER TABLE public.records DISABLE TRIGGER before_record_insert_update;
+
+    SELECT id INTO root_org_id
+    FROM public.organizations
+    WHERE type = 'root'
+    LIMIT 1;
+
+    RAISE NOTICE 'Root organization ID: %', root_org_id;
 
     LOOP
-        -- Insert a batch of missing plots
-        WITH missing_plots AS (
-
+        WITH eligible_plots AS (
             SELECT p.id, p.plot_name, p.cluster_name, p.cluster_id
             FROM inventory_archive.plot p
             JOIN inventory_archive.cluster c ON p.cluster_id = c.id
             WHERE (
-                (c.grid_density in (64, 256) and p.federal_state in (1, 2, 4, 8, 9, 13)) -- SH, HH, BB, BW, BY, MV
-                or (c.grid_density in (16, 32, 64, 256) and p.federal_state in (5, 6, 7, 10, 16)) -- NW, HE, RP, SL, TH
-                or (c.grid_density in (4, 8, 16, 32, 64, 256) and p.federal_state in (11, 12, 14, 15)) -- BE, BB, SN, ST
-                or p.sampling_stratum  in (308, 316)
+                (c.grid_density in (64, 256) and p.federal_state in (1, 2, 4, 8, 9, 13))
+                or (c.grid_density in (16, 32, 64, 256) and p.federal_state in (5, 6, 7, 10, 16))
+                or (c.grid_density in (4, 8, 16, 32, 64, 256) and p.federal_state in (11, 12, 14, 15))
+                or p.sampling_stratum in (308, 316)
                 or c.is_training = true
-                ) AND p.interval_name = 'bwi2022'
-            AND NOT EXISTS (
-                SELECT 1 FROM public.records r 
-                WHERE r.plot_id = p.id
-            )
+            ) 
+            AND p.interval_name = 'bwi2022'
+            ORDER BY p.id
             LIMIT p_batch_size
-
+            OFFSET total_processed
         )
-        INSERT INTO public.records (plot_id, schema_id, plot_name, cluster_name, cluster_id)
-        SELECT id, p_schema_id, plot_name, cluster_name, cluster_id
-        FROM missing_plots
-        ON CONFLICT (plot_id) DO NOTHING;
+        INSERT INTO public.records (plot_id, schema_id, plot_name, cluster_name, cluster_id, responsible_administration)
+        SELECT id, p_schema_id, plot_name, cluster_name, cluster_id, root_org_id
+        FROM eligible_plots
+        ON CONFLICT (cluster_name, plot_name) DO UPDATE 
+        SET 
+            plot_id = EXCLUDED.plot_id,
+            schema_id = EXCLUDED.schema_id,
+            cluster_id = EXCLUDED.cluster_id,
+            responsible_administration = EXCLUDED.responsible_administration,
+            updated_at = NOW();
 
         GET DIAGNOSTICS batch_count = ROW_COUNT;
 
-        -- Exit the loop if no more rows are inserted
         IF batch_count = 0 THEN
             EXIT;
         END IF;
 
-        inserted_count := inserted_count + batch_count;
-        RAISE NOTICE 'Inserted % records in this batch...', batch_count;
+        total_processed := total_processed + batch_count;
+        RAISE NOTICE 'Processed % records in this batch (total: %)...', batch_count, total_processed;
+        
+        PERFORM pg_sleep(0.1);
     END LOOP;
 
-    -- Re-enable triggers after the insert
-    RAISE NOTICE 'Re-enabling user triggers...';
     ALTER TABLE public.records ENABLE TRIGGER before_record_insert_or_update;
     ALTER TABLE public.records ENABLE TRIGGER on_record_updated;
-    --ALTER TABLE public.records ENABLE TRIGGER before_record_insert_update;
 
-    RAISE NOTICE 'Bulk insert completed: % records inserted', inserted_count;
-    RETURN inserted_count;
+    RAISE NOTICE 'Bulk insert/update completed: % records processed', total_processed;
+    RETURN total_processed;
 
 EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'Error in bulk insert: %', SQLERRM;
+    ALTER TABLE public.records ENABLE TRIGGER before_record_insert_or_update;
+    ALTER TABLE public.records ENABLE TRIGGER on_record_updated;
+    RAISE NOTICE 'Error in bulk insert/update: %', SQLERRM;
     RAISE;
 END;
 $$;
 
--- If organizations_lose.responsible_organization_id inserted or updates set records.administration_los, records.state_los, records.provider_los, records.troop_los based on organizations.type
--- Function to update records when organizations_lose responsible_organization_id changes
-/* 
-DROP TRIGGER IF EXISTS trg_update_records_from_organizations_lose ON public.organizations_lose;
-DROP FUNCTION IF EXISTS public.update_records_from_organizations_lose_changes;
+-- Permissions for add_plot_ids_to_records
+REVOKE ALL ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) FROM anon;
+REVOKE ALL ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) TO postgres;
+GRANT EXECUTE ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) TO service_role;
 
-CREATE OR REPLACE FUNCTION public.update_records_from_organizations_lose_changes()
-RETURNS TRIGGER AS $$
-DECLARE
-    org_type text;
-BEGIN
-    -- Handle when responsible_organization_id is changed
-    IF NEW.responsible_organization_id IS DISTINCT FROM OLD.responsible_organization_id THEN
-        -- If NEW.responsible_organization_id is NULL, clear the appropriate los fields
-        IF NEW.responsible_organization_id IS NULL THEN
-            -- Get the old organization type to know which field to clear
-            SELECT type INTO org_type
-            FROM organizations
-            WHERE id = OLD.organization_id;
-            
-            -- Clear the appropriate los field based on old organization type
-            CASE org_type
-                WHEN 'root' THEN
-                    UPDATE records
-                    SET responsible_state = NULL, responsible_provider = NULL, responsible_troop = NULL, state_los = NULL, provider_los = NULL, troop_los = NULL
-                    WHERE administration_los = OLD.id;
-
-                WHEN 'country' THEN --state
-                    UPDATE records
-                    SET responsible_provider = NULL, responsible_troop = NULL, provider_los = NULL, troop_los = NULL
-                    WHERE state_los = OLD.id;
-
-                WHEN 'provider' THEN
-                    UPDATE records
-                    SET responsible_troop = NULL, troop_los = NULL
-                    WHERE provider_los = OLD.id;
-
-                ELSE
-                    -- Handle unknown organization types or do nothing
-                    NULL;
-            END CASE;
-        ELSE
-            -- Get the new organization type
-            SELECT type INTO org_type
-            FROM organizations
-            WHERE id = NEW.organization_id;
-            
-            -- Update records based on new organization type
-            CASE org_type
-                WHEN 'root' THEN
-                    UPDATE records
-                    --SET administration_los = NEW.id
-                    SET responsible_state = NEW.responsible_organization_id, responsible_provider = NULL, responsible_troop = NULL,
-                        state_los = NULL, provider_los = NULL, troop_los = NULL
-                    WHERE administration_los = OLD.id;
-
-                WHEN 'country' THEN
-                    UPDATE records
-                    SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL, provider_los = NULL, troop_los = NULL
-                    WHERE state_los = OLD.id;
-
-                WHEN 'provider' THEN
-                    UPDATE records
-                    SET responsible_troop = NEW.troop_id, troop_los = NULL
-                    WHERE provider_los = OLD.id;
-
-                ELSE
-                    -- Handle unknown organization types or do nothing
-                    NULL;
-            END CASE;
-        END IF;
-    END IF;
-
-    IF NEW.troop_id IS DISTINCT FROM OLD.troop_id THEN
-        SELECT type INTO org_type
-        FROM organizations
-        WHERE id = NEW.organization_id;
-        
-        -- Update records based on new organization type
-        CASE org_type
-            WHEN 'root' THEN
-                UPDATE records
-                SET responsible_troop = NEW.troop_id
-                WHERE administration_los = NEW.id;
-
-            WHEN 'country' THEN
-                UPDATE records
-                SET responsible_troop = NEW.troop_id
-                WHERE state_los = NEW.id;
-
-            WHEN 'provider' THEN
-                UPDATE records
-                SET responsible_troop = NEW.troop_id
-                WHERE provider_los = NEW.id;
-
-            ELSE
-                -- Handle unknown organization types or do nothing
-                NULL;
-        END CASE;
-        
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- UPDATE LOS information in Records
-
-CREATE TRIGGER trg_update_records_from_organizations_lose_changes
-AFTER UPDATE OF responsible_organization_id, troop_id ON public.organizations_lose
-FOR EACH ROW
- EXECUTE FUNCTION public.update_records_from_organizations_lose_changes();*/
-
-
--- If update organizations_lose.responsible_organization_id changes or update responsible_state and/or responsible_provider of records where administration_los, state_los or provider_los is equal id
--- on change organizations_lose
--- Function to update responsible_state and responsible_provider based on organizations_lose changes
-/*
-CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_organizations_lose()
-RETURNS TRIGGER AS $$
-DECLARE
-    org_type text;
-BEGIN
-    -- Handle when responsible_organization_id is changed
-    IF NEW.responsible_organization_id IS DISTINCT FROM OLD.responsible_organization_id THEN
-        -- Get the organization type from the organizations_lose record's organization_id
-        SELECT o.type INTO org_type
-        FROM organizations o
-        WHERE o.id = NEW.organization_id;
-        
-        -- Update records based on which los field matches this organizations_lose id
-        -- and set the appropriate responsible field based on organization type
-        
-        -- For administration_los matches
-        IF org_type = 'root' THEN
-            UPDATE records
-            SET responsible_state = NEW.responsible_organization_id, responsible_provider = NULL, responsible_troop = NULL
-            WHERE administration_los = NEW.id;
-
-        END IF;
-        
-        -- For state_los matches  
-        IF org_type = 'country' THEN
-            UPDATE records
-            SET responsible_provider = NEW.responsible_organization_id, responsible_troop = NULL
-            WHERE state_los = NEW.id;
-        END IF;
-        
-        -- For troop_los matches (if troop type exists)
-        IF org_type = 'troop' THEN
-            UPDATE records
-            SET responsible_troop = NEW.troop_id, troop_los = NULL
-            WHERE troop_los = OLD.id;
-        END IF;
-        
-        -- If responsible_organization_id is set to NULL, clear the corresponding responsible fields
-        IF NEW.responsible_organization_id IS NULL THEN
-            CASE org_type
-                WHEN 'root' THEN
-                    UPDATE records
-                    SET responsible_state = NULL, responsible_provider = NULL, responsible_troop = NULL
-                    WHERE administration_los = NEW.id;
-
-                WHEN 'country' THEN
-                    UPDATE records
-                    SET responsible_provider = NULL, responsible_troop = NULL
-                    WHERE state_los = NEW.id;
-                    
-                WHEN 'troop' THEN
-                    UPDATE records
-                    SET responsible_troop = NULL
-                    WHERE troop_los = NEW.id;
-                ELSE
-                    -- Handle unknown organization types or do nothing
-                    NULL;
-            END CASE;
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;*/
-
--- Create trigger to fire on responsible_organization_id changes in organizations_lose
--- UPDATES Responsible
---DROP TRIGGER IF EXISTS trg_update_records_responsible_fields_from_organizations_lose ON public.organizations_lose;
---CREATE TRIGGER trg_update_records_responsible_fields_from_organizations_lose
---AFTER UPDATE OF responsible_organization_id ON public.organizations_lose
---FOR EACH ROW
---EXECUTE FUNCTION public.update_records_responsible_fields_from_organizations_lose();
-
--- Function to update responsible fields when los fields in records are updated
-/*CREATE OR REPLACE FUNCTION public.update_records_responsible_fields_from_los_changes()
-RETURNS TRIGGER AS $$
-DECLARE
-    org_type text;
-    responsible_org_id uuid;
-BEGIN
-    -- Handle administration_los changes
-    IF NEW.administration_los IS DISTINCT FROM OLD.administration_los THEN
-        -- If administration_los changes, set state_los and provider_los to NULL
-        NEW.state_los := NULL;
-        NEW.responsible_state := NULL;
-        NEW.provider_los := NULL;
-        NEW.responsible_provider := NULL;
-        NEW.troop_los := NULL;
-        NEW.responsible_troop := NULL;
-
-        IF NEW.administration_los IS NOT NULL THEN
-            -- Get responsible_organization_id from organizations_lose
-            SELECT ol.responsible_organization_id INTO responsible_org_id
-            FROM organizations_lose ol
-            WHERE ol.id = NEW.administration_los;
-            
-            -- Update responsible_state
-            NEW.responsible_state := responsible_org_id;
-        END IF;
-    END IF;
-    
-    -- Handle state_los changes
-    IF NEW.state_los IS DISTINCT FROM OLD.state_los THEN
-        -- If state_los changes, set provider_los to NULL
-        NEW.provider_los := NULL;
-        NEW.responsible_provider := NULL;
-        NEW.troop_los := NULL;
-        NEW.responsible_troop := NULL;
-
-        IF NEW.state_los IS NOT NULL THEN
-            -- Get responsible_organization_id from organizations_lose
-            SELECT ol.responsible_organization_id INTO responsible_org_id
-            FROM organizations_lose ol
-            WHERE ol.id = NEW.state_los;
-            
-            -- Update responsible_state
-            NEW.responsible_provider := responsible_org_id;
-            --NEW.responsible_state := responsible_org_id;
-        END IF;
-    END IF;
-    
-    -- Handle provider_los changes
-    IF NEW.provider_los IS DISTINCT FROM OLD.provider_los THEN
-
-        NEW.responsible_troop := NULL;
-
-        IF NEW.provider_los IS NOT NULL THEN
-            -- Get responsible_organization_id from organizations_lose
-            SELECT ol.troop_id INTO responsible_org_id
-            FROM organizations_lose ol
-            WHERE ol.id = NEW.provider_los;
-            
-            -- Update responsible_provider
-            NEW.responsible_troop := responsible_org_id;
-        END IF;
-    END IF;
-    
-    -- Handle troop_los changes (if applicable)
-    --IF NEW.troop_los IS DISTINCT FROM OLD.troop_los THEN
-    --    IF NEW.troop_los IS NOT NULL THEN
-    --        -- Get responsible_organization_id from organizations_lose
-    --        SELECT ol.responsible_organization_id INTO responsible_org_id
-    --        FROM organizations_lose ol
-    --        WHERE ol.id = NEW.troop_los;
-    --        
-    --        -- Update responsible_troop
-    --        NEW.responsible_troop := responsible_org_id;
-    --    ELSE
-    --        -- Clear responsible_troop if troop_los is set to NULL
-    --        NEW.responsible_troop := NULL;
-    --    END IF;
-    --END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create trigger to fire on los field changes in records
-DROP TRIGGER IF EXISTS trg_update_records_responsible_fields_from_los_changes ON public.records;
-CREATE TRIGGER trg_update_records_responsible_fields_from_los_changes
-BEFORE UPDATE OF administration_los, state_los, provider_los, troop_los ON public.records
-FOR EACH ROW
-EXECUTE FUNCTION public.update_records_responsible_fields_from_los_changes();*/
-
-
--- Function to update responsible_state based on administration_los changes
-/*CREATE OR REPLACE FUNCTION public.update_records_responsible_state_from_admin_los()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Handle when administration_los is added or changed
-    IF NEW.administration_los IS NOT NULL AND NEW.administration_los IS DISTINCT FROM OLD.administration_los THEN
-        -- First try to update responsible_state if responsible_organization_id exists
-        UPDATE records
-        SET responsible_state = ol.responsible_organization_id
-        FROM organizations_lose ol
-        WHERE ol.id = NEW.administration_los
-          AND records.id = NEW.id
-          AND ol.responsible_organization_id IS NOT NULL;
-        
-        -- If responsible_organization_id is null, check for troop_id and update responsible_troop
-        UPDATE records
-        SET responsible_troop = ol.troop_id
-        FROM organizations_lose ol
-        WHERE ol.id = NEW.administration_los
-          AND records.id = NEW.id
-          AND ol.responsible_organization_id IS NULL
-          AND ol.troop_id IS NOT NULL;
-    END IF;
-    
-    -- Handle when administration_los is removed (set to NULL)
-    IF OLD.administration_los IS NOT NULL AND NEW.administration_los IS NULL THEN
-        -- Clear the responsible_state that was set by the old administration_los
-        UPDATE records
-        SET responsible_state = NULL
-        FROM organizations_lose ol
-        WHERE ol.id = OLD.administration_los
-          AND records.id = NEW.id
-          AND records.responsible_state = ol.responsible_organization_id;
-          
-        -- Clear the responsible_troop that was set by the old administration_los
-        UPDATE records
-        SET responsible_troop = NULL
-        FROM organizations_lose ol
-        WHERE ol.id = OLD.administration_los
-          AND records.id = NEW.id
-          AND records.responsible_troop = ol.troop_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;*/
-
--- Create trigger to fire on administration_los changes
---DROP TRIGGER IF EXISTS trg_update_responsible_state_from_admin_los ON public.records;
---CREATE TRIGGER trg_update_responsible_state_from_admin_los
---AFTER UPDATE OF administration_los ON public.records
---FOR EACH ROW
---EXECUTE FUNCTION public.update_records_responsible_state_from_admin_los();
-
-
+-- ============================================================================
+-- VIEW: view_records_details
+-- ============================================================================
+-- Comprehensive view joining records with plot data from multiple intervals
+-- Includes cluster information and coordinates
+-- ============================================================================
 
 DROP VIEW IF EXISTS public.view_records_details;
 CREATE OR REPLACE VIEW public.view_records_details AS
@@ -714,18 +468,31 @@ SELECT
     c.grid_density
 FROM public.records r
 LEFT JOIN inventory_archive.plot p_bwi 
-    ON r.plot_id = p_bwi.id AND p_bwi.interval_name = 'bwi2022'
+    ON r.plot_name = p_bwi.plot_name AND r.cluster_name = p_bwi.cluster_name AND p_bwi.interval_name = 'bwi2022'
 LEFT JOIN inventory_archive.plot_coordinates p_coordinates 
-    ON r.plot_id = p_coordinates.plot_id
+    ON p_bwi.id = p_coordinates.plot_id
 LEFT JOIN inventory_archive.plot p_ci2017 
     ON p_bwi.plot_name = p_ci2017.plot_name AND p_bwi.cluster_name = p_ci2017.cluster_name AND p_ci2017.interval_name = 'ci2017'
 LEFT JOIN inventory_archive.plot p_ci2012 
     ON p_bwi.plot_name = p_ci2012.plot_name AND p_bwi.cluster_name = p_ci2012.cluster_name AND p_ci2012.interval_name = 'bwi2012'
 LEFT JOIN inventory_archive.cluster c
-    ON r.cluster_id = c.id;
+    ON r.cluster_name = c.cluster_name;
 
--- add indexes for better performance
--- Indexes for view_records_details performance
+-- ============================================================================
+-- PERMISSIONS: view_records_details
+-- ============================================================================
+-- Only authenticated users can access this view
+
+REVOKE ALL ON public.view_records_details FROM PUBLIC;
+REVOKE ALL ON public.view_records_details FROM anon;
+GRANT SELECT ON public.view_records_details TO authenticated;
+
+-- ============================================================================
+-- INDEXES: Performance optimization for view_records_details
+-- ============================================================================
+-- Indexes on underlying tables to improve view query performance
+-- ============================================================================
+
 CREATE INDEX IF NOT EXISTS idx_records_responsible_administration ON public.records (responsible_administration);
 CREATE INDEX IF NOT EXISTS idx_records_responsible_state ON public.records (responsible_state);
 CREATE INDEX IF NOT EXISTS idx_records_responsible_provider ON public.records (responsible_provider);
@@ -737,11 +504,13 @@ CREATE INDEX IF NOT EXISTS idx_plot_cluster_name ON inventory_archive.plot (clus
 CREATE INDEX IF NOT EXISTS idx_cluster_id ON inventory_archive.cluster (id);
 CREATE INDEX IF NOT EXISTS idx_plot_coordinates_plot_id ON inventory_archive.plot_coordinates (plot_id);
 
--- Only authenticated users can access this view
-REVOKE ALL ON public.view_records_details FROM PUBLIC;
-REVOKE ALL ON public.view_records_details FROM anon;
-GRANT SELECT ON public.view_records_details TO authenticated;
-
+-- ============================================================================
+-- FUNCTION: batch_update_records
+-- ============================================================================
+-- Updates previous_properties for records in batches
+-- Processes records that are NULL, empty, or older than 1 day
+-- Usage: SELECT public.batch_update_records(1000);
+-- ============================================================================
 
 DROP FUNCTION IF EXISTS public.batch_update_records;
 CREATE OR REPLACE FUNCTION public.batch_update_records(batch_size INTEGER)
@@ -760,7 +529,8 @@ BEGIN
             FROM public.records
             WHERE previous_properties IS NULL OR -- empty
                   previous_properties = '{}'::jsonb OR -- empty
-                  previous_properties_updated_at IS NULL
+                  previous_properties_updated_at IS NULL OR
+                  previous_properties_updated_at < NOW() - INTERVAL '1 day'
             ORDER BY id
             LIMIT batch_size
         );
@@ -781,11 +551,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Permissions for batch_update_records
+REVOKE ALL ON FUNCTION public.batch_update_records(INTEGER) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.batch_update_records(INTEGER) FROM anon;
+REVOKE ALL ON FUNCTION public.batch_update_records(INTEGER) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.batch_update_records(INTEGER) TO postgres;
+GRANT EXECUTE ON FUNCTION public.batch_update_records(INTEGER) TO service_role;
 
--- SELECT public.batch_update_records(1000);
+-- ============================================================================
+-- FUNCTION: get_user_clusters
+-- ============================================================================
+-- Returns all clusters a user has access to based on their organization permissions
+-- Checks against responsible_state and responsible_provider fields
+-- ============================================================================
 
-
--- Function to get all clusters a user has access to based on their permissions
 DROP FUNCTION IF EXISTS public.get_user_clusters;
 CREATE OR REPLACE FUNCTION public.get_user_clusters()
 RETURNS TABLE (
@@ -822,11 +601,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Permissions for get_user_clusters
+REVOKE ALL ON FUNCTION public.get_user_clusters() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_user_clusters() FROM anon;
+GRANT EXECUTE ON FUNCTION public.get_user_clusters() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_user_clusters() TO postgres;
+GRANT EXECUTE ON FUNCTION public.get_user_clusters() TO service_role;
 
+-- ============================================================================
+-- VALIDATION FUNCTIONS AND TRIGGERS
+-- ============================================================================
+-- Functions to call external Edge Function for record validation
+-- ============================================================================
 
---------- Trigger and function to call Supabase Edge Function on validation_version change
+-- ============================================================================
+-- FUNCTION: call_validation_function
+-- ============================================================================
+-- Calls Supabase Edge Function to validate record properties
+-- Returns validation_errors and plausibility_errors as JSONB
+-- ============================================================================
 
--- Create function to call Supabase Edge Function for validation
 DROP FUNCTION IF EXISTS public.call_validation_function;
 CREATE OR REPLACE FUNCTION public.call_validation_function(
     p_properties jsonb,
@@ -915,10 +709,21 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- Create the trigger
-DROP TRIGGER IF EXISTS trigger_validation_version_change ON public.records;
+-- Permissions for call_validation_function
+REVOKE ALL ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid) FROM anon;
+REVOKE ALL ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid) TO postgres;
+GRANT EXECUTE ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid) TO service_role;
 
--- Create the trigger function
+-- ============================================================================
+-- FUNCTION: handle_validation_version_change (TRIGGER FUNCTION)
+-- ============================================================================
+-- Triggers validation when schema_id or properties change
+-- Updates validation_errors, is_valid, plausibility_errors, and is_plausible
+-- ============================================================================
+
+DROP TRIGGER IF EXISTS trigger_validation_version_change ON public.records;
 DROP FUNCTION IF EXISTS public.handle_validation_version_change;
 CREATE OR REPLACE FUNCTION public.handle_validation_version_change()
 RETURNS TRIGGER
@@ -952,15 +757,26 @@ BEGIN
 END;
 $$;
 
+-- ============================================================================
+-- TRIGGER: trigger_validation_version_change
+-- ============================================================================
+-- Fires on schema_id, properties, or previous_properties updates
+-- ============================================================================
+
 CREATE TRIGGER trigger_validation_version_change
     BEFORE UPDATE OF schema_id, properties, previous_properties ON public.records
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_validation_version_change();
 
+-- ============================================================================
+-- FUNCTION: set_preliminary
+-- ============================================================================
+-- Sets preliminary properties from previous monitoring interval (bwi2022)
+-- Copies field values from inventory_archive.plot to records.properties
+-- Reference: https://github.com/Thuenen-Forest-Ecosystems/TFM-Documentation/issues/79
+-- Usage: SELECT public.set_preliminary();
+-- ============================================================================
 
-
--- SET subgroup of previous monitoring to current monitoring in properties
--- https://github.com/Thuenen-Forest-Ecosystems/TFM-Documentation/issues/79
 DROP FUNCTION IF EXISTS public.set_preliminary;
 CREATE OR REPLACE FUNCTION public.set_preliminary()
 RETURNS VOID
@@ -1017,10 +833,19 @@ BEGIN
         'harvest_restriction_other_internalcause', p.harvest_restriction_other_internalcause
     )
     FROM inventory_archive.plot p
-    WHERE r.plot_id = p.id
-      AND r.properties = '{}'::jsonb; -- Only update if properties is empty
+    WHERE r.cluster_name = p.cluster_name AND r.plot_name = p.plot_name;
 END;
 $$;
 
--- run once
+-- Permissions for set_preliminary
+REVOKE ALL ON FUNCTION public.set_preliminary() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.set_preliminary() FROM anon;
+REVOKE ALL ON FUNCTION public.set_preliminary() FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.set_preliminary() TO postgres;
+GRANT EXECUTE ON FUNCTION public.set_preliminary() TO service_role;
+
+-- ============================================================================
+-- END OF MIGRATION
+-- ============================================================================
+-- Run once to populate preliminary data:
 -- SELECT public.set_preliminary();

@@ -27,9 +27,9 @@ insert into "public"."schemas"
 CREATE TABLE IF NOT EXISTS organizations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    apex_domain text NULL,
+    --apex_domain text NULL,
     created_by uuid DEFAULT auth.uid() REFERENCES auth.users(id),
-    state_responsible smallint NULL REFERENCES lookup.lookup_state (code),
+    --state_responsible smallint NULL REFERENCES lookup.lookup_state (code),
     parent_organization_id uuid NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name text NULL,
     description text NULL,
@@ -55,10 +55,11 @@ create table if not exists "public"."users_permissions" (
     "created_at" timestamp with time zone not null default now(),
     "user_id" uuid not null,
     "organization_id" uuid not null,
-    "write_access" boolean not null default false,
+    --"write_access" boolean not null default false,
     "created_by" uuid default auth.uid(),
-    "role" text
+    --"role" text
 );
+-- 3ed9cd74-7f47-4a84-9cb4-111b6ce587de
 
 ALTER TABLE public.users_permissions ADD CONSTRAINT unique_user_organization UNIQUE (user_id, organization_id);
 
@@ -611,7 +612,7 @@ create table IF NOT EXISTS "public"."users_permissions" (
     "troop_id" uuid references public.troop(id) on delete cascade
     --"is_organization_admin" boolean not null default false
 );
-ALTER TABLE "public"."users_permissions" ADD COLUMN IF NOT EXISTS "is_database_admin" boolean not null default false;
+--ALTER TABLE "public"."users_permissions" ADD COLUMN IF NOT EXISTS "is_database_admin" boolean not null default false;
 ALTER TABLE "public"."users_permissions" ADD COLUMN IF NOT EXISTS "is_organization_admin" boolean not null default false;
 
 alter table "public"."users_permissions" enable row level security;
