@@ -268,7 +268,7 @@ $$;
 
 DROP TRIGGER IF EXISTS on_record_updated ON public.records;
 CREATE TRIGGER on_record_updated
-AFTER UPDATE OF is_valid, completed_at_troop, completed_at_state, completed_at_administration, responsible_administration, responsible_state, responsible_provider, responsible_troop, record_changes_id ON public.records
+AFTER UPDATE OF is_valid, completed_at_troop, completed_at_state, completed_at_administration, responsible_provider, responsible_troop, record_changes_id ON public.records
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_record_changes();
 
