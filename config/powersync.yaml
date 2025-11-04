@@ -3,7 +3,7 @@
 # See https://docs.powersync.com/self-hosting/telemetry
 telemetry:
   # Opt out of reporting anonymized usage metrics to PowerSync telemetry service
-  disable_telemetry_sharing: false
+  disable_telemetry_sharing: true
 
 # Settings for source database replication
 replication:
