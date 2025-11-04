@@ -95,8 +95,7 @@ COMMENT ON COLUMN inventory_archive.plot.property_size_class IS 'Eigentumsgröß
 COMMENT ON COLUMN inventory_archive.plot.forest_community IS 'potentielle natürliche Waldgesellschaft lt. Vorklärung';
 COMMENT ON COLUMN inventory_archive.plot.ffh_forest_type IS 'WLT - Waldlebensraumtyp lt. Vorklärung';
 COMMENT ON COLUMN inventory_archive.plot.ffh_forest_type_field IS 'Waldlebensraumtyp lt. Feldaufnahme';
-COMMENT ON COLUMN inventory_archive.plot.land_use_before IS 'Landnutzungsart';
-COMMENT ON COLUMN inventory_archive.plot.land_use_after IS 'Landnutzungsart';
+COMMENT ON COLUMN inventory_archive.plot.land_use IS 'Landnutzungsart';
 COMMENT ON COLUMN inventory_archive.plot.coast IS 'bewaldete Küstendüne (unmittelbar in Küsten- bzw. Strandnähe)';
 COMMENT ON COLUMN inventory_archive.plot.sandy IS 'trockener sandiger Boden oder wechseltrockene Standorte oder Vegetationszeiger oder  andere gesicherte Bestätigung (j/n)';
 COMMENT ON COLUMN inventory_archive.plot.protected_landscape IS 'Landschaftschutzgebiet';
