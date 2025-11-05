@@ -25,9 +25,6 @@ services:
     depends_on:
       mongo-rs-init:
         condition: service_completed_successfully
-      # Add dependency on the Supabase database
-      db:
-        condition: service_healthy
     volumes:
       - ./config:/config
     environment:
@@ -38,7 +35,7 @@ services:
       - PS_JWKS_URL=${PS_JWKS_URL}
     networks:
       - default
-      - supabase-net
+      - supabase_network_supabase
 
   # ====== SUPABASE ======
   studio:
@@ -583,5 +580,5 @@ networks:
     driver: bridge
   # This is derived from `supabase_network_${project_id}`
   # Where project_id is defined in the `config.toml` file.
-  #supabase_network_tfm_server:
-  #  external: true
+  supabase_network_supabase:
+    external: true
