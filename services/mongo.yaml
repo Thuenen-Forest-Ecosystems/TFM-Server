@@ -2,7 +2,13 @@ services:
   # MongoDB Service used internally
   mongo:
     image: mongo:7.0
-    command: --replSet rs0 --bind_ip_all --quiet
+    command: 
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --quiet
+      - --wiredTigerCacheSizeGB
+      - "3"
     restart: unless-stopped
     ports:
       - 27017:27017
@@ -16,6 +22,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    
+    deploy:
+      resources:
+        limits:
+          memory: 4G  # Limit to 4GB instead of consuming 8GB+
+          cpus: '2.0'  # Limit to 2 CPU cores
+        reservations:
+          memory: 2G
+          cpus: '1.0'
 
   # Initializes the MongoDB replica set. This service will not usually be actively running
   mongo-rs-init:
