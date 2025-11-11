@@ -229,3 +229,225 @@ CREATE POLICY "troop_member_read_policy"
 ON public.troop
 FOR SELECT
 USING (true);
+
+
+
+
+-- ============================================================================
+-- POLICIES: organizations
+-- ============================================================================
+-- Users can access organizations they are members of or parent organizations
+-- ============================================================================
+
+-- SELECT: View organizations user has access to
+CREATE POLICY "Enable all access for authenticated users with same parent_organization_id"
+ON organizations
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND (up.organization_id = organizations.id 
+               OR up.organization_id = organizations.parent_organization_id)
+    )
+);
+
+-- ALL: Modify organizations user has access to
+CREATE POLICY "Enable all access for authenticated users with same organization_id or parent_organization_id"
+ON organizations
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND (up.organization_id = organizations.id 
+               OR up.organization_id = organizations.parent_organization_id)
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.users_permissions up
+        WHERE up.user_id = auth.uid()
+          AND (up.organization_id = organizations.id 
+               OR up.organization_id = organizations.parent_organization_id)
+    )
+);
+
+-- ============================================================================
+-- POLICIES: troop
+-- ============================================================================
+-- Users can access troops within their organizations
+-- ============================================================================
+
+DROP POLICY IF EXISTS "Enable all access for authenticated users of same organization_id" ON troop;
+CREATE POLICY "Enable all access for authenticated users of same organization_id"
+ON troop
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+)
+WITH CHECK (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+);
+
+-- ============================================================================
+-- POLICIES: organizations_lose
+-- ============================================================================
+-- Users can access lose within their organizations
+-- ============================================================================
+
+DROP POLICY IF EXISTS "Lose Enable all access for authenticated users of same organization_id" ON organizations_lose;
+CREATE POLICY "Lose Enable all access for authenticated users of same organization_id"
+ON organizations_lose
+AS PERMISSIVE
+FOR ALL
+TO authenticated
+USING (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+)
+WITH CHECK (
+    organization_id IN (
+        SELECT organization_id
+        FROM public.users_permissions
+        WHERE user_id = auth.uid()
+    )
+);
+
+-- ============================================================================
+-- POLICIES: users_permissions
+-- ============================================================================
+-- All authenticated users can view permissions (for collaboration)
+-- ============================================================================
+
+DROP POLICY IF EXISTS "Enable users with own role equals organization_admin and same organization_id" ON "public"."users_permissions";
+CREATE POLICY "Enable users with own role equals organization_admin and same organization_id"
+ON "public"."users_permissions"
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (true);
+
+-- ============================================================================
+-- POLICIES: records
+-- ============================================================================
+-- Users can access records assigned to their organizations or troops
+-- Root organization users can access all records
+-- ============================================================================
+
+-- SELECT: View records user has access to
+CREATE POLICY "Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop"
+ON "records"
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+    -- Root organization users can see all records
+    EXISTS (
+        SELECT 1
+        FROM public.organizations org
+        JOIN public.users_permissions up ON org.id = up.organization_id
+        WHERE up.user_id = auth.uid() AND org.type = 'root'
+    ) 
+    OR
+    -- Users can see records assigned to their organizations
+    responsible_state IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_provider IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_troop IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+);
+
+-- UPDATE: Modify records user has access to
+CREATE POLICY "Enable UPDATE access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop"
+ON "records"
+AS PERMISSIVE
+FOR UPDATE
+TO authenticated
+USING (
+    -- Root organization or admin users
+    EXISTS (
+        SELECT 1
+        FROM public.organizations org
+        JOIN public.users_permissions up ON org.id = up.organization_id
+        WHERE up.user_id = auth.uid() AND org.type = 'root'
+    )
+    OR EXISTS (
+        SELECT 1 FROM public.users_profile prof
+        WHERE prof.id = auth.uid() AND prof.is_admin = true
+    )
+    OR
+    -- Users with organizational access
+    responsible_state IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_provider IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_troop IN (
+        SELECT t.id FROM public.troop t
+        JOIN public.users_permissions up ON t.organization_id = up.organization_id
+        WHERE up.user_id = auth.uid()
+    )
+)
+WITH CHECK (
+    -- Same constraints for updates
+    EXISTS (
+        SELECT 1
+        FROM public.organizations org
+        JOIN public.users_permissions up ON org.id = up.organization_id
+        WHERE up.user_id = auth.uid() AND org.type = 'root'
+    )
+    OR EXISTS (
+        SELECT 1 FROM public.users_profile prof
+        WHERE prof.id = auth.uid() AND prof.is_admin = true
+    )
+    OR
+    responsible_state IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_provider IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_troop IN (
+        SELECT t.id FROM public.troop t
+        JOIN public.users_permissions up ON t.organization_id = up.organization_id
+        WHERE up.user_id = auth.uid()
+    )
+);
+
+-- ============================================================================
+-- POLICIES: record_changes
+-- ============================================================================
+-- Same access rules as records table for viewing audit history
+-- ============================================================================
+
+CREATE POLICY "record_changes: Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop"
+ON "record_changes"
+AS PERMISSIVE
+FOR SELECT
+TO authenticated
+USING (
+    -- Root organization users can see all changes
+    EXISTS (
+        SELECT 1
+        FROM public.organizations org
+        JOIN public.users_permissions up ON org.id = up.organization_id
+        WHERE up.user_id = auth.uid() AND org.type = 'root'
+    )
+    OR
+    -- Users can see changes for records assigned to their organizations
+    responsible_state IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_provider IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+    OR responsible_troop IN (SELECT organization_id FROM public.users_permissions WHERE user_id = auth.uid())
+);
