@@ -596,4 +596,4 @@ networks:
   # This is derived from `supabase_network_${project_id}`
   # Where project_id is defined in the `config.toml` file.
   supabase_network_supabase:
-    external: true
+    external: ${EXTERNAL_NETWORK}
