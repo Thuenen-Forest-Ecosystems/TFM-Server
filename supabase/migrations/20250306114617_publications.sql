@@ -19,7 +19,7 @@ BEGIN
     END LOOP;
 END $$ LANGUAGE plpgsql;
 
-SELECT add_all_tables_to_publication('powersync', 'inventory');
+-- SELECT add_all_tables_to_publication('powersync', 'inventory');
 SELECT add_all_tables_to_publication('powersync', 'inventory_archive');
 SELECT add_all_tables_to_publication('powersync', 'lookup');
 ALTER PUBLICATION powersync ADD TABLE public.organizations;

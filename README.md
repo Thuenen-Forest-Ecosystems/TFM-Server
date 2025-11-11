@@ -38,7 +38,7 @@ supabase stop
 
 ### Start Powersync
 ```bash
-docker compose --env-file .env.local -f docker-compose.local.yaml up 
+docker compose --env-file .env.local -f docker-compose.local.yaml up -d
 ```
 
 ### Stop Powersync

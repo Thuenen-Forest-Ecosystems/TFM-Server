@@ -519,6 +519,9 @@ DECLARE
     processed INTEGER := 0;
     rows_updated INTEGER;
 BEGIN
+    -- Disable the validation trigger to avoid unnecessary validation during batch update
+    ALTER TABLE public.records DISABLE TRIGGER trigger_validation_version_change;
+
     LOOP
         -- Update only rows that have not yet been processed in previous runs
         UPDATE public.records
@@ -548,6 +551,9 @@ BEGIN
     END LOOP;
 
     RAISE NOTICE 'Finished processing % records total', processed;
+
+    -- Re-enable the validation trigger
+    ALTER TABLE public.records ENABLE TRIGGER trigger_validation_version_change;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -733,8 +739,8 @@ AS $$
 DECLARE
     validation_result jsonb;
 BEGIN
-    -- Only proceed if validation_version has actually changed
-    IF OLD.schema_id IS DISTINCT FROM NEW.schema_id THEN
+    -- Only proceed if schema_id or properties have actually changed
+    IF OLD.schema_id IS DISTINCT FROM NEW.schema_id OR OLD.properties IS DISTINCT FROM NEW.properties THEN
         
         -- Call the validation function
         SELECT public.call_validation_function(
