@@ -31,6 +31,12 @@ bucket_definitions:
       - SELECT * FROM "public"."organizations_lose" WHERE organization_id = bucket.organization_id
       - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
       - SELECT * FROM "public"."records" WHERE responsible_administration = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_provider = bucket.organization_id
+  
+  permissions:
+    parameters:
+      - SELECT request.user_id() as user_id
+    data:
+      - SELECT * FROM "public"."users_permissions" WHERE user_id = bucket.user_id
 
   global:
     data:
@@ -38,7 +44,7 @@ bucket_definitions:
       - SELECT * FROM "public"."organizations"
       - SELECT * FROM "public"."users_profile"
       - SELECT * FROM "public"."troop"
-      - SELECT * FROM "inventory_archive"."cluster"
+      # - SELECT * FROM "inventory_archive"."cluster"
 
       # Lookup Tables
       - SELECT * FROM "lookup"."lookup_accessibility"
