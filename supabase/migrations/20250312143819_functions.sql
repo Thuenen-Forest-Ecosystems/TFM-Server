@@ -850,8 +850,58 @@ REVOKE ALL ON FUNCTION public.set_preliminary() FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.set_preliminary() TO postgres;
 GRANT EXECUTE ON FUNCTION public.set_preliminary() TO service_role;
 
+
+-- ============================================================================
+-- FUNCTION: populate_current_troop_members (TRIGGER FUNCTION)
+-- ============================================================================
+-- Automatically populates current_troop_members with users from the assigned troop
+-- when completed_at_troop is set or changed
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.populate_current_troop_members()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    troop_user_ids uuid[];
+BEGIN
+    -- Only proceed if completed_at_troop is being set (NULL to NOT NULL or changed)
+    IF NEW.completed_at_troop IS NOT NULL AND 
+       (OLD.completed_at_troop IS NULL OR OLD.completed_at_troop != NEW.completed_at_troop) AND
+       NEW.responsible_troop IS NOT NULL THEN
+        
+        -- Get user_ids from the troop table
+        SELECT user_ids INTO troop_user_ids
+        FROM public.troop
+        WHERE id = NEW.responsible_troop AND deleted = false;
+        
+        -- Update current_troop_members if we found users
+        IF troop_user_ids IS NOT NULL THEN
+            NEW.current_troop_members := troop_user_ids;
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+-- ============================================================================
+-- TRIGGER: trigger_populate_troop_members
+-- ============================================================================
+-- Fires before INSERT or UPDATE when completed_at_troop changes
+-- ============================================================================
+
+DROP TRIGGER IF EXISTS trigger_populate_troop_members ON public.records;
+CREATE TRIGGER trigger_populate_troop_members
+    BEFORE INSERT OR UPDATE OF completed_at_troop ON public.records
+    FOR EACH ROW
+    EXECUTE FUNCTION public.populate_current_troop_members();
+
 -- ============================================================================
 -- END OF MIGRATION
 -- ============================================================================
 -- Run once to populate preliminary data:
 -- SELECT public.set_preliminary();
+

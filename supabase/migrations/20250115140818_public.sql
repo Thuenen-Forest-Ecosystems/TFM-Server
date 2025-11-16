@@ -257,6 +257,7 @@ CREATE TABLE IF NOT EXISTS "records" (
     "responsible_state" uuid REFERENCES organizations(id) ON DELETE SET NULL,
     "responsible_provider" uuid REFERENCES organizations(id) ON DELETE SET NULL,
     "responsible_troop" uuid REFERENCES troop(id) ON DELETE SET NULL,
+    -- "current_troop_members" uuid[] NULL DEFAULT '{}',
     
     -- Completion tracking
     "completed_at_troop" timestamp with time zone NULL,
@@ -271,11 +272,24 @@ CREATE TABLE IF NOT EXISTS "records" (
     CONSTRAINT unique_cluster_plot UNIQUE (cluster_name, plot_name)
 );
 
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "current_troop_members" uuid[] NULL DEFAULT '{}';
+
+-- Auto-update updated_at timestampop_members contains only valid auth.users IDs
+-- ALTER TABLE "records" ADD CONSTRAINT check_current_troop_members_valid_users
+-- CHECK (
+--     current_troop_members IS NULL OR
+--     NOT EXISTS (
+--         SELECT 1 FROM unnest(current_troop_members) AS member_id
+--         WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE id = member_id)
+--     )
+-- );
+
 -- Auto-update updated_at timestamp
 CREATE TRIGGER handle_updated_at BEFORE UPDATE ON records
 FOR EACH ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 
 COMMENT ON TABLE "records" IS 'Forest inventory plot data collection records';
+COMMENT ON COLUMN "records"."current_troop_members" IS 'Array of user IDs currently assigned to work on this record. All IDs must exist in auth.users table.';
 
 -- ============================================================================
 -- INDEXES: records
