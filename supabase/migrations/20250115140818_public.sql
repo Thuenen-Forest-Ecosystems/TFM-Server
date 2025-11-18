@@ -273,6 +273,8 @@ CREATE TABLE IF NOT EXISTS "records" (
 );
 
 ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "current_troop_members" uuid[] NULL DEFAULT '{}';
+ALTER TABLE "records" ADD COLUMN IF NOT EXISTS "previous_position_data" jsonb NULL DEFAULT '{}'::jsonb;
+COMMENT ON COLUMN "records"."previous_position_data" IS 'Position data from previous inventory intervals stored by interval_name. Contains all fields from inventory_archive.position table.';
 
 -- Auto-update updated_at timestampop_members contains only valid auth.users IDs
 -- ALTER TABLE "records" ADD CONSTRAINT check_current_troop_members_valid_users
