@@ -121,6 +121,7 @@ services:
     volumes:
       - ./supabase/templates:/templates
       - ./volumes/auth/certs:/usr/local/share/ca-certificates
+      - ./volumes/auth/certs:/tmp/certs:ro
     networks:
       - supabase-net
     image: supabase/gotrue:v2.164.0
@@ -148,19 +149,18 @@ services:
     command:
       - -c
       - |
+        cp /tmp/certs/*.crt /usr/local/share/ca-certificates/ 2>/dev/null || true
         update-ca-certificates 2>/dev/null || true
-        /usr/local/bin/gotrue
+        exec /usr/local/bin/gotrue
     environment:
-      SSL_CERT_DIR: /etc/ssl/certs
-      GOMAIL_INSECURE_SKIP_VERIFY: "true"
+      #SSL_CERT_DIR: /etc/ssl/certs
+      #GOMAIL_INSECURE_SKIP_VERIFY: "true"
       #SSL_CERT_FILE: /usr/local/share/ca-certificates/HARICA-TLS-Root-2021-RSA.crt
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${API_EXTERNAL_URL}
-
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
-
       GOTRUE_SITE_URL: ${SITE_URL}
       GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
       GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP}
