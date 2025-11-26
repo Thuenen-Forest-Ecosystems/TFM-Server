@@ -149,7 +149,7 @@ services:
       - -c
       - |
         update-ca-certificates 2>/dev/null || true
-        /usr/local/bin/gotrue serve --config /etc/gotrue/config.toml
+        /usr/local/bin/gotrue
     environment:
       SSL_CERT_DIR: /etc/ssl/certs
       GOMAIL_INSECURE_SKIP_VERIFY: "true"
