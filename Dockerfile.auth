@@ -1,8 +1,8 @@
 FROM supabase/gotrue:v2.164.0
 
 USER root
-COPY .certificates/HARICA-GEANT-TLS-R1.txt /usr/local/share/ca-certificates/HARICA-GEANT-TLS-R1.crt
-COPY .certificates/HARICA-TLS-Root-2021-RSA.txt /usr/local/share/ca-certificates/HARICA-TLS-Root-2021-RSA.crt
+COPY volumes/auth/certs/HARICA-GEANT-TLS-R1.crt /usr/local/share/ca-certificates/
+COPY volumes/auth/certs/HARICA-TLS-Root-2021-RSA.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
 
 USER supabase
