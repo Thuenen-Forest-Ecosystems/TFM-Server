@@ -87,7 +87,7 @@ ALTER TABLE plot
 	ADD COLUMN coast BOOLEAN NULL DEFAULT FALSE, --kueste
 	ADD COLUMN sandy BOOLEAN NULL DEFAULT FALSE, -- gestein
 	ADD COLUMN protected_landscape BOOLEAN DEFAULT FALSE, -- lsg
-	ADD COLUMN histwald BOOLEAN NULL DEFAULT FALSE, -- histwald
+	ADD COLUMN long_time_forest BOOLEAN NULL DEFAULT FALSE, -- histwald
 	ADD COLUMN harvest_restriction INTEGER NULL, -- ne TODO: Lookup Table & enum
 	--ADD COLUMN harvest_restriction_source INTEGER NULL, -- NEU: NeUrsacheB
 	ADD COLUMN marker_status INTEGER NULL, -- perm lookup_marker_status

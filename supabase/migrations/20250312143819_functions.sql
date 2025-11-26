@@ -187,9 +187,11 @@ SET search_path = public, inventory_archive
 AS $$
 DECLARE
     plot_data jsonb;
+    position_data jsonb;
 BEGIN
     NEW.message := COALESCE(NEW.message, '') || 'Trigger fired for ' || TG_OP || ' operation';
     NEW.previous_properties := '{}'::jsonb;
+    NEW.previous_position_data := '{}'::jsonb;
     
     IF NEW.plot_id IS NOT NULL THEN
         BEGIN
@@ -205,6 +207,40 @@ BEGIN
         EXCEPTION WHEN OTHERS THEN
             NEW.message := 'Error: ' || SQLERRM;
             RAISE NOTICE 'Error fetching plot data for %: %', NEW.plot_id, SQLERRM;
+        END;
+        
+        -- Populate previous_position_data from inventory_archive
+        BEGIN
+            SELECT json_object_agg(
+                p.interval_name,
+                json_build_object(
+                    'longitude_median', ST_X(pos.position_median),
+                    'latitude_median', ST_Y(pos.position_median),
+                    'longitude_mean', ST_X(pos.position_mean),
+                    'latitude_mean', ST_Y(pos.position_mean),
+                    'hdop_mean', pos.hdop_mean,
+                    'pdop_mean', pos.pdop_mean,
+                    'satellites_count_mean', pos.satellites_count_mean,
+                    'measurement_count', pos.measurement_count,
+                    'rtcm_age', pos.rtcm_age,
+                    'start_measurement', pos.start_measurement,
+                    'stop_measurement', pos.stop_measurement,
+                    'device_gnss', pos.device_gnss,
+                    'quality', pos.quality
+                )
+            )
+            INTO position_data
+            FROM inventory_archive.plot p
+            JOIN inventory_archive.position pos ON pos.plot_id = p.id
+            WHERE p.cluster_name = NEW.cluster_name
+            AND p.plot_name = NEW.plot_name
+            AND p.interval_name != 'bwi2022';
+            
+            IF position_data IS NOT NULL THEN
+                NEW.previous_position_data := position_data;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Error fetching position data for %: %', NEW.plot_id, SQLERRM;
         END;
     ELSE
         NEW.message := 'plot_id IS NULL';
@@ -850,8 +886,58 @@ REVOKE ALL ON FUNCTION public.set_preliminary() FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.set_preliminary() TO postgres;
 GRANT EXECUTE ON FUNCTION public.set_preliminary() TO service_role;
 
+
+-- ============================================================================
+-- FUNCTION: populate_current_troop_members (TRIGGER FUNCTION)
+-- ============================================================================
+-- Automatically populates current_troop_members with users from the assigned troop
+-- when completed_at_troop is set or changed
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.populate_current_troop_members()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    troop_user_ids uuid[];
+BEGIN
+    -- Only proceed if completed_at_troop is being set (NULL to NOT NULL or changed)
+    IF NEW.completed_at_troop IS NOT NULL AND 
+       (OLD.completed_at_troop IS NULL OR OLD.completed_at_troop != NEW.completed_at_troop) AND
+       NEW.responsible_troop IS NOT NULL THEN
+        
+        -- Get user_ids from the troop table
+        SELECT user_ids INTO troop_user_ids
+        FROM public.troop
+        WHERE id = NEW.responsible_troop AND deleted = false;
+        
+        -- Update current_troop_members if we found users
+        IF troop_user_ids IS NOT NULL THEN
+            NEW.current_troop_members := troop_user_ids;
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$;
+
+-- ============================================================================
+-- TRIGGER: trigger_populate_troop_members
+-- ============================================================================
+-- Fires before INSERT or UPDATE when completed_at_troop changes
+-- ============================================================================
+
+DROP TRIGGER IF EXISTS trigger_populate_troop_members ON public.records;
+CREATE TRIGGER trigger_populate_troop_members
+    BEFORE INSERT OR UPDATE OF completed_at_troop ON public.records
+    FOR EACH ROW
+    EXECUTE FUNCTION public.populate_current_troop_members();
+
 -- ============================================================================
 -- END OF MIGRATION
 -- ============================================================================
 -- Run once to populate preliminary data:
 -- SELECT public.set_preliminary();
+

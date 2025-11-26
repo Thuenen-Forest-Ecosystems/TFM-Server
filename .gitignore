@@ -18,3 +18,5 @@ supabase/tmp
 supabase/seeds/intern
 
 .utils
+
+.certificates
