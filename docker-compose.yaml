@@ -120,7 +120,7 @@ services:
     container_name: supabase-auth
     volumes:
       - ./supabase/templates:/templates
-      - ./volumes/auth/certs:/usr/local/share/ca-certificates:ro
+      - ./volumes/auth/certs:/usr/local/share/ca-certificates
     networks:
       - supabase-net
     image: supabase/gotrue:v2.164.0
