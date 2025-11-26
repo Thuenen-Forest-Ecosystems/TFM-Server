@@ -15,7 +15,6 @@ include:
   - path: ./services/mongo.yaml
 
 services:
-
   # ====== POWERSYNC ======
   # Extend PowerSync with Mongo healthchecks
   powersync:
@@ -121,6 +120,7 @@ services:
     container_name: supabase-auth
     volumes:
       - ./supabase/templates:/templates
+      - ./volumes/auth/certs:/usr/local/share/ca-certificates:ro
     networks:
       - supabase-net
     image: supabase/gotrue:v2.164.0
@@ -138,7 +138,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://localhost:9999/health"
+          "http://localhost:9999/health",
         ]
       timeout: 5s
       interval: 5s
@@ -185,7 +185,7 @@ services:
       GOTRUE_MAILER_URLPATHS_RECOVERY: ${MAILER_URLPATHS_RECOVERY}
       GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${MAILER_URLPATHS_EMAIL_CHANGE}
 
-      # Email templates 
+      # Email templates
       GOTRUE_MAILER_TEMPLATES_INVITE: ${MAILER_TEMPLATES_INVITE}
       GOTRUE_MAILER_TEMPLATES_CONFIRMATION: ${MAILER_TEMPLATES_CONFIRMATION}
       GOTRUE_MAILER_TEMPLATES_RECOVERY: ${MAILER_TEMPLATES_RECOVERY}
@@ -219,10 +219,6 @@ services:
       # GOTRUE_HOOK_SEND_EMAIL_ENABLED: "false"
       # GOTRUE_HOOK_SEND_EMAIL_URI: "http://host.docker.internal:54321/functions/v1/email_sender"
       # GOTRUE_HOOK_SEND_EMAIL_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
-
-
-
-
 
   rest:
     container_name: supabase-rest
@@ -271,7 +267,7 @@ services:
           "/dev/null",
           "-H",
           "Authorization: Bearer ${ANON_KEY}",
-          "http://localhost:4000/api/tenants/realtime-dev/health"
+          "http://localhost:4000/api/tenants/realtime-dev/health",
         ]
       timeout: 5s
       interval: 5s
@@ -284,7 +280,7 @@ services:
       DB_USER: supabase_admin
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_NAME: ${POSTGRES_DB}
-      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
       DB_ENC_KEY: supabaserealtime
       API_JWT_SECRET: ${JWT_SECRET}
       SECRET_KEY_BASE: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq
@@ -317,7 +313,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://storage:5000/status"
+          "http://storage:5000/status",
         ]
       timeout: 5s
       interval: 5s
@@ -347,7 +343,7 @@ services:
       - supabase-net
     image: darthsim/imgproxy:v3.8.0
     healthcheck:
-      test: [ "CMD", "imgproxy", "health" ]
+      test: ["CMD", "imgproxy", "health"]
       timeout: 5s
       interval: 5s
       retries: 3
@@ -410,7 +406,7 @@ services:
       - supabase-net
     image: supabase/logflare:1.4.0
     healthcheck:
-      test: [ "CMD", "curl", "http://localhost:4000/health" ]
+      test: ["CMD", "curl", "http://localhost:4000/health"]
       timeout: 5s
       interval: 5s
       retries: 10
@@ -452,7 +448,7 @@ services:
   # https://supabase.com/docs/guides/self-hosting/docker#exposing-your-postgres-database
   db:
     container_name: supabase-db
-    shm_size: '1g'  # Increase shared memory to 1 GB
+    shm_size: "1g" # Increase shared memory to 1 GB
     networks:
       - supabase-net
     image: supabase/postgres:15.6.1.146
@@ -524,13 +520,12 @@ services:
     healthcheck:
       test:
         [
-
           "CMD",
           "wget",
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://vector:9001/health"
+          "http://vector:9001/health",
         ]
       timeout: 5s
       interval: 5s
@@ -540,7 +535,7 @@ services:
       - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro
     environment:
       LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
-    command: [ "--config", "/etc/vector/vector.yml" ]
+    command: ["--config", "/etc/vector/vector.yml"]
 
   # Update the DATABASE_URL if you are using an external Postgres database
   #supavisor:
