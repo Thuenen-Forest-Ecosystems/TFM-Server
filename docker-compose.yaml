@@ -144,6 +144,13 @@ services:
       interval: 5s
       retries: 3
     restart: unless-stopped
+    user: root
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        update-ca-certificates 2>/dev/null || true
+        exec su-exec supabase /usr/local/bin/gotrue
     environment:
       SSL_CERT_DIR: /etc/ssl/certs
       GOMAIL_INSECURE_SKIP_VERIFY: "true"

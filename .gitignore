@@ -13,6 +13,7 @@ volumes/logs
 volumes/pooler
 volumes/db
 volumes/storage
+volumes/auth
 
 supabase/tmp
 supabase/seeds/intern
