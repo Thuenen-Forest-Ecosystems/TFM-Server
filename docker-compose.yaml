@@ -124,7 +124,6 @@ services:
     networks:
       - supabase-net
     image: supabase/gotrue:v2.164.0
-    entrypoint: /bin/sh -c "update-ca-certificates && /usr/local/bin/gotrue"
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -146,6 +145,7 @@ services:
       retries: 3
     restart: unless-stopped
     environment:
+      SSL_CERT_FILE: /usr/local/share/ca-certificates/HARICA-TLS-Root-2021-RSA.crt
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${API_EXTERNAL_URL}
