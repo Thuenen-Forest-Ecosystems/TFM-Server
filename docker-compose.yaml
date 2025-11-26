@@ -118,13 +118,13 @@ services:
 
   auth:
     container_name: supabase-auth
+    build:
+      context: .
+      dockerfile: Dockerfile.auth
     volumes:
       - ./supabase/templates:/templates
-      - ./volumes/auth/certs:/usr/local/share/ca-certificates
-      - ./volumes/auth/certs:/tmp/certs:ro
     networks:
       - supabase-net
-    image: supabase/gotrue:v2.164.0
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -145,17 +145,7 @@ services:
       interval: 5s
       retries: 3
     restart: unless-stopped
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        cp /tmp/certs/*.crt /usr/local/share/ca-certificates/ 2>/dev/null || true
-        update-ca-certificates 2>/dev/null || true
-        exec /usr/local/bin/gotrue
     environment:
-      #SSL_CERT_DIR: /etc/ssl/certs
-      #GOMAIL_INSECURE_SKIP_VERIFY: "true"
-      #SSL_CERT_FILE: /usr/local/share/ca-certificates/HARICA-TLS-Root-2021-RSA.crt
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${API_EXTERNAL_URL}
