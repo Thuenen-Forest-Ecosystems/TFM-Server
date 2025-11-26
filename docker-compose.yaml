@@ -146,6 +146,7 @@ services:
     restart: unless-stopped
     environment:
       SSL_CERT_DIR: /etc/ssl/certs
+      GOMAIL_INSECURE_SKIP_VERIFY: "true"
       #SSL_CERT_FILE: /usr/local/share/ca-certificates/HARICA-TLS-Root-2021-RSA.crt
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
