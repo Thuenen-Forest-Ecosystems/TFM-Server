@@ -124,6 +124,7 @@ services:
     networks:
       - supabase-net
     image: supabase/gotrue:v2.164.0
+    entrypoint: /bin/sh -c "update-ca-certificates && /usr/local/bin/gotrue"
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
