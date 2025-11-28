@@ -306,3 +306,70 @@ SET NULL;
 -- ============================================================================
 -- END OF MIGRATION
 -- ============================================================================
+-- ============================================================================
+-- TABLE: troop_members
+-- ============================================================================
+-- Junction table that mirrors troop.user_ids array
+-- Automatically synced via triggers for PowerSync compatibility
+-- ============================================================================
+-- Drop the view first
+DROP VIEW IF EXISTS public.troop_members;
+-- Create the real table
+CREATE TABLE IF NOT EXISTS public.troop_members (
+  troop_id uuid NOT NULL REFERENCES public.troop(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (troop_id, user_id)
+);
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_troop_members_user ON public.troop_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_troop_members_troop ON public.troop_members(troop_id);
+-- Enable RLS
+ALTER TABLE public.troop_members ENABLE ROW LEVEL SECURITY;
+-- Policy: Users can view all memberships (needed for collaboration)
+CREATE POLICY "Users can view troop memberships" ON public.troop_members FOR
+SELECT TO authenticated USING (true);
+COMMENT ON TABLE public.troop_members IS 'Flattened troop memberships from troop.user_ids array - automatically synced via triggers';
+-- ============================================================================
+-- FUNCTION: sync_troop_members_from_array
+-- ============================================================================
+-- Syncs troop_members table when troop.user_ids changes
+-- ============================================================================
+CREATE OR REPLACE FUNCTION sync_troop_members_from_array() RETURNS TRIGGER AS $$ BEGIN IF TG_OP = 'DELETE' THEN -- Remove all members when troop is deleted
+DELETE FROM public.troop_members
+WHERE troop_id = OLD.id;
+RETURN OLD;
+ELSIF TG_OP = 'UPDATE'
+OR TG_OP = 'INSERT' THEN -- Delete existing members
+DELETE FROM public.troop_members
+WHERE troop_id = NEW.id;
+-- Insert new members from array
+IF NEW.user_ids IS NOT NULL
+AND array_length(NEW.user_ids, 1) > 0 THEN
+INSERT INTO public.troop_members (troop_id, user_id)
+SELECT NEW.id,
+  unnest(NEW.user_ids) ON CONFLICT DO NOTHING;
+END IF;
+RETURN NEW;
+END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- ============================================================================
+-- TRIGGER: Keep troop_members in sync with troop.user_ids
+-- ============================================================================
+DROP TRIGGER IF EXISTS troop_members_sync ON public.troop;
+CREATE TRIGGER troop_members_sync
+AFTER
+INSERT
+  OR
+UPDATE OF user_ids
+  OR DELETE ON public.troop FOR EACH ROW EXECUTE FUNCTION sync_troop_members_from_array();
+-- ============================================================================
+-- POPULATE: Initial data from existing troops
+-- ============================================================================
+INSERT INTO public.troop_members (troop_id, user_id)
+SELECT t.id,
+  unnest(t.user_ids)
+FROM public.troop t
+WHERE t.user_ids IS NOT NULL
+  AND array_length(t.user_ids, 1) > 0 ON CONFLICT DO NOTHING;

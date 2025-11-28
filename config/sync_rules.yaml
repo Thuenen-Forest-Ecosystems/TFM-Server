@@ -38,10 +38,8 @@ bucket_definitions:
 
   troop_records:
     parameters:
-      # Get all troop IDs where user is a member
-      - SELECT id as troop_id FROM "public"."troop" WHERE array_position(user_ids, request.user_id()) IS NOT NULL
+      - SELECT troop_id FROM "public"."troop_members" WHERE user_id = request.user_id()
     data:
-      # Sync records where this troop is responsible
       - SELECT * FROM "public"."records" WHERE responsible_troop = bucket.troop_id
 
   #organizations:
