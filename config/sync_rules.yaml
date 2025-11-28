@@ -39,7 +39,7 @@ bucket_definitions:
   troop_records:
     parameters:
       # Get all troop IDs where user is a member
-      - SELECT id as troop_id FROM "public"."troop" WHERE request.user_id() = ANY(user_ids)
+      - SELECT id as troop_id FROM "public"."troop" WHERE request.user_id() IN (SELECT unnest(user_ids))
     data:
       # Sync records where this troop is responsible
       - SELECT * FROM "public"."records" WHERE responsible_troop = bucket.troop_id
