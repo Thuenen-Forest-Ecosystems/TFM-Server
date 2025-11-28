@@ -21,17 +21,38 @@ bucket_definitions:
   #  data:
   #    #- SELECT * FROM "inventory_archive"."plot" WHERE TRUE = bucket.is_admin
   #    - SELECT * FROM "public"."records" WHERE TRUE = bucket.is_admin
-      
 
-  organizations:
+  user_organizations:
     parameters:
-      - SELECT organization_id FROM "public"."users_profile" WHERE id = request.user_id()
+      # This query returns multiple rows if user has multiple organizations
+      - SELECT organization_id FROM "public"."users_permissions" WHERE user_id = request.user_id()
     data:
+      # Each bucket gets data for its specific organization_id
       - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
       - SELECT * FROM "public"."organizations_lose" WHERE organization_id = bucket.organization_id
-      - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
-      - SELECT * FROM "public"."records" WHERE responsible_administration = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_provider = bucket.organization_id
-  
+      # - SELECT * FROM "public"."records" WHERE
+      #     responsible_administration = bucket.organization_id OR
+      #     responsible_state = bucket.organization_id OR
+      #     responsible_provider = bucket.organization_id
+      - SELECT * FROM "public"."troop" WHERE organization_id = bucket.organization_id
+
+  troop_records:
+    parameters:
+      # Get all troop IDs where user is a member
+      - SELECT id as troop_id FROM "public"."troop" WHERE request.user_id() = ANY(user_ids)
+    data:
+      # Sync records where this troop is responsible
+      - SELECT * FROM "public"."records" WHERE responsible_troop = bucket.troop_id
+
+  #organizations:
+  #  parameters:
+  #    - SELECT organization_id FROM "public"."users_profile" WHERE id = request.user_id()
+  #  data:
+  #    - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
+  #    - SELECT * FROM "public"."organizations_lose" WHERE organization_id = bucket.organization_id
+  #    - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
+  #    - SELECT * FROM "public"."records" WHERE responsible_administration = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_provider = bucket.organization_id
+
   permissions:
     parameters:
       - SELECT request.user_id() as user_id
