@@ -315,20 +315,22 @@ ALTER TABLE plot_coordinates ADD CONSTRAINT FK_PlotPosition_Plot FOREIGN KEY (pl
 	REFERENCES plot (id) MATCH SIMPLE
 	ON DELETE CASCADE;
 
-------------------------------------------------- PLOT LANDMARK -------------------------------------------------
+------------------------------------------------- PLOT SUPPORT POINTS -------------------------------------------------
 
-CREATE TABLE plot_landmark (LIKE table_TEMPLATE INCLUDING ALL);
-ALTER TABLE plot_landmark 
+CREATE TABLE plot_support_points (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE plot_support_points
     ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN landmark_azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 399), -- mark_azi [Gon]
-	ADD COLUMN landmark_distance SMALLINT NOT NULL CHECK (landmark_distance > 0), -- mark_hori [cm]
-	ADD COLUMN landmark_note TEXT NOT NULL; -- mark_beschreibung
+	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 399), -- [Gon]
+	ADD COLUMN distance SMALLINT NOT NULL CHECK (landmark_distance > 0), -- [cm]
+	ADD COLUMN point_type SMALLINT NOT NULL
+	ADD COLUMN note TEXT NOT NULL;
 
---- remove column intkey due to does not exist in the new data model
-
-ALTER TABLE plot_landmark ADD CONSTRAINT FK_PlotLandmark_Plot FOREIGN KEY (plot_id)
+ALTER TABLE plot_support_points ADD CONSTRAINT FK_PlotSupport_Plot FOREIGN KEY (plot_id)
 	REFERENCES plot (id) MATCH SIMPLE
 	ON DELETE CASCADE;
+
+ALTER TABLE plot_support_points ADD CONSTRAINT FK_support_points_type FOREIGN KEY (support_point_type)
+	REFERENCES lookup.lookup_support_point_type (code);
 
 ------------------------------------------------- TREE -------------------------------------------------
 CREATE TABLE tree (LIKE table_TEMPLATE INCLUDING ALL);
