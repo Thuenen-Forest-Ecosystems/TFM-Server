@@ -65,6 +65,19 @@ ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterSituation
     FOREIGN KEY (cluster_situation)
     REFERENCES lookup.lookup_cluster_situation (code);
 
+------------------------------------------------- CLUSTER MOVE -------------------------------------------------
+create table cluster_move (like table_template including all);
+alter table cluster_move
+	add column cluster_id uuid not null,
+    add column cluster_name integer not null check (cluster_name >= 1),
+    add column rotation smallint not null check (rotation >= 0 and rotation <= 399) -- [gon]
+    add columns azimuth smallint not null check (azimuth >= 0 and azimuth <= 399) -- [gon]
+    add columns distance smallint not null check (distance > 0) -- [m]
+
+ALTER TABLE cluster_move ADD CONSTRAINT FK_Cluster_Move_Cluster FOREIGN KEY (cluster_id)
+	REFERENCES cluster (id) MATCH SIMPLE
+	ON DELETE CASCADE;
+
 ------------------------------------------------- PLOT -------------------------------------------------
 CREATE TABLE plot (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot 
@@ -320,8 +333,8 @@ ALTER TABLE plot_coordinates ADD CONSTRAINT FK_PlotPosition_Plot FOREIGN KEY (pl
 CREATE TABLE plot_support_points (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot_support_points
     ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 399), -- [Gon]
-	ADD COLUMN distance SMALLINT NOT NULL CHECK (landmark_distance > 0), -- [cm]
+	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND landmark_azimuth <= 399), -- [Gon]
+	ADD COLUMN distance SMALLINT NOT NULL CHECK (distance > 0), -- [cm]
 	ADD COLUMN point_type SMALLINT NOT NULL
 	ADD COLUMN note TEXT NOT NULL;
 
