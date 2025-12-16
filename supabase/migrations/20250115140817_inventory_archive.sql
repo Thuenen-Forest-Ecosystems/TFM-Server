@@ -147,7 +147,9 @@ ALTER TABLE plot
 	
 	--ADD COLUMN usage_type INTEGER NULL -- NutzArt
 	ADD COLUMN harvest_method INTEGER NULL REFERENCES lookup.lookup_harvest_method (code), -- NutzArt
-	ADD COLUMN harvest_reason INTEGER NULL REFERENCES lookup.lookup_harvest_reason (code) -- Nutzursache
+	ADD COLUMN harvest_reason INTEGER NULL REFERENCES lookup.lookup_harvest_reason (code), -- Nutzursache
+
+	ADD COLUMN municipality INT4 NOT NULL REFERENCES lookup.lookup_municipality
 	;
 
 
