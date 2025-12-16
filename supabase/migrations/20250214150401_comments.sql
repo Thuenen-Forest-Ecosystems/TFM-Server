@@ -114,6 +114,7 @@ COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_other_internalcause
 COMMENT ON COLUMN inventory_archive.plot.marker_status IS 'Permanente Trakteckenmarkierung gefunden/gesetzt';
 COMMENT ON COLUMN inventory_archive.plot.marker_azimuth IS 'Position (Azimut [gon]) der permanenten Trakteckenmarkierung';
 COMMENT ON COLUMN inventory_archive.plot.marker_distance IS 'Position (Horizontalentfernung [cm]) der permanenten Trakteckenmarkierung';
+COMMENT ON COLUMN inventory_archive.plot.municipality IS 'Amtlicher Gemeindeschlüssel (8-stellig, Pos 1+2=Bl, 3=RegBez, 4-5=Kreis, 6-7=Gemeinde)';
 
 --COMMENT ON COLUMN inventory_archive.plot.usage_type IS 'Nutzungsart';
 
