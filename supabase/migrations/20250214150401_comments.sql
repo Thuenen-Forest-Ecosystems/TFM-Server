@@ -142,6 +142,7 @@ COMMENT ON COLUMN inventory_archive.plot.natur_schutzgebiet IS 'Naturschutzgebie
 COMMENT ON COLUMN inventory_archive.plot_support_points.azimuth IS 'Azimut in [gon]';
 COMMENT ON COLUMN inventory_archive.plot_support_points.distance IS 'Horizontalentfernung [cm]';
 COMMENT ON COLUMN inventory_archive.plot_support_points.point_type IS 'Art/Zweck der gesetzten Markierung';
+COMMENT ON COLUMN inventory_archive.plot_support_points.is_marked IS 'Wurde der Punkt mit einem Eisen gesichert?';
 COMMENT ON COLUMN inventory_archive.plot_support_points.note IS 'Freitext-Kommentar';
 
 COMMENT ON COLUMN inventory_archive.cluster_move.roation IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verdreht, Dreh-Azimut [gon] von Soll zu Ist';
