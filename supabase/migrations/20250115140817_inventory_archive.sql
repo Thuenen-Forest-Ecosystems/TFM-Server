@@ -70,9 +70,9 @@ create table cluster_move (like table_template including all);
 alter table cluster_move
 	add column cluster_id uuid not null,
     add column cluster_name integer not null check (cluster_name >= 1),
-    add column rotation smallint not null check (rotation >= 0 and rotation <= 399) -- [gon]
-    add columns azimuth smallint not null check (azimuth >= 0 and azimuth <= 399) -- [gon]
-    add columns distance smallint not null check (distance > 0) -- [m]
+    add column rotation smallint not null check (rotation >= 0 and rotation <= 399), -- [gon]
+    add columns azimuth smallint not null check (azimuth >= 0 and azimuth <= 399), -- [gon]
+    add columns distance smallint not null check (distance >= 0) -- [m]
 
 ALTER TABLE cluster_move ADD CONSTRAINT FK_Cluster_Move_Cluster FOREIGN KEY (cluster_id)
 	REFERENCES cluster (id) MATCH SIMPLE
@@ -337,7 +337,8 @@ ALTER TABLE plot_support_points
     ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND landmark_azimuth <= 399), -- [Gon]
 	ADD COLUMN distance SMALLINT NOT NULL CHECK (distance > 0), -- [cm]
-	ADD COLUMN point_type SMALLINT NOT NULL
+	ADD COLUMN is_marked BOOLEAN NO NULL DEFAULT FALSE,
+	ADD COLUMN point_type SMALLINT NOT NULL,
 	ADD COLUMN note TEXT NOT NULL;
 
 ALTER TABLE plot_support_points ADD CONSTRAINT FK_PlotSupport_Plot FOREIGN KEY (plot_id)
