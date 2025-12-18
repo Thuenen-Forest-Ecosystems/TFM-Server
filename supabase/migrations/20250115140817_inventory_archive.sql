@@ -65,6 +65,19 @@ ALTER TABLE cluster ADD CONSTRAINT FK_Cluster_LookupClusterSituation
     FOREIGN KEY (cluster_situation)
     REFERENCES lookup.lookup_cluster_situation (code);
 
+------------------------------------------------- CLUSTER MOVE -------------------------------------------------
+create table cluster_move (like table_template including all);
+alter table cluster_move
+	add column cluster_id uuid not null,
+    add column cluster_name integer not null check (cluster_name >= 1),
+    add column rotation smallint not null check (rotation >= 0 and rotation <= 399), -- [gon]
+    add columns azimuth smallint not null check (azimuth >= 0 and azimuth <= 399), -- [gon]
+    add columns distance smallint not null check (distance >= 0) -- [m]
+
+ALTER TABLE cluster_move ADD CONSTRAINT FK_Cluster_Move_Cluster FOREIGN KEY (cluster_id)
+	REFERENCES cluster (id) MATCH SIMPLE
+	ON DELETE CASCADE;
+
 ------------------------------------------------- PLOT -------------------------------------------------
 CREATE TABLE plot (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE plot 
@@ -84,15 +97,13 @@ ALTER TABLE plot
 	ADD COLUMN ffh_forest_type INTEGER NULL, -- wlt_v -- lookup_ffh_forest_type
 	ADD COLUMN ffh_forest_type_field INTEGER NULL, --wlt -- lookup_ffh_forest_type
 	ADD COLUMN land_use INTEGER NULL, -- lanu -- lookup_land_use
-	ADD COLUMN coast BOOLEAN NULL DEFAULT FALSE, --kueste
-	ADD COLUMN sandy BOOLEAN NULL DEFAULT FALSE, -- gestein
+	ADD COLUMN coast BOOLEAN NOT NULL DEFAULT FALSE, --kueste
+	ADD COLUMN sandy BOOLEAN NOT NULL DEFAULT FALSE, -- gestein
 	ADD COLUMN protected_landscape BOOLEAN DEFAULT FALSE, -- lsg
-	ADD COLUMN long_time_forest BOOLEAN NULL DEFAULT FALSE, -- histwald
+	ADD COLUMN long_time_forest BOOLEAN NOT NULL DEFAULT FALSE, -- histwald
 	ADD COLUMN harvest_restriction INTEGER NULL, -- ne TODO: Lookup Table & enum
 	--ADD COLUMN harvest_restriction_source INTEGER NULL, -- NEU: NeUrsacheB
 	ADD COLUMN marker_status INTEGER NULL, -- perm lookup_marker_status
-	ADD COLUMN marker_azimuth INTEGER NULL CHECK (marker_azimuth >= 0 AND marker_azimuth <= 399), -- perm_azi: 
-	ADD COLUMN marker_distance SMALLINT NULL CHECK (marker_distance >= 0 AND marker_distance <= 15000), -- perm_hori Zentimeter 
 	ADD COLUMN marker_profile INTEGER NULL, -- perm_profil -- lookup_marker_profile
 	ADD COLUMN terrain_form INTEGER NULL, -- gform -- lookup_terrain_form
 	ADD COLUMN terrain_slope SMALLINT NULL CHECK (terrain_slope >= 0 AND terrain_slope <= 90), -- gneig [Grad]
@@ -104,7 +115,7 @@ ALTER TABLE plot
 	ADD COLUMN stand_age SMALLINT NULL, -- al_best 
 	ADD COLUMN stand_development_phase SMALLINT NULL, -- phase - lookup_stand_dev_phase
 	ADD COLUMN stand_layer_regeneration INTEGER NULL, -- b0_bs
-	ADD COLUMN fence_regeneration BOOLEAN NULL DEFAULT FALSE, -- b0_zaun
+	ADD COLUMN fence_regeneration BOOLEAN NOT NULL DEFAULT FALSE, -- b0_zaun
 	
 	ADD COLUMN trees_greater_4meter_mirrored INTEGER NULL, -- schigt4_sp (gespiegelt) lookup_trees_less_4meter_mirrored
 	ADD COLUMN trees_greater_4meter_basal_area_factor INTEGER NULL, -- schigt4_zf lookup_basal_area_factor
@@ -120,21 +131,23 @@ ALTER TABLE plot
 	ADD COLUMN vogel_schutzgebiet INTEGER NULL, -- VogelSG lookup_vogel_schutzgebiet
 	ADD COLUMN natur_schutzgebiet INTEGER NULL, -- NaturSG lookup_natur_schutzgebiet
 
-	ADD COLUMN harvest_restriction_nature_reserve boolean NULL DEFAULT FALSE, -- NeNSchutz - Naturschutz
-	ADD COLUMN harvest_restriction_protection_forest boolean NULL DEFAULT FALSE, -- NeSWald - Schutzwald
-	ADD COLUMN harvest_restriction_recreational_forest boolean NULL DEFAULT FALSE, -- NeEWald - Erholungswald
+	ADD COLUMN harvest_restriction_nature_reserve boolean NOT NULL DEFAULT FALSE, -- NeNSchutz - Naturschutz
+	ADD COLUMN harvest_restriction_protection_forest boolean NOT NULL DEFAULT FALSE, -- NeSWald - Schutzwald
+	ADD COLUMN harvest_restriction_recreational_forest boolean NOT NULL DEFAULT FALSE, -- NeEWald - Erholungswald
 	--ADD COLUMN harvest_restriction_NeSABUrsach boolean NOT NULL DEFAULT FALSE, -- NeSABUrsach - Ursache der Nutzungseinschränkung 9-sonstige außerbetriebliche Ursachen
-	ADD COLUMN harvest_restriction_scattered boolean NULL DEFAULT FALSE, -- NESplitter - Splitterbesitz - Ursache der Nutzungseinschränkung 11-Splitterbesitz mit unwirtschaftlicher Größe
-	ADD COLUMN harvest_restriction_fragmented boolean NULL DEFAULT FALSE, -- NeStreu - Streulage - Ursache der Nutzungseinschränkung 12-Streulage
-	ADD COLUMN harvest_restriction_insufficient_access boolean NULL DEFAULT FALSE, -- NeUnErschlies - unzur. Erschließung - Ursache der Nutzungseinschränkung 13-unzureichender Erschließung
-	ADD COLUMN harvest_restriction_wetness boolean NULL DEFAULT FALSE, -- NeGelEig - Gelände - Ursache der Nutzungseinschränkung 14-Geländeeigenschaften, Nassstandort
-	ADD COLUMN harvest_restriction_low_yield boolean NULL DEFAULT FALSE, -- NeGerErtrag - geringer Ertrag - Ursache der Nutzungseinschränkung 15-geringer Ertragserwartungen (dGZ < 1 m³/(ha*a))
-	ADD COLUMN harvest_restriction_private_conservation boolean NULL DEFAULT FALSE, -- NeEigenbin - Eigenbindung - Ursache der Nutzungseinschränkung 16-Schutzflächen in Eigenbindung (z.B. Naturreservate)
-	ADD COLUMN harvest_restriction_other_internalcause boolean NULL DEFAULT FALSE, -- NeSIBUrsach - s. innerbetriebl. Urs. - Ursache der Nutzungseinschränkung 19-sonstige innerbetriebliche Ursachen
+	ADD COLUMN harvest_restriction_scattered boolean NOT NULL DEFAULT FALSE, -- NESplitter - Splitterbesitz - Ursache der Nutzungseinschränkung 11-Splitterbesitz mit unwirtschaftlicher Größe
+	ADD COLUMN harvest_restriction_fragmented boolean NOT NULL DEFAULT FALSE, -- NeStreu - Streulage - Ursache der Nutzungseinschränkung 12-Streulage
+	ADD COLUMN harvest_restriction_insufficient_access boolean NOT NULL DEFAULT FALSE, -- NeUnErschlies - unzur. Erschließung - Ursache der Nutzungseinschränkung 13-unzureichender Erschließung
+	ADD COLUMN harvest_restriction_wetness boolean NOT NULL DEFAULT FALSE, -- NeGelEig - Gelände - Ursache der Nutzungseinschränkung 14-Geländeeigenschaften, Nassstandort
+	ADD COLUMN harvest_restriction_low_yield boolean NOT NULL DEFAULT FALSE, -- NeGerErtrag - geringer Ertrag - Ursache der Nutzungseinschränkung 15-geringer Ertragserwartungen (dGZ < 1 m³/(ha*a))
+	ADD COLUMN harvest_restriction_private_conservation boolean NOT NULL DEFAULT FALSE, -- NeEigenbin - Eigenbindung - Ursache der Nutzungseinschränkung 16-Schutzflächen in Eigenbindung (z.B. Naturreservate)
+	ADD COLUMN harvest_restriction_other_internalcause boolean NOT NULL DEFAULT FALSE, -- NeSIBUrsach - s. innerbetriebl. Urs. - Ursache der Nutzungseinschränkung 19-sonstige innerbetriebliche Ursachen
 	
 	--ADD COLUMN usage_type INTEGER NULL -- NutzArt
 	ADD COLUMN harvest_method INTEGER NULL REFERENCES lookup.lookup_harvest_method (code), -- NutzArt
-	ADD COLUMN harvest_reason INTEGER NULL REFERENCES lookup.lookup_harvest_reason (code) -- Nutzursache
+	ADD COLUMN harvest_reason INTEGER NULL REFERENCES lookup.lookup_harvest_reason (code), -- Nutzursache
+
+	ADD COLUMN municipality INT4 NOT NULL REFERENCES lookup.lookup_municipality
 	;
 
 
@@ -315,20 +328,23 @@ ALTER TABLE plot_coordinates ADD CONSTRAINT FK_PlotPosition_Plot FOREIGN KEY (pl
 	REFERENCES plot (id) MATCH SIMPLE
 	ON DELETE CASCADE;
 
-------------------------------------------------- PLOT LANDMARK -------------------------------------------------
+------------------------------------------------- PLOT SUPPORT POINTS -------------------------------------------------
 
-CREATE TABLE plot_landmark (LIKE table_TEMPLATE INCLUDING ALL);
-ALTER TABLE plot_landmark 
+CREATE TABLE plot_support_points (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE plot_support_points
     ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN landmark_azimuth SMALLINT NOT NULL CHECK (landmark_azimuth >= 0 AND landmark_azimuth <= 399), -- mark_azi [Gon]
-	ADD COLUMN landmark_distance SMALLINT NOT NULL CHECK (landmark_distance > 0), -- mark_hori [cm]
-	ADD COLUMN landmark_note TEXT NOT NULL; -- mark_beschreibung
+	ADD COLUMN azimuth SMALLINT NOT NULL CHECK (azimuth >= 0 AND landmark_azimuth <= 399), -- [Gon]
+	ADD COLUMN distance SMALLINT NOT NULL CHECK (distance > 0), -- [cm]
+	ADD COLUMN is_marked BOOLEAN NO NULL DEFAULT FALSE,
+	ADD COLUMN point_type SMALLINT NOT NULL,
+	ADD COLUMN note TEXT NOT NULL;
 
---- remove column intkey due to does not exist in the new data model
-
-ALTER TABLE plot_landmark ADD CONSTRAINT FK_PlotLandmark_Plot FOREIGN KEY (plot_id)
+ALTER TABLE plot_support_points ADD CONSTRAINT FK_PlotSupport_Plot FOREIGN KEY (plot_id)
 	REFERENCES plot (id) MATCH SIMPLE
 	ON DELETE CASCADE;
+
+ALTER TABLE plot_support_points ADD CONSTRAINT FK_support_points_type FOREIGN KEY (support_point_type)
+	REFERENCES lookup.lookup_support_point_type (code);
 
 ------------------------------------------------- TREE -------------------------------------------------
 CREATE TABLE tree (LIKE table_TEMPLATE INCLUDING ALL);
@@ -352,21 +368,21 @@ ALTER TABLE tree
 	ADD COLUMN stem_form INTEGER NULL DEFAULT 0, --Kst
 	ADD COLUMN pruning INTEGER NULL, -- Ast
 	-- ADD COLUMN pruning_height smallint NULL, -- Ast_Hoe (Astungungshöhe [dm]) Deprecated
-	ADD COLUMN within_stand BOOLEAN NULL DEFAULT false, -- Bz https://git-dmz.thuenen.de/datenerfassunginventory_archive/inventory_archive_datenerfassung/inventory_archive-db-structure/-/issues/3#note_24310
+	ADD COLUMN within_stand BOOLEAN NOT NULL DEFAULT false, -- Bz https://git-dmz.thuenen.de/datenerfassunginventory_archive/inventory_archive_datenerfassung/inventory_archive-db-structure/-/issues/3#note_24310
 	ADD COLUMN stand_layer INTEGER NULL, -- Bs //saplings_layer
-	ADD COLUMN damage_dead boolean NULL DEFAULT false, -- Tot
-	ADD COLUMN damage_peel_new boolean NULL DEFAULT false, -- jSchael
-	ADD COLUMN damage_peel_old boolean NULL DEFAULT false, -- aeSchael
-	ADD COLUMN damage_logging boolean NULL DEFAULT false, -- Ruecke
-	ADD COLUMN damage_fungus boolean NULL DEFAULT false, -- Pilz
-	ADD COLUMN damage_resin boolean NULL DEFAULT false, -- Harz
-	ADD COLUMN damage_beetle boolean NULL DEFAULT false, -- Kaefer
-	ADD COLUMN damage_other boolean NULL DEFAULT false, -- sStamm
-	ADD COLUMN cave_tree boolean NULL DEFAULT false, -- Hoehle
-	ADD COLUMN crown_dead_wood boolean NULL DEFAULT false, -- Bizarr
-	ADD COLUMN tree_top_drought boolean NULL DEFAULT false, -- Uralt
-	ADD COLUMN bark_pocket boolean NULL DEFAULT false, -- Rindentaschen
-	ADD COLUMN biotope_marked boolean NULL DEFAULT false,
+	ADD COLUMN damage_dead boolean NOT NULL DEFAULT false, -- Tot
+	ADD COLUMN damage_peel_new boolean NOT NULL DEFAULT false, -- jSchael
+	ADD COLUMN damage_peel_old boolean NOT NULL DEFAULT false, -- aeSchael
+	ADD COLUMN damage_logging boolean NOT NULL DEFAULT false, -- Ruecke
+	ADD COLUMN damage_fungus boolean NOT NULL DEFAULT false, -- Pilz
+	ADD COLUMN damage_resin boolean NOT NULL DEFAULT false, -- Harz
+	ADD COLUMN damage_beetle boolean NOT NULL DEFAULT false, -- Kaefer
+	ADD COLUMN damage_other boolean NOT NULL DEFAULT false, -- sStamm
+	ADD COLUMN cave_tree boolean NOT NULL DEFAULT false, -- Hoehle
+	ADD COLUMN crown_dead_wood boolean NOT NULL DEFAULT false, -- Bizarr
+	ADD COLUMN tree_top_drought boolean NOT NULL DEFAULT false, -- Uralt
+	ADD COLUMN bark_pocket boolean NOT NULL DEFAULT false, -- Rindentaschen
+	ADD COLUMN biotope_marked boolean NOT NULL DEFAULT false,
 	ADD COLUMN bark_condition smallint NULL REFERENCES lookup.lookup_bark_condition (code), -- Rindenzustand
 	ADD COLUMN deadwood_used BOOLEAN DEFAULT FALSE;
 
@@ -459,7 +475,7 @@ ALTER TABLE regeneration
 	ADD COLUMN browsing INTEGER NULL, --Biss
 	ADD COLUMN tree_size_class INTEGER NULL, --Gr
 	ADD COLUMN damage_peel smallint NULL, --Schael
-	ADD COLUMN protection_individual boolean NULL, --Schu
+	ADD COLUMN protection_individual boolean NOT NULL, --Schu
 	ADD COLUMN tree_count smallint NOT NULL CHECK (tree_count >= 1 AND tree_count <= 350); --Anz
 
 ALTER TABLE regeneration ADD CONSTRAINT FK_Saplings2m_Plot FOREIGN KEY (plot_id) REFERENCES plot(id) MATCH SIMPLE

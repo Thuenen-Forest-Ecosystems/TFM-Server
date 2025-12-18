@@ -111,7 +111,10 @@ ALTER TABLE lookup_biosphaere
 ADD COLUMN bfn_code varchar(20) NULL;
 CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE lookup_gemeinde (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_municipality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+ALTER TABLE lookup_municipality
+ADD COLUMN code_district serial UNIQUE NOT NULL;
+CREATE TABLE lookup_district (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 --CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 -- change code to type text
@@ -228,34 +231,71 @@ VALUES (
         1,
         'mindestens 10m und maximal 20m geringere Bestandeshöhe (das kann auch eine Blöße oder Nichtholzboden sein)',
         'At least 10m and maximum 20m lower stand height (this can also be temporary unstocked area or unstocked forest land floor)',
-        ARRAY ['ci2027'],
+        ARRAY ['bwi2027'],
         1
     ),
     (
         2,
         'mindestens 20m geringere Bestandeshöhe (das kann auch eine Blöße oder Nichtholzboden sein)',
         'At least 20m lower stand height (this can also be temporary unstocked area or unstocked forest land floor)',
-        ARRAY ['ci2027'],
+        ARRAY ['bwi2027'],
         2
     ),
     (
         3,
         'mindestens 20%-ige Änderung der Baumartenanteile bei einem Höhenunterschied von weniger als 10m',
         'At least 20% change in the proportion of tree species with a height difference of less than 10 metres',
-        ARRAY ['ci2027'],
+        ARRAY ['bwi2027'],
         3
     ),
     (
         4,
         'mindestens 20%-ige Änderung der Baumartenanteile bei einem Höhenunterschied bei mindestens 10m und maximal 20m',
         'At least 20% change in the proportion of tree species with a height difference of at least 10m and maximum 20m',
-        ARRAY ['ci2027'],
+        ARRAY ['bwi2027'],
         4
     ),
     (
         9,
         'keiner der genannten Fälle',
         'None of the cases mentioned',
-        ARRAY ['ci2027'],
+        ARRAY ['bwi2027'],
         9
     );
+CREATE TABLE IF NOT EXISTS lookup_support_point_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_support_point_type (code, name_de, name_en, interval, sort)
+VALUES (
+        1,
+        'versetzte Markierung',
+        'Displaced marker',
+        ARRAY ['ci2027'],
+        1
+    ),
+    (
+        2,
+        'markanter Geländepunkt',
+        'Landmark',
+        ARRAY ['ci2027'],
+        2
+    ),
+    (
+        3,
+        'Startpunkt Trakteinmessung',
+        'Starting point for cluster location',
+        ARRAY ['ci2027'],
+        3
+    ),
+    (
+        4,
+        'Sicherung Startpunkt',
+        'Supporting point for cluster location start',
+        ARRAY ['ci2027'],
+        4
+    ),
+    (
+        5,
+        'Hilfspunkt GNSS',
+        'Supporting point GNSS measurement',
+        ARRAY ['ci2027'],
+        5
+    )

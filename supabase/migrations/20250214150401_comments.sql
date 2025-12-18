@@ -14,8 +14,8 @@ COMMENT ON COLUMN inventory_archive.tree.intkey IS 'Interner Key. Wird generiert
 COMMENT ON COLUMN inventory_archive.tree.tree_number IS 'Baumnummer BWI4';
 COMMENT ON COLUMN inventory_archive.tree.tree_marked IS 'Permanente Trakteckenmarkierung gefunden/gesetzt';
 COMMENT ON COLUMN inventory_archive.tree.tree_status IS 'Probebaumkennziffer BWI4';
-COMMENT ON COLUMN inventory_archive.tree.azimuth IS 'Azimut [gon], nur wenn der Baum nicht zur WZP4 gehört';
-COMMENT ON COLUMN inventory_archive.tree.distance IS 'Horizontalentfernung [cm], nur wenn der Baum nicht zur WZP4 gehört';
+COMMENT ON COLUMN inventory_archive.tree.azimuth IS 'Azimut [gon]';
+COMMENT ON COLUMN inventory_archive.tree.distance IS 'Horizontalentfernung [cm]';
 COMMENT ON COLUMN inventory_archive.tree.tree_species IS 'Baumart';
 COMMENT ON COLUMN inventory_archive.tree.dbh IS 'gemessener BHD [mm]';
 COMMENT ON COLUMN inventory_archive.tree.dbh_height IS 'Messhöhe des BHD [cm] bei Vorgängerinventur';
@@ -27,8 +27,8 @@ COMMENT ON COLUMN inventory_archive.tree.tree_age IS 'Alter des Baumes [Jahre] z
 COMMENT ON COLUMN inventory_archive.tree.stem_breakage IS 'Höhenkennziffer';
 COMMENT ON COLUMN inventory_archive.tree.stem_form IS 'Stammkennziffer';
 COMMENT ON COLUMN inventory_archive.tree.pruning IS 'Astung';
-COMMENT ON COLUMN inventory_archive.tree.within_stand IS 'RAUS: Bestandeszugehörigkeit (0=nein, 1=ja)';
-COMMENT ON COLUMN inventory_archive.tree.stand_layer IS 'RAUS: Bestandesschicht';
+COMMENT ON COLUMN inventory_archive.tree.within_stand IS 'Bestandeszugehörigkeit (0=nein, 1=ja)';
+COMMENT ON COLUMN inventory_archive.tree.stand_layer IS 'Bestandesschicht';
 COMMENT ON COLUMN inventory_archive.tree.damage_dead IS 'Totholzstücken ab 10 cm Dicke im Probekreis r=5,00 m vorhanden? (0=nein, 1/leer=ja)';
 COMMENT ON COLUMN inventory_archive.tree.damage_peel_new IS 'jüngere/frische Schälschäden (0=nein, 1=ja)';
 COMMENT ON COLUMN inventory_archive.tree.damage_peel_old IS 'ältere Schälschäden (0=nein, 1=ja)';
@@ -114,6 +114,7 @@ COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_other_internalcause
 COMMENT ON COLUMN inventory_archive.plot.marker_status IS 'Permanente Trakteckenmarkierung gefunden/gesetzt';
 COMMENT ON COLUMN inventory_archive.plot.marker_azimuth IS 'Position (Azimut [gon]) der permanenten Trakteckenmarkierung';
 COMMENT ON COLUMN inventory_archive.plot.marker_distance IS 'Position (Horizontalentfernung [cm]) der permanenten Trakteckenmarkierung';
+COMMENT ON COLUMN inventory_archive.plot.municipality IS 'Amtlicher Gemeindeschlüssel (8-stellig, Pos 1+2=Bl, 3=RegBez, 4-5=Kreis, 6-7=Gemeinde)';
 
 --COMMENT ON COLUMN inventory_archive.plot.usage_type IS 'Nutzungsart';
 
@@ -137,3 +138,13 @@ COMMENT ON COLUMN inventory_archive.plot.national_park IS 'Nationalpark';
 COMMENT ON COLUMN inventory_archive.plot.natur_park IS 'Naturpark';
 COMMENT ON COLUMN inventory_archive.plot.vogel_schutzgebiet IS 'Vogelschutzgebiet';
 COMMENT ON COLUMN inventory_archive.plot.natur_schutzgebiet IS 'Naturschutzgebiet';
+
+COMMENT ON COLUMN inventory_archive.plot_support_points.azimuth IS 'Azimut in [gon]';
+COMMENT ON COLUMN inventory_archive.plot_support_points.distance IS 'Horizontalentfernung [cm]';
+COMMENT ON COLUMN inventory_archive.plot_support_points.point_type IS 'Art/Zweck der gesetzten Markierung';
+COMMENT ON COLUMN inventory_archive.plot_support_points.is_marked IS 'Wurde der Punkt mit einem Eisen gesichert?';
+COMMENT ON COLUMN inventory_archive.plot_support_points.note IS 'Freitext-Kommentar';
+
+COMMENT ON COLUMN inventory_archive.cluster_move.roation IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verdreht, Dreh-Azimut [gon] von Soll zu Ist';
+COMMENT ON COLUMN inventory_archive.cluster_move.azimuth IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verschoben, Azimut [gon] der Abweichung von Soll zu ist';
+COMMENT ON COLUMN inventory_archive.cluster_move.distance IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verschoben, Horizontalentfernung [m] der Abweichung';
