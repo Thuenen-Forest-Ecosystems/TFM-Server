@@ -104,8 +104,6 @@ ALTER TABLE plot
 	ADD COLUMN harvest_restriction INTEGER NULL, -- ne TODO: Lookup Table & enum
 	--ADD COLUMN harvest_restriction_source INTEGER NULL, -- NEU: NeUrsacheB
 	ADD COLUMN marker_status INTEGER NULL, -- perm lookup_marker_status
-	ADD COLUMN marker_azimuth INTEGER NULL CHECK (marker_azimuth >= 0 AND marker_azimuth <= 399), -- perm_azi: 
-	ADD COLUMN marker_distance SMALLINT NULL CHECK (marker_distance >= 0 AND marker_distance <= 15000), -- perm_hori Zentimeter 
 	ADD COLUMN marker_profile INTEGER NULL, -- perm_profil -- lookup_marker_profile
 	ADD COLUMN terrain_form INTEGER NULL, -- gform -- lookup_terrain_form
 	ADD COLUMN terrain_slope SMALLINT NULL CHECK (terrain_slope >= 0 AND terrain_slope <= 90), -- gneig [Grad]
