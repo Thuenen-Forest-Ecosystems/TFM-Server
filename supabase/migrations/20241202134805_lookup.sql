@@ -102,7 +102,9 @@ ALTER TABLE lookup_biosphaere ADD COLUMN bfn_code varchar(20) NULL;
 
 CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE lookup_gemeinde (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_municipality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+ALTER TABLE lookup_municipality ADD COLUMN code_district serial UNIQUE NOT NULL;
+CREATE TABLE lookup_district (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
 --CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 
