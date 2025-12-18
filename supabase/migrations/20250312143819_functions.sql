@@ -241,8 +241,7 @@ SELECT json_object_agg(
 FROM inventory_archive.plot p
     JOIN inventory_archive.position pos ON pos.plot_id = p.id
 WHERE p.cluster_name = NEW.cluster_name
-    AND p.plot_name = NEW.plot_name
-    AND p.interval_name != 'bwi2022';
+    AND p.plot_name = NEW.plot_name;
 IF position_data IS NOT NULL THEN NEW.previous_position_data := position_data;
 END IF;
 EXCEPTION

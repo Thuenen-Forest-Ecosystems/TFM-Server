@@ -249,6 +249,11 @@ COMMENT ON COLUMN "records"."previous_position_data" IS 'Position data from prev
 ALTER TABLE "records"
 ADD COLUMN IF NOT EXISTS "local_updated_at" timestamp with time zone NULL;
 COMMENT ON COLUMN "public"."records"."local_updated_at" IS 'Timestamp of last local modification before sync. NULL means no pending changes. Used to determine if record has unsynced local changes.';
+ALTER TABLE "records"
+ADD COLUMN IF NOT EXISTS "is_to_be_recorded_by_troop" boolean NOT NULL DEFAULT true;
+--not nullable default true
+COMMENT ON COLUMN "public"."records"."is_to_be_recorded_by_troop" IS 'Indicates if the plot is marked to be recorded in the current inventory interval. TRUE means it should be recorded. FALSE means it should not be recorded.';
+-- ============================================================================
 -- Auto-update updated_at timestampop_members contains only valid auth.users IDs
 -- ALTER TABLE "records" ADD CONSTRAINT check_current_troop_members_valid_users
 -- CHECK (
