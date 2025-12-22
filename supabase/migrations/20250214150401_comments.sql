@@ -5,9 +5,6 @@ COMMENT ON COLUMN inventory_archive.cluster.topo_map_sheet IS 'Nummer der topgra
 COMMENT ON COLUMN inventory_archive.cluster.states_affected IS 'Liste der betroffenen Länder (Kürzel)';
 COMMENT ON COLUMN inventory_archive.cluster.grid_density IS 'Zugehörigkeit zum Rasternetz';
 COMMENT ON COLUMN inventory_archive.cluster.cluster_situation IS 'Traktstatus lt. Vorklärung + Feldaufnahme';
-COMMENT ON COLUMN inventory_archive.plot_landmark.landmark_azimuth IS 'Markanter Geländepunkt, hier Azimut [gon]';
-COMMENT ON COLUMN inventory_archive.plot_landmark.landmark_distance IS 'Markanter Geländepunkt, hier Horizontalentfernung [cm]';
-COMMENT ON COLUMN inventory_archive.plot_landmark.landmark_note IS 'Markanter Geländepunkt, hier Kurz-Beschreibung';
 COMMENT ON COLUMN inventory_archive.plot_coordinates.center_location IS 'Soll-Ost-Koordinate WGS84 [Grad] für Traktecke, auch Longitude oder Längengrad genannt; EPSG: 4326';
 COMMENT ON COLUMN inventory_archive.plot.intkey IS 'Interner Key. Wird generiert.';
 COMMENT ON COLUMN inventory_archive.tree.intkey IS 'Interner Key. Wird generiert.';
@@ -99,7 +96,7 @@ COMMENT ON COLUMN inventory_archive.plot.land_use IS 'Landnutzungsart';
 COMMENT ON COLUMN inventory_archive.plot.coast IS 'bewaldete Küstendüne (unmittelbar in Küsten- bzw. Strandnähe)';
 COMMENT ON COLUMN inventory_archive.plot.sandy IS 'trockener sandiger Boden oder wechseltrockene Standorte oder Vegetationszeiger oder  andere gesicherte Bestätigung (j/n)';
 COMMENT ON COLUMN inventory_archive.plot.protected_landscape IS 'Landschaftschutzgebiet';
-COMMENT ON COLUMN inventory_archive.plot.histwald IS 'Historischer Wald, seit langem (bisher nur NI) Input für WLT_Algorithmus';
+COMMENT ON COLUMN inventory_archive.plot.long_time_forest IS 'Historischer Wald, seit langem (bisher nur NI) Input für WLT_Algorithmus';
 COMMENT ON COLUMN inventory_archive.plot.harvest_restriction IS 'Nutzungseinschränkung';
 COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_nature_reserve IS 'Ursache der Nutzungseinschränkung 1-Naturschutz (1=ja, 0=nein)';
 COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_protection_forest IS 'Ursache der Nutzungseinschränkung 2-Schutzwald (1=ja, 0=nein)';
@@ -112,12 +109,10 @@ COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_low_yield IS 'Ursac
 COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_private_conservation IS 'Ursache der Nutzungseinschränkung 16-Schutzflächen in Eigenbindung (z.B. Naturreservate) (1=ja, 0=nein)';
 COMMENT ON COLUMN inventory_archive.plot.harvest_restriction_other_internalcause IS 'Ursache der Nutzungseinschränkung 19-sonstige innerbetriebliche Ursachen (1=ja, 0=nein)';
 COMMENT ON COLUMN inventory_archive.plot.marker_status IS 'Permanente Trakteckenmarkierung gefunden/gesetzt';
-COMMENT ON COLUMN inventory_archive.plot.marker_azimuth IS 'Position (Azimut [gon]) der permanenten Trakteckenmarkierung';
-COMMENT ON COLUMN inventory_archive.plot.marker_distance IS 'Position (Horizontalentfernung [cm]) der permanenten Trakteckenmarkierung';
+--COMMENT ON COLUMN inventory_archive.plot.marker_azimuth IS 'Position (Azimut [gon]) der permanenten Trakteckenmarkierung';
+--COMMENT ON COLUMN inventory_archive.plot.marker_distance IS 'Position (Horizontalentfernung [cm]) der permanenten Trakteckenmarkierung';
 COMMENT ON COLUMN inventory_archive.plot.municipality IS 'Amtlicher Gemeindeschlüssel (8-stellig, Pos 1+2=Bl, 3=RegBez, 4-5=Kreis, 6-7=Gemeinde)';
-
 --COMMENT ON COLUMN inventory_archive.plot.usage_type IS 'Nutzungsart';
-
 COMMENT ON COLUMN inventory_archive.plot.marker_profile IS 'Profil der permanenten Trakteckenmarkierung; fakultativ';
 COMMENT ON COLUMN inventory_archive.plot.terrain_form IS 'Geländeform';
 COMMENT ON COLUMN inventory_archive.plot.terrain_slope IS 'Geländeneigung [Grad]';
@@ -138,13 +133,11 @@ COMMENT ON COLUMN inventory_archive.plot.national_park IS 'Nationalpark';
 COMMENT ON COLUMN inventory_archive.plot.natur_park IS 'Naturpark';
 COMMENT ON COLUMN inventory_archive.plot.vogel_schutzgebiet IS 'Vogelschutzgebiet';
 COMMENT ON COLUMN inventory_archive.plot.natur_schutzgebiet IS 'Naturschutzgebiet';
-
 COMMENT ON COLUMN inventory_archive.plot_support_points.azimuth IS 'Azimut in [gon]';
 COMMENT ON COLUMN inventory_archive.plot_support_points.distance IS 'Horizontalentfernung [cm]';
 COMMENT ON COLUMN inventory_archive.plot_support_points.point_type IS 'Art/Zweck der gesetzten Markierung';
 COMMENT ON COLUMN inventory_archive.plot_support_points.is_marked IS 'Wurde der Punkt mit einem Eisen gesichert?';
 COMMENT ON COLUMN inventory_archive.plot_support_points.note IS 'Freitext-Kommentar';
-
-COMMENT ON COLUMN inventory_archive.cluster_move.roation IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verdreht, Dreh-Azimut [gon] von Soll zu Ist';
+COMMENT ON COLUMN inventory_archive.cluster_move.rotation IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verdreht, Dreh-Azimut [gon] von Soll zu Ist';
 COMMENT ON COLUMN inventory_archive.cluster_move.azimuth IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verschoben, Azimut [gon] der Abweichung von Soll zu ist';
 COMMENT ON COLUMN inventory_archive.cluster_move.distance IS 'Trakt ist insgesamt gegenüber Soll-Koordinaten verschoben, Horizontalentfernung [m] der Abweichung';

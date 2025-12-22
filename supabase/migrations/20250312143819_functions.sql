@@ -74,11 +74,11 @@ CREATE OR REPLACE VIEW public.plot_nested_json AS WITH base_plots AS (
             COALESCE(
                 (
                     SELECT json_agg(row_to_json(pl.*))
-                    FROM inventory_archive.plot_landmark pl
+                    FROM inventory_archive.plot_support_points pl
                     WHERE pl.plot_id = p.id
                 ),
                 '[]'::json
-            ) AS plot_landmark,
+            ) AS plot_support_points,
             COALESCE(
                 (
                     SELECT row_to_json(pos)
@@ -845,8 +845,8 @@ SET properties = jsonb_build_object(
         p.sandy,
         'biotope',
         p.biotope,
-        'histwald',
-        p.histwald,
+        'long_time_forest',
+        p.long_time_forest,
         'land_use',
         p.land_use,
         'plot_name',

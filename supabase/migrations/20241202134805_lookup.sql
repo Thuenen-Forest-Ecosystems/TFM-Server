@@ -111,10 +111,10 @@ ALTER TABLE lookup_biosphaere
 ADD COLUMN bfn_code varchar(20) NULL;
 CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE lookup_district (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_municipality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 ALTER TABLE lookup_municipality
-ADD COLUMN code_district serial UNIQUE NOT NULL;
-CREATE TABLE lookup_district (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+ADD COLUMN code_district INTEGER NULL REFERENCES lookup.lookup_district (code);
 --CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 -- change code to type text
@@ -225,8 +225,8 @@ CREATE TABLE IF NOT EXISTS lookup_edge_type_deprecated (LIKE lookup.lookup_TEMPL
 --    (32, 'aus früherer Aufnahme übernommene, immer noch gültige Grenze zu nicht begehbaren Holzboden', 'Still valid boundary to non-accessible forest, taken over from previous recording', ARRAY['bwi2027'], 32),
 --    (42, 'aus früherer Aufnahme übernommene, immer noch gültige Bestandesgrenze', 'Still valid boundary between different stands, taken over from previous recording', ARRAY['bwi2027'], 42),
 --    (99, 'Grenze einer früheren Aufnahme, die zum aktuellen Inventurzeitpunkt nicht mehr auffindbar bzw. nicht mehr gültig ist', 'Boundary of a previous inventory that can no longer be found or is no longer valid at the current survey', ARRAY['bwi2027'], 99);
-CREATE TABLE lookup_id_stand_differences_rows (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-INSERT INTO lookup.lookup_id_stand_differences_rows (code, name_de, name_en, interval, sort)
+CREATE TABLE lookup_edge_stand_difference (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_edge_stand_difference (code, name_de, name_en, interval, sort)
 VALUES (
         1,
         'mindestens 10m und maximal 20m geringere Bestandeshöhe (das kann auch eine Blöße oder Nichtholzboden sein)',
