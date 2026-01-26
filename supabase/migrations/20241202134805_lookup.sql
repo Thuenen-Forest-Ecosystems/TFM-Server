@@ -299,8 +299,8 @@ VALUES (
         ARRAY ['ci2027'],
         5
     )
-CREATE TABLE IF NOT EXISTS lookup_cover_pecentage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-INSERT INTO lookup.lookup_cover_pecentage (code, name_de, name_en, interval, sort)
+CREATE TABLE IF NOT EXISTS lookup_cover_percentage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_cover_percentage (code, name_de, name_en, interval, sort)
 VALUES (0, '0%', '0%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 1),
     (1, '10%', '10%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 2),
     (2, '20%', '20%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 3),
