@@ -299,3 +299,16 @@ VALUES (
         ARRAY ['ci2027'],
         5
     )
+CREATE TABLE IF NOT EXISTS lookup_cover_pecentage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_cover_pecentage (code, name_de, name_en, interval, sort)
+VALUES (0, '0%', '0%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 1),
+    (1, '10%', '10%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 2),
+    (2, '20%', '20%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 3),
+    (3, '30%', '30%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 4),
+    (4, '40%', '40%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 5),
+    (5, '50%', '50%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 6),
+    (6, '60%', '60%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 7),
+    (7, '70%', '70%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 8),
+    (8, '80%', '80%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 9),
+    (9, '90%', '90%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 10),
+    (10, '100%', '100%', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 11)
