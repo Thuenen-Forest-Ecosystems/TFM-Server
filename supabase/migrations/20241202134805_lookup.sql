@@ -298,7 +298,7 @@ VALUES (
         'Supporting point GNSS measurement',
         ARRAY ['ci2027'],
         5
-    )
+    );
 CREATE TABLE IF NOT EXISTS lookup_cover_percentage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_cover_percentage (code, name_de, name_en, interval, sort)
 VALUES (0, '< 10 %', '< 10 %', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 1),
@@ -311,4 +311,18 @@ VALUES (0, '< 10 %', '< 10 %', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027']
     (7, 'ca. 70 % (65 % bis 74 %)', 'ca. 70 % (65 % to 74 %)', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 8),
     (8, 'ca. 80 % (75 % bis 84 %)', 'ca. 80 % (75 % to 84 %)', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 9),
     (9, 'ca. 90 % (85 % bis 94 %)', 'ca. 90 % (85 % to 94 %)', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 10),
-    (10, 'ca. 100 % (95 % bis 100 %)', 'ca. 100 % (95 % to 100 %)', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 11)
+    (10, 'ca. 100 % (95 % bis 100 %)', 'ca. 100 % (95 % to 100 %)', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'], 11);
+
+CREATE TABLE IF NOT EXISTS lookup_gnss_quality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_gnss_quality (code, name_de, name_en, interval, sort) 
+VALUES (0, 'Fix nicht gültig', 'Fix not valid', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 9),
+  (1, 'GNSS (1) - Viertbeste Qualität', 'GPS fix', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 4), 
+  (2, 'DGNSS (2) - Drittbeste Qualität', 'Differential GPS fix (DGNSS), SBAS, OmniSTAR VBS, Beacon, RTX in GVBS mode', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 3),
+  (4, 'RTK fixed (4) - Beste Qualität', 'RTK Fixed, xFill', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 1), 
+  (5, 'RTK floating (5) - Zweitbeste Qualität', 'RTK Float, OmniSTAR XP/HP, Location RTK, RTX', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 2), 
+  (6, 'Koppelnavigation', 'INS Dead reckoning', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 10),
+  (9, 'GNSS (9) - Viertbeste Qualität', 'GNSS - fourth best quality', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 5),
+  (91, 'WGS84-Koordinatennachlieferung mit nachträglicher Umrechnung von WGS84 zu Gauß-Krüger', 'External coordinates with transformation from WGS84 to Gauß-Krüger', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 7),
+  (92, 'Gauß-Krüger-Koordinatennachlieferung mit nachträglicher Umrechnung von Gauß-Krüger zu WGS84', 'External coordinates with transformation from Gauß-Krüger to WGS84', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 8),
+  (93, 'Koordinaten aus Postprocessing. Qualität unbekannt', 'External coordinates from post-processing, unknown quality', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 6);
+
