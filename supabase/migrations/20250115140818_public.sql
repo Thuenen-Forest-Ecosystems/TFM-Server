@@ -18,9 +18,12 @@ CREATE TABLE IF NOT EXISTS "public"."schemas" (
   "title" text not null,
   "description" text,
   "is_visible" boolean not null default false,
+  "is_deprecated" boolean not null default false,
   "bucket_schema_file_name" text,
   "bucket_plausability_file_name" text,
-  "schema" json,
+  "schema" jsonb NULL,
+  "style_default" jsonb NULL,
+  "plausability_script" text NULL,
   "version" integer,
   "directory" text
 );
@@ -210,8 +213,8 @@ CREATE TABLE IF NOT EXISTS "records" (
   "cluster_name" integer NULL,
   "plot_name" smallint NULL,
   -- Data and validation
-  "properties" jsonb NOT NULL DEFAULT '{}'::jsonb,
-  "previous_properties" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "properties" json NOT NULL DEFAULT '{}'::json,
+  "previous_properties" json NOT NULL DEFAULT '{}'::json,
   "previous_properties_updated_at" timestamp with time zone NOT NULL DEFAULT now(),
   "schema_id" uuid NULL REFERENCES public.schemas(id),
   "schema_name" text NULL DEFAULT 'ci2027',
@@ -253,6 +256,9 @@ ALTER TABLE "records"
 ADD COLUMN IF NOT EXISTS "is_to_be_recorded_by_troop" boolean NOT NULL DEFAULT true;
 --not nullable default true
 COMMENT ON COLUMN "public"."records"."is_to_be_recorded_by_troop" IS 'Indicates if the plot is marked to be recorded in the current inventory interval. TRUE means it should be recorded. FALSE means it should not be recorded.';
+ALTER TABLE "records"
+ADD COLUMN IF NOT EXISTS "cluster" jsonb NULL DEFAULT NULL;
+COMMENT ON COLUMN "public"."records"."cluster" IS 'Snapshot of cluster data from inventory_archive.cluster at the time of record creation or last update.';
 -- ============================================================================
 -- Auto-update updated_at timestampop_members contains only valid auth.users IDs
 -- ALTER TABLE "records" ADD CONSTRAINT check_current_troop_members_valid_users

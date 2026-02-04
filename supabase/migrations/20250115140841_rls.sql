@@ -66,6 +66,7 @@ DROP POLICY IF EXISTS default_select_anon ON inventory_archive.subplots_relative
 DROP POLICY IF EXISTS default_select_anon ON inventory_archive.tree_coordinates;
 -- PUBLIC RLS
 -- rls INSERT public.organizations where user_profile.is_admin = true 
+DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.organizations;
 create policy "Enable insert for authenticated users only" on "public"."organizations" as PERMISSIVE for
 INSERT to authenticated WITH CHECK (
         auth.uid() = created_by
@@ -77,6 +78,7 @@ INSERT to authenticated WITH CHECK (
         )
     );
 -- Bestehende SELECT-Policy beibehalten oder anpassen
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.organizations;
 create policy "Enable read access for all users" on "public"."organizations" as PERMISSIVE for
 SELECT to public USING (
         auth.uid() = created_by
@@ -88,6 +90,7 @@ SELECT to public USING (
         )
     );
 -- Create an RLS policy for updating public.users_profile
+DROP POLICY IF EXISTS "update_same_org_admin_policy" ON public.users_profile;
 CREATE POLICY "update_same_org_admin_policy" ON public.users_profile AS PERMISSIVE FOR
 UPDATE TO authenticated USING (
         EXISTS (
@@ -132,6 +135,7 @@ SELECT TO authenticated USING (
         ) = true
     );
 -- Neue UPDATE-Policy hinzufügen
+DROP POLICY IF EXISTS "Enable update for same user and admin" ON public.organizations;
 create policy "Enable update for same user and admin" on "public"."organizations" as PERMISSIVE for
 UPDATE to public using (
         auth.uid() = created_by
@@ -210,6 +214,7 @@ DROP POLICY IF EXISTS "record_access_policy" ON public.records;
 --USING (supervisor_id = auth.uid())
 --WITH CHECK (supervisor_id = auth.uid());
 -- Create policy for troop members to read troops they belong to
+DROP POLICY IF EXISTS "troop_member_read_policy" ON public.troop;
 CREATE POLICY "troop_member_read_policy" ON public.troop FOR
 SELECT USING (true);
 -- ============================================================================
@@ -218,6 +223,7 @@ SELECT USING (true);
 -- Users can access organizations they are members of or parent organizations
 -- ============================================================================
 -- SELECT: View organizations user has access to
+DROP POLICY IF EXISTS "Enable all access for authenticated users with same parent_organization_id" ON organizations;
 CREATE POLICY "Enable all access for authenticated users with same parent_organization_id" ON organizations AS PERMISSIVE FOR
 SELECT TO authenticated USING (
         EXISTS (
@@ -231,6 +237,7 @@ SELECT TO authenticated USING (
         )
     );
 -- ALL: Modify organizations user has access to
+DROP POLICY IF EXISTS "Enable all access for authenticated users with same organization_id or parent_organization_id" ON organizations;
 CREATE POLICY "Enable all access for authenticated users with same organization_id or parent_organization_id" ON organizations AS PERMISSIVE FOR ALL TO authenticated USING (
     EXISTS (
         SELECT 1
@@ -305,6 +312,7 @@ SELECT TO authenticated USING (true);
 -- Root organization users can access all records
 -- ============================================================================
 -- SELECT: View records user has access to
+DROP POLICY IF EXISTS "Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "records";
 CREATE POLICY "Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "records" AS PERMISSIVE FOR
 SELECT TO authenticated USING (
         -- Root organization users can see all records
@@ -333,6 +341,7 @@ SELECT TO authenticated USING (
         )
     );
 -- UPDATE: Modify records user has access to
+DROP POLICY IF EXISTS "Enable UPDATE access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "records";
 CREATE POLICY "Enable UPDATE access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "records" AS PERMISSIVE FOR
 UPDATE TO authenticated USING (
         -- Root organization or admin users
@@ -403,6 +412,7 @@ UPDATE TO authenticated USING (
 -- ============================================================================
 -- Same access rules as records table for viewing audit history
 -- ============================================================================
+DROP POLICY IF EXISTS "record_changes: Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "record_changes";
 CREATE POLICY "record_changes: Enable SELECT access for authenticated users with same organization_id of responsible_state, responsible_provider or responsible_troop" ON "record_changes" AS PERMISSIVE FOR
 SELECT TO authenticated USING (
         -- Root organization users can see all changes

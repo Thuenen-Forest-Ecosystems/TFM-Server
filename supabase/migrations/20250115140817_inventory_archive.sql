@@ -74,8 +74,7 @@ ADD CONSTRAINT FK_Cluster_LookupClusterSituation FOREIGN KEY (cluster_situation)
 create table cluster_move (like table_template including all);
 alter table cluster_move
 add column cluster_id uuid not null,
-	add column cluster_name integer not null check (cluster_name >= 1),
-	add column rotation smallint not null check (
+	add column rotation smallint null check (
 		rotation >= 0
 		and rotation <= 399
 	),
@@ -214,7 +213,8 @@ ADD COLUMN harvest_method INTEGER NULL REFERENCES lookup.lookup_harvest_method (
 	-- NutzArt
 ADD COLUMN harvest_reason INTEGER NULL REFERENCES lookup.lookup_harvest_reason (code),
 	-- Nutzursache
-ADD COLUMN municipality INTEGER NULL REFERENCES lookup.lookup_municipality (code);
+ADD COLUMN municipality INTEGER NOT NULL REFERENCES lookup.lookup_municipality (code);
+-- 9780133
 --ALTER TABLE plot ADD CONSTRAINT FK_plot_ModifiedBy
 --    FOREIGN KEY (modified_by)
 --    REFERENCES auth.users (id);
@@ -316,14 +316,13 @@ ADD COLUMN plot_id uuid UNIQUE NOT NULL,
 	-- bwi.koord.b0_ecke_soll
 ADD COLUMN cartesian_x float NOT NULL,
 	-- bwi.koord.b0_ecke_soll.Soll_Hoch
-ADD COLUMN cartesian_y float NOT NULL;
-ADD COLUMN azimuth SMALLINT NOT NULL CHECK (
+ADD COLUMN cartesian_y float NOT NULL,
+	ADD COLUMN azimuth SMALLINT NULL CHECK (
 		azimuth >= 0
 		AND azimuth <= 399
 	),
 	-- bwi.koord.b0_ecke_soll.Soll_Azi
-ADD COLUMN distance INTEGER NOT NULL CHECK (distance > 0);
--- bwi.koord.b0_ecke_soll.Soll_Recht
+ADD COLUMN distance INTEGER NULL CHECK (distance > 0);
 --- remove column intkey due to does not exist in the new data model
 ALTER TABLE plot_coordinates DROP COLUMN IF EXISTS intkey;
 ALTER TABLE plot_coordinates
@@ -447,28 +446,28 @@ ALTER TABLE tree_coordinates DROP COLUMN IF EXISTS intkey;
 CREATE TABLE position (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE position
 ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN position_median extensions.GEOMETRY(Point, 4326) NOT NULL,
+	ADD COLUMN position_median extensions.GEOMETRY(Point, 4326) NULL,
 	ADD COLUMN position_mean extensions.GEOMETRY(Point, 4326) NOT NULL,
-	ADD COLUMN hdop_mean float NOT NULL CHECK (hdop_mean >= 0),
+	ADD COLUMN hdop_mean float NULL CHECK (hdop_mean >= 0),
 	-- HDOP  MEAN OR MEDIAN ???
 ADD COLUMN pdop_mean float NULL CHECK (
 		pdop_mean IS NULL
 		OR pdop_mean >= 0
 	),
 	-- PDOP  MEAN OR MEDIAN ???
-ADD COLUMN satellites_count_mean float NOT NULL CHECK (satellites_count_mean >= 1),
+ADD COLUMN satellites_count_mean float NULL CHECK (satellites_count_mean >= 1),
 	-- NumSat MEAN OR MEDIAN ???
-ADD COLUMN measurement_count smallint NOT NULL CHECK (measurement_count >= 1),
+ADD COLUMN measurement_count smallint NULL CHECK (measurement_count >= 1),
 	-- AnzahlMessungen
 ADD COLUMN rtcm_age float NULL,
 	-- RTCMAlter
-ADD COLUMN start_measurement timestamp NOT NULL,
+ADD COLUMN start_measurement timestamptz NULL,
 	-- UTCStartzeit
-ADD COLUMN stop_measurement timestamp NOT NULL,
+ADD COLUMN stop_measurement timestamptz NULL,
 	-- UTCStopzeit
 ADD COLUMN device_gnss text NULL,
 	-- Geraet (smallint) || ToDo: Ist hier ein freies Eingabefeld nicht sinnvoller ???
-ADD COLUMN quality INTEGER NULL;
+ADD COLUMN quality INTEGER NOT NULL;
 -- GNSS_Qualitaet
 ALTER TABLE position
 ADD CONSTRAINT FK_Position_Plot FOREIGN KEY (plot_id) REFERENCES plot (id) ON DELETE CASCADE;
@@ -484,8 +483,8 @@ ADD COLUMN edge_status INTEGER NULL,
 	--Rk
 ADD COLUMN edge_type INTEGER NULL,
 	--Rart
-ADD COLUMN edge_type_deprecated INTEGER NULL,
-	-- REFERENCES lookup.lookup_edge_type_deprecated (code), --Rart_Alt
+ADD COLUMN edge_type_deprecated INTEGER NULL REFERENCES lookup.lookup_edge_type_deprecated (code),
+	--Rart_Alt
 ADD COLUMN terrain INTEGER NULL,
 	--Rterrain
 ADD COLUMN edges JSONB NOT NULL,
@@ -497,8 +496,8 @@ ALTER TABLE edges
 ADD CONSTRAINT FK_Edges_Plot FOREIGN KEY (plot_id) REFERENCES plot (id) ON DELETE CASCADE;
 ALTER TABLE edges
 ADD CONSTRAINT FK_Edge_LookupEdgeStatus FOREIGN KEY (edge_status) REFERENCES lookup.lookup_edge_status (code);
---ALTER TABLE edges ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type)
---	REFERENCES lookup.lookup_edge_type (code);
+ALTER TABLE edges
+ADD CONSTRAINT FK_Edge_LookupEdgeType FOREIGN KEY (edge_type) REFERENCES lookup.lookup_edge_type (code);
 ALTER TABLE edges
 ADD CONSTRAINT FK_Edge_LookupTerrain FOREIGN KEY (terrain) REFERENCES lookup.lookup_terrain (code);
 ------------------------------------------------- EDGES -------------------------------------------------
@@ -544,7 +543,7 @@ ADD COLUMN coverage INTEGER NOT NULL CHECK (
 		AND coverage <= 100
 	),
 	--Anteil TODO: enum_coverage NEU
-ADD COLUMN regeneration_type INTEGER NULL;
+ADD COLUMN regeneration_type INTEGER NOT NULL;
 --Vart lookup_trees_less_4meter_origin
 ALTER TABLE structure_lt4m
 ADD CONSTRAINT FK_StructureLt4m_Plot FOREIGN KEY (plot_id) REFERENCES plot(id) ON DELETE CASCADE;

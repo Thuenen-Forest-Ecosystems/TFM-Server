@@ -4,7 +4,7 @@
 -- Creates a nested JSON view of plots with all related data (trees, deadwood, etc.)
 -- Optimized using CTEs and subqueries for better performance
 -- ============================================================================
---DROP VIEW IF EXISTS public.plot_nested_json;
+DROP VIEW IF EXISTS public.plot_nested_json;
 CREATE OR REPLACE VIEW public.plot_nested_json AS WITH base_plots AS (
         -- Filter plots first to reduce working set
         SELECT *
@@ -23,6 +23,22 @@ CREATE OR REPLACE VIEW public.plot_nested_json AS WITH base_plots AS (
                 ),
                 '{}'::json
             ) AS plot_coordinates,
+            COALESCE(
+                (
+                    SELECT json_agg(psp)
+                    FROM inventory_archive.plot_support_points psp
+                    WHERE psp.plot_id = p.id
+                ),
+                '[]'::json
+            ) AS plot_support_points,
+            COALESCE(
+                (
+                    SELECT json_agg(srp)
+                    FROM inventory_archive.subplots_relative_position srp
+                    WHERE srp.plot_id = p.id
+                ),
+                '[]'::json
+            ) AS subplots_relative_position,
             COALESCE(
                 (
                     SELECT json_agg(row_to_json(t.*))
@@ -73,14 +89,6 @@ CREATE OR REPLACE VIEW public.plot_nested_json AS WITH base_plots AS (
             ) AS structure_gt4m,
             COALESCE(
                 (
-                    SELECT json_agg(row_to_json(pl.*))
-                    FROM inventory_archive.plot_support_points pl
-                    WHERE pl.plot_id = p.id
-                ),
-                '[]'::json
-            ) AS plot_support_points,
-            COALESCE(
-                (
                     SELECT row_to_json(pos)
                     FROM inventory_archive.position pos
                     WHERE pos.plot_id = p.id
@@ -109,6 +117,7 @@ GRANT SELECT ON public.plot_nested_json TO service_role;
 -- Cached version of plot_nested_json for faster queries
 -- Must be refreshed manually using refresh_plot_nested_json_cached()
 -- ============================================================================
+DROP MATERIALIZED VIEW IF EXISTS public.plot_nested_json_cached;
 CREATE MATERIALIZED VIEW IF NOT EXISTS plot_nested_json_cached AS
 SELECT *
 FROM public.plot_nested_json;
@@ -180,6 +189,98 @@ FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) TO postgres;
 GRANT EXECUTE ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) TO service_role;
 -- ============================================================================
+-- FUNCTION: fill_cluster_data
+-- ============================================================================
+-- Fills the records.cluster field with data from inventory_archive.cluster
+-- based on the cluster_name match. Returns JSONB representation of cluster.
+-- Usage: SELECT public.fill_cluster_data(123);
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.fill_cluster_data(p_cluster_name INTEGER) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public,
+    inventory_archive AS $$
+DECLARE cluster_data jsonb;
+BEGIN -- Fetch cluster data from inventory_archive.cluster
+SELECT row_to_json(c)::jsonb INTO cluster_data
+FROM inventory_archive.cluster c
+WHERE c.cluster_name = p_cluster_name;
+RETURN cluster_data;
+EXCEPTION
+WHEN OTHERS THEN RAISE NOTICE 'Error fetching cluster data for cluster_name %: %',
+p_cluster_name,
+SQLERRM;
+RETURN NULL;
+END;
+$$;
+-- Permissions for fill_cluster_data
+REVOKE ALL ON FUNCTION public.fill_cluster_data(INTEGER)
+FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fill_cluster_data(INTEGER)
+FROM anon;
+REVOKE ALL ON FUNCTION public.fill_cluster_data(INTEGER)
+FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.fill_cluster_data(INTEGER) TO postgres;
+GRANT EXECUTE ON FUNCTION public.fill_cluster_data(INTEGER) TO service_role;
+-- ============================================================================
+-- FUNCTION: update_records_cluster
+-- ============================================================================
+-- Updates the cluster field in records table for all records or a specific one
+-- Processes in batches to avoid performance issues
+-- Usage: SELECT public.update_records_cluster(); -- Updates all
+--        SELECT public.update_records_cluster(1000); -- Batch size 1000
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.update_records_cluster(p_batch_size INTEGER DEFAULT 500) RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public,
+    inventory_archive AS $$
+DECLARE batch_count INTEGER := 0;
+total_processed INTEGER := 0;
+BEGIN RAISE NOTICE 'Starting bulk update of records.cluster field...';
+LOOP WITH cluster_batch AS (
+    SELECT r.id,
+        c.cluster_name
+    FROM public.records r
+        LEFT JOIN inventory_archive.cluster c ON c.cluster_name = r.cluster_name
+    WHERE r.cluster IS NULL
+        OR r.cluster = '{}'::jsonb
+    LIMIT p_batch_size
+)
+UPDATE public.records r
+SET cluster = (
+        SELECT row_to_json(c)::jsonb
+        FROM inventory_archive.cluster c
+        WHERE c.cluster_name = cb.cluster_name
+    ),
+    updated_at = NOW()
+FROM cluster_batch cb
+WHERE r.id = cb.id;
+GET DIAGNOSTICS batch_count = ROW_COUNT;
+IF batch_count = 0 THEN EXIT;
+END IF;
+total_processed := total_processed + batch_count;
+RAISE NOTICE 'Processed % records in this batch (total: %)...',
+batch_count,
+total_processed;
+-- Small delay to avoid overwhelming the database
+PERFORM pg_sleep(0.1);
+END LOOP;
+RAISE NOTICE 'Bulk update completed: % records processed',
+total_processed;
+RETURN total_processed;
+EXCEPTION
+WHEN OTHERS THEN RAISE NOTICE 'Error in bulk update: %',
+SQLERRM;
+RAISE;
+END;
+$$;
+-- Permissions for update_records_cluster
+REVOKE ALL ON FUNCTION public.update_records_cluster(INTEGER)
+FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.update_records_cluster(INTEGER)
+FROM anon;
+REVOKE ALL ON FUNCTION public.update_records_cluster(INTEGER)
+FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.update_records_cluster(INTEGER) TO postgres;
+GRANT EXECUTE ON FUNCTION public.update_records_cluster(INTEGER) TO service_role;
+-- ============================================================================
 -- FUNCTION: fill_previous_properties (TRIGGER FUNCTION)
 -- ============================================================================
 -- Automatically fills previous_properties field with plot data when a record
@@ -190,9 +291,21 @@ SET search_path = public,
     inventory_archive AS $$
 DECLARE plot_data jsonb;
 position_data jsonb;
+cluster_data jsonb;
 BEGIN NEW.message := COALESCE(NEW.message, '') || 'Trigger fired for ' || TG_OP || ' operation';
 NEW.previous_properties := '{}'::jsonb;
 NEW.previous_position_data := '{}'::jsonb;
+-- Fill cluster data if cluster_name is present
+IF NEW.cluster_name IS NOT NULL THEN BEGIN
+SELECT public.fill_cluster_data(NEW.cluster_name) INTO cluster_data;
+IF cluster_data IS NOT NULL THEN NEW.cluster := cluster_data;
+END IF;
+EXCEPTION
+WHEN OTHERS THEN RAISE NOTICE 'Error fetching cluster data for cluster_name %: %',
+NEW.cluster_name,
+SQLERRM;
+END;
+END IF;
 IF NEW.plot_id IS NOT NULL THEN BEGIN -- Use the function instead of direct view query for better caching
 SELECT public.get_plot_nested_json_by_id(NEW.plot_id, NEW.cluster_name, NEW.plot_name) INTO plot_data;
 IF plot_data IS NOT NULL THEN NEW.previous_properties := plot_data;
@@ -211,13 +324,13 @@ SELECT json_object_agg(
         p.interval_name,
         json_build_object(
             'longitude_median',
-            ST_X(pos.position_median),
+            extensions.ST_X(pos.position_median),
             'latitude_median',
-            ST_Y(pos.position_median),
+            extensions.ST_Y(pos.position_median),
             'longitude_mean',
-            ST_X(pos.position_mean),
+            extensions.ST_X(pos.position_mean),
             'latitude_mean',
-            ST_Y(pos.position_mean),
+            extensions.ST_Y(pos.position_mean),
             'hdop_mean',
             pos.hdop_mean,
             'pdop_mean',
@@ -257,14 +370,15 @@ $$;
 -- ============================================================================
 -- TRIGGER: before_record_insert_or_update
 -- ============================================================================
--- Fires before INSERT or UPDATE to populate previous_properties field
+-- Fires before INSERT or UPDATE to populate previous_properties and cluster fields
 -- ============================================================================
 DROP TRIGGER IF EXISTS before_record_insert_or_update ON public.records;
 CREATE TRIGGER before_record_insert_or_update BEFORE
 INSERT
     OR
 UPDATE OF previous_properties_updated_at,
-    plot_id ON public.records FOR EACH ROW EXECUTE FUNCTION fill_previous_properties();
+    plot_id,
+    cluster_name ON public.records FOR EACH ROW EXECUTE FUNCTION fill_previous_properties();
 -- ============================================================================
 -- FUNCTION: handle_record_changes (TRIGGER FUNCTION)
 -- ============================================================================
@@ -836,97 +950,7 @@ CREATE OR REPLACE FUNCTION public.set_preliminary() RETURNS VOID LANGUAGE plpgsq
 ALTER TABLE public.records DISABLE TRIGGER trigger_validation_version_change;
 -- Update records.properties with values from inventory_archive.plot
 UPDATE public.records r
-SET properties = jsonb_build_object(
-        'ffh',
-        p.ffh,
-        'coast',
-        p.coast,
-        'sandy',
-        p.sandy,
-        'biotope',
-        p.biotope,
-        'long_time_forest',
-        p.long_time_forest,
-        'land_use',
-        p.land_use,
-        'plot_name',
-        p.plot_name,
-        'biosphaere',
-        p.biosphaere,
-        'natur_park',
-        p.natur_park,
-        'cluster_name',
-        p.cluster_name,
-        'terrain_form',
-        p.terrain_form,
-        'accessibility',
-        p.accessibility,
-        'federal_state',
-        p.federal_state,
-        'forest_office',
-        p.forest_office,
-        'forest_status',
-        p.forest_status,
-        'interval_name',
-        p.interval_name,
-        'marker_status',
-        p.marker_status,
-        'national_park',
-        p.national_park,
-        'property_type',
-        p.property_type,
-        'terrain_slope',
-        p.terrain_slope,
-        'marker_azimuth',
-        p.marker_azimuth,
-        'marker_profile',
-        p.marker_profile,
-        'elevation_level',
-        p.elevation_level,
-        'ffh_forest_type',
-        p.ffh_forest_type,
-        'growth_district',
-        p.growth_district,
-        'marker_distance',
-        p.marker_distance,
-        'forest_community',
-        p.forest_community,
-        'sampling_stratum',
-        p.sampling_stratum,
-        'terrain_exposure',
-        p.terrain_exposure,
-        'natur_schutzgebiet',
-        p.natur_schutzgebiet,
-        'vogel_schutzgebiet',
-        p.vogel_schutzgebiet,
-        'property_size_class',
-        p.property_size_class,
-        'protected_landscape',
-        p.protected_landscape,
-        'forest_community_field',
-        p.forest_community_field,
-        'biogeographische_region',
-        p.biogeographische_region,
-        'harvest_restriction_nature_reserve',
-        p.harvest_restriction_nature_reserve,
-        'harvest_restriction_protection_forest',
-        p.harvest_restriction_protection_forest,
-        'harvest_restriction_recreational_forest',
-        p.harvest_restriction_recreational_forest,
-        'harvest_restriction_scattered',
-        p.harvest_restriction_scattered,
-        'harvest_restriction_fragmented',
-        p.harvest_restriction_fragmented,
-        'harvest_restriction_insufficient_access',
-        p.harvest_restriction_insufficient_access,
-        'harvest_restriction_wetness',
-        p.harvest_restriction_wetness,
-        'harvest_restriction_low_yield',
-        p.harvest_restriction_low_yield,
-        'harvest_restriction_private_conservation',
-        p.harvest_restriction_private_conservation,
-        'harvest_restriction_other_internalcause',
-        p.harvest_restriction_other_internalcause,
+SET properties = (to_jsonb(p) - 'id' - 'intkey' - 'cluster_id') || jsonb_build_object(
         'tree',
         COALESCE(
             (
@@ -936,7 +960,11 @@ SET properties = jsonb_build_object(
                             x.acquisition_date,
                             'interval_name',
                             x.interval_name
-                        ) || (to_jsonb(x.t) - 'plot_id')
+                        ) || jsonb_set(
+                            to_jsonb(x.t) - 'plot_id',
+                            '{dbh}',
+                            'null'::jsonb
+                        )
                     )
                 FROM (
                         SELECT pl.acquisition_date,
