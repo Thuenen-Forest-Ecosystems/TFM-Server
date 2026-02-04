@@ -299,7 +299,167 @@ VALUES (
         ARRAY ['ci2027'],
         5
     ) ON CONFLICT (code) DO NOTHING;
--- Ensure grants for all lookup tables including support_point_type
-GRANT ALL ON ALL TABLES IN SCHEMA lookup TO anon,
-    authenticated,
-    service_role;
+;
+-- NEW Table: lookup_cover_percentage
+CREATE TABLE IF NOT EXISTS lookup.lookup_cover_percentage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_cover_percentage (code, name_de, name_en, interval, sort)
+VALUES (
+        0,
+        '< 10 %',
+        '< 10 %',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        1
+    ),
+    (
+        1,
+        'ca. 10 % (10 % bis 14 %)',
+        'ca. 10 % (10 % to 14 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        2
+    ),
+    (
+        2,
+        'ca. 20 % (15 % bis 24 %)',
+        'ca. 20 % (15 % to 24 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        3
+    ),
+    (
+        3,
+        'ca. 30 % (25 % bis 34 %)',
+        'ca. 30 % (25 % to 34 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        4
+    ),
+    (
+        4,
+        'ca. 40 % (35 % bis 44 %)',
+        'ca. 40 % (35 % to 44 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        5
+    ),
+    (
+        5,
+        'ca. 50 % (45 % bis 54 %)',
+        'ca. 50 % (45 % to 54 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        6
+    ),
+    (
+        6,
+        'ca. 60 % (55 % bis 64 %)',
+        'ca. 60 % (55 % to 64 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        7
+    ),
+    (
+        7,
+        'ca. 70 % (65 % bis 74 %)',
+        'ca. 70 % (65 % to 74 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        8
+    ),
+    (
+        8,
+        'ca. 80 % (75 % bis 84 %)',
+        'ca. 80 % (75 % to 84 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        9
+    ),
+    (
+        9,
+        'ca. 90 % (85 % bis 94 %)',
+        'ca. 90 % (85 % to 94 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        10
+    ),
+    (
+        10,
+        'ca. 100 % (95 % bis 100 %)',
+        'ca. 100 % (95 % to 100 %)',
+        ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027'],
+        11
+    ) ON CONFLICT (code) DO
+UPDATE
+SET name_de = EXCLUDED.name_de,
+    name_en = EXCLUDED.name_en,
+    interval = EXCLUDED.interval,
+    sort = EXCLUDED.sort;
+    
+CREATE TABLE IF NOT EXISTS lookup.lookup_gnss_quality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_gnss_quality (code, name_de, name_en, interval, sort)
+VALUES (
+        0,
+        'Fix nicht gültig',
+        'Fix not valid',
+        ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
+        9
+    ),
+    (
+        1,
+        'GNSS (1) - Viertbeste Qualität',
+        'GPS fix',
+        ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
+        4
+    ),
+    (
+        2,
+        'DGNSS (2) - Drittbeste Qualität',
+        'Differential GPS fix (DGNSS), SBAS, OmniSTAR VBS, Beacon, RTX in GVBS mode',
+        ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
+        3
+    )
+    (
+        4,
+        'RTK fixed (4) - Beste Qualität',
+        'RTK Fixed, xFill',
+        ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
+        1
+    ),
+    (
+        5,
+        'RTK floating (5) - Zweitbeste Qualität',
+        'RTK Float, OmniSTAR XP/HP, Location RTK, RTX',
+        ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
+        2
+    ),
+    (
+        6,
+        'Koppelnavigation',
+        'INS Dead reckoning',
+        ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
+        10
+    ),
+    (
+        9,
+        'GNSS (9) - Viertbeste Qualität',
+        'GNSS - fourth best quality',
+        ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
+        5
+    ),
+    (
+        91,
+        'WGS84-Koordinatennachlieferung mit nachträglicher Umrechnung von WGS84 zu Gauß-Krüger',
+        'External coordinates with transformation from WGS84 to Gauß-Krüger',
+        ARRAY ['bwi2012', 'bwi2022'],
+        7
+    ),
+    (
+        92,
+        'Gauß-Krüger-Koordinatennachlieferung mit nachträglicher Umrechnung von Gauß-Krüger zu WGS84',
+        'External coordinates with transformation from Gauß-Krüger to WGS84',
+        ARRAY ['bwi2012', 'bwi2022'],
+        8
+    ),
+    (
+        93,
+        'Koordinaten aus Postprocessing. Qualität unbekannt',
+        'External coordinates from post-processing, unknown quality',
+        ARRAY ['bwi2012', 'bwi2022'],
+        6
+    ) ON CONFLICT (code) DO
+UPDATE
+SET name_de = EXCLUDED.name_de,
+    name_en = EXCLUDED.name_en,
+    interval = EXCLUDED.interval,
+    sort = EXCLUDED.sort;

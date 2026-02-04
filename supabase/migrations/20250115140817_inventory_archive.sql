@@ -168,7 +168,7 @@ ADD COLUMN trees_greater_4meter_basal_area_factor INTEGER NULL,
 	-- schigt4_zf lookup_basal_area_factor
 ADD COLUMN trees_less_4meter_coverage SMALLINT NULL CHECK (
 		trees_less_4meter_coverage >= 0
-		AND trees_less_4meter_coverage <= 100
+		AND trees_less_4meter_coverage <= 10
 	),
 	-- schile4_bedg 
 ADD COLUMN trees_less_4meter_layer INTEGER NULL,
@@ -302,7 +302,9 @@ ADD CONSTRAINT FK_Plot_LookupNatureSchutzgebiet FOREIGN KEY (natur_schutzgebiet)
 ALTER TABLE plot
 ADD CONSTRAINT FK_Plot_LookupTreesLess4meterCountFactor FOREIGN KEY (trees_greater_4meter_basal_area_factor) REFERENCES lookup.lookup_basal_area_factor (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
 ALTER TABLE plot
-ADD CONSTRAINT FK_Plot_LookupTreesLess4meterLayer FOREIGN KEY (trees_less_4meter_layer) REFERENCES lookup.lookup_trees_less_4meter_layer (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
+ADD CONSTRAINT FK_Plot_LookupTreesLess4meterLayer FOREIGN KEY (trees_less_4meter_layer) REFERENCES lookup.lookup_layer (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
+ALTER TABLE plot
+ADD CONSTRAINT FK_Plot_LookupTreesLess4meterCoverage FOREIGN KEY (trees_less_4meter_coverage) REFERENCES lookup.lookup_cover_percentage (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
 -- usage_type
 --ALTER TABLE plot ADD CONSTRAINT FK_Plot_LookupUsageType FOREIGN KEY (usage_type)
 --	REFERENCES lookup.lookup_usage_type (code) MATCH SIMPLE
@@ -539,8 +541,8 @@ ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN tree_species INTEGER NULL,
 	--Ba
 ADD COLUMN coverage INTEGER NOT NULL CHECK (
-		coverage >= 1
-		AND coverage <= 100
+		coverage >= 0
+		AND coverage <= 10
 	),
 	--Anteil TODO: enum_coverage NEU
 ADD COLUMN regeneration_type INTEGER NOT NULL;
@@ -551,6 +553,8 @@ ALTER TABLE structure_lt4m
 ADD CONSTRAINT FK_StructureLt4m_LookupTreeSpecies FOREIGN KEY (tree_species) REFERENCES lookup.lookup_tree_species (code);
 ALTER TABLE structure_lt4m
 ADD CONSTRAINT FK_StructureLt4m_LookupLess4Origin FOREIGN KEY (regeneration_type) REFERENCES lookup.lookup_trees_less_4meter_origin (code);
+ALTER TABLE structure_lt4m
+ADD CONSTRAINT FK_StructureLt4m_LookupLess4Coverage FOREIGN KEY (coverage) REFERENCES lookup.lookup_cover_percentage (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
 ------------------------------------------------- STRUCTURE GREATER THAN 8 METER -------------------------------------------------
 CREATE TABLE structure_gt4m (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE structure_gt4m
