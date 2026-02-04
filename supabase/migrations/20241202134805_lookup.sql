@@ -91,8 +91,8 @@ ALTER TABLE lookup_tree_species
 ADD COLUMN species text NULL;
 CREATE TABLE IF NOT EXISTS lookup_tree_status (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_basal_area_factor (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_mirrored (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+--CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_trees_greater_4meter_mirrored (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_origin (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_harvest_restriction (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 --CREATE TABLE IF NOT EXISTS lookup_harvest_restriction_source (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -110,7 +110,7 @@ CREATE TABLE lookup_biosphaere (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 ALTER TABLE lookup_biosphaere
 ADD COLUMN bfn_code varchar(20) NULL;
 CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
-CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+--CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_district (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_municipality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 ALTER TABLE lookup_municipality
@@ -315,14 +315,15 @@ VALUES (0, '< 10 %', '< 10 %', ARRAY ['bwi2002', 'bwi2012', 'bwi2022', 'ci2027']
 
 CREATE TABLE IF NOT EXISTS lookup_gnss_quality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_gnss_quality (code, name_de, name_en, interval, sort) 
-VALUES (0, 'Fix nicht gültig', 'Fix not valid', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 9),
-  (1, 'GNSS (1) - Viertbeste Qualität', 'GPS fix', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 4), 
-  (2, 'DGNSS (2) - Drittbeste Qualität', 'Differential GPS fix (DGNSS), SBAS, OmniSTAR VBS, Beacon, RTX in GVBS mode', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 3),
-  (4, 'RTK fixed (4) - Beste Qualität', 'RTK Fixed, xFill', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 1), 
-  (5, 'RTK floating (5) - Zweitbeste Qualität', 'RTK Float, OmniSTAR XP/HP, Location RTK, RTX', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 2), 
-  (6, 'Koppelnavigation', 'INS Dead reckoning', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 10),
-  (9, 'GNSS (9) - Viertbeste Qualität', 'GNSS - fourth best quality', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 5),
-  (91, 'WGS84-Koordinatennachlieferung mit nachträglicher Umrechnung von WGS84 zu Gauß-Krüger', 'External coordinates with transformation from WGS84 to Gauß-Krüger', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 7),
-  (92, 'Gauß-Krüger-Koordinatennachlieferung mit nachträglicher Umrechnung von Gauß-Krüger zu WGS84', 'External coordinates with transformation from Gauß-Krüger to WGS84', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 8),
-  (93, 'Koordinaten aus Postprocessing. Qualität unbekannt', 'External coordinates from post-processing, unknown quality', ARRAY ['bwi2012', 'bwi2022', 'ci2027'], 6);
+VALUES (0, 'Fix nicht gültig', 'Fix not valid', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 9),
+  (1, 'GNSS (1) - Viertbeste Qualität', 'GPS fix', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 4), 
+  (2, 'DGNSS (2) - Drittbeste Qualität', 'Differential GPS fix (DGNSS), SBAS, OmniSTAR VBS, Beacon, RTX in GVBS mode', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 3),
+  (3, 'Nicht anwendbar', 'Not applicable', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 10),
+  (4, 'RTK fixed (4) - Beste Qualität', 'RTK Fixed, xFill', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 1), 
+  (5, 'RTK floating (5) - Zweitbeste Qualität', 'RTK Float, OmniSTAR XP/HP, Location RTK, RTX', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 2), 
+  (6, 'Koppelnavigation', 'INS Dead reckoning', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 10),
+  (9, 'GNSS (9) - Viertbeste Qualität', 'GNSS - fourth best quality', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 5),
+  (91, 'WGS84-Koordinatennachlieferung mit nachträglicher Umrechnung von WGS84 zu Gauß-Krüger', 'External coordinates with transformation from WGS84 to Gauß-Krüger', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 7),
+  (92, 'Gauß-Krüger-Koordinatennachlieferung mit nachträglicher Umrechnung von Gauß-Krüger zu WGS84', 'External coordinates with transformation from Gauß-Krüger to WGS84', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 8),
+  (93, 'Koordinaten aus Postprocessing. Qualität unbekannt', 'External coordinates from post-processing, unknown quality', ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'], 6);
 
