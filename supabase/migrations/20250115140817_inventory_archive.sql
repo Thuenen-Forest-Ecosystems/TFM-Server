@@ -164,7 +164,7 @@ ADD COLUMN stand_layer_regeneration INTEGER NULL,
 ADD COLUMN fence_regeneration BOOLEAN NOT NULL DEFAULT FALSE,
 	-- b0_zaun
 ADD COLUMN trees_greater_4meter_mirrored INTEGER NULL,
-	-- schigt4_sp (gespiegelt) lookup_trees_less_4meter_mirrored
+	-- schigt4_sp (gespiegelt) lookup_trees_greater_4meter_mirrored
 ADD COLUMN trees_greater_4meter_basal_area_factor INTEGER NULL,
 	-- schigt4_zf lookup_basal_area_factor
 ADD COLUMN trees_less_4meter_coverage SMALLINT NULL CHECK (
@@ -284,7 +284,7 @@ ADD CONSTRAINT FK_Plot_LookupStandDevPhase FOREIGN KEY (stand_development_phase)
 ALTER TABLE plot
 ADD CONSTRAINT FK_Plot_LookupStandLayer FOREIGN KEY (stand_layer_regeneration) REFERENCES lookup.lookup_stand_layer (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
 ALTER TABLE plot
-ADD CONSTRAINT FK_Plot_LookupTreesLess4meterMirrored FOREIGN KEY (trees_greater_4meter_mirrored) REFERENCES lookup.lookup_trees_less_4meter_mirrored (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
+ADD CONSTRAINT FK_Plot_LookupTreesGreater4meterMirrored FOREIGN KEY (trees_greater_4meter_mirrored) REFERENCES lookup.lookup_trees_greater_4meter_mirrored (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
 ALTER TABLE plot
 ADD CONSTRAINT FK_Plot_LookupBiosgeographischeRegion FOREIGN KEY (biogeographische_region) REFERENCES lookup.lookup_biogeographische_region (code) MATCH SIMPLE ON UPDATE NO ACTION ON DELETE NO ACTION;
 ALTER TABLE plot
