@@ -129,7 +129,12 @@ VALUES ('bwi1987', 'BWI 1987', 'BWI 1987', 1),
     ('ci2012', 'CI 2012', 'CI 2012', 6),
     ('ci2017', 'CI 2017', 'CI 2017', 7),
     ('bwi2022', 'BWI 2022', 'BWI 2022', 8),
-    ('ci2027', 'CI 2027', 'CI 2027', 9) ON CONFLICT (code) DO NOTHING;
+    ('ci2027', 'CI 2027', 'CI 2027', 9) ON CONFLICT (code) DO
+UPDATE
+SET name_de = EXCLUDED.name_de,
+    name_en = EXCLUDED.name_en,
+    interval = EXCLUDED.interval,
+    sort = EXCLUDED.sort;
 CREATE TABLE IF NOT EXISTS lookup_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 -- 
 CREATE TABLE IF NOT EXISTS lookup_edge_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -210,7 +215,12 @@ VALUES (
         'Boundary of a previous inventory that can no longer be found or is no longer valid at the current survey',
         ARRAY ['ci2027'],
         99
-    ) ON CONFLICT (code) DO NOTHING;
+    ) ON CONFLICT (code) DO
+UPDATE
+SET name_de = EXCLUDED.name_de,
+    name_en = EXCLUDED.name_en,
+    interval = EXCLUDED.interval,
+    sort = EXCLUDED.sort;
 CREATE TABLE IF NOT EXISTS lookup_edge_type_deprecated (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 --INSERT INTO lookup.lookup_edge_type_deprecated (code, name_de, name_en, interval, sort)
 --VALUES
@@ -261,7 +271,12 @@ VALUES (
         'None of the cases mentioned',
         ARRAY ['bwi2027'],
         9
-    ) ON CONFLICT (code) DO NOTHING;
+    ) ON CONFLICT (code) DO
+UPDATE
+SET name_de = EXCLUDED.name_de,
+    name_en = EXCLUDED.name_en,
+    interval = EXCLUDED.interval,
+    sort = EXCLUDED.sort;
 CREATE TABLE IF NOT EXISTS lookup.lookup_support_point_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_support_point_type (code, name_de, name_en, interval, sort)
 VALUES (
@@ -298,8 +313,12 @@ VALUES (
         'Supporting point GNSS measurement',
         ARRAY ['ci2027'],
         5
-    ) ON CONFLICT (code) DO NOTHING;
-;
+    ) ON CONFLICT (code) DO
+UPDATE
+SET name_de = EXCLUDED.name_de,
+    name_en = EXCLUDED.name_en,
+    interval = EXCLUDED.interval,
+    sort = EXCLUDED.sort;
 -- NEW Table: lookup_cover_percentage
 CREATE TABLE IF NOT EXISTS lookup.lookup_cover_percentage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_cover_percentage (code, name_de, name_en, interval, sort)
@@ -385,7 +404,6 @@ SET name_de = EXCLUDED.name_de,
     name_en = EXCLUDED.name_en,
     interval = EXCLUDED.interval,
     sort = EXCLUDED.sort;
-    
 CREATE TABLE IF NOT EXISTS lookup.lookup_gnss_quality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_gnss_quality (code, name_de, name_en, interval, sort)
 VALUES (
@@ -408,8 +426,7 @@ VALUES (
         'Differential GPS fix (DGNSS), SBAS, OmniSTAR VBS, Beacon, RTX in GVBS mode',
         ARRAY ['bwi2012', 'bwi2022', 'ci2027'],
         3
-    )
-    (
+    ) (
         4,
         'RTK fixed (4) - Beste Qualität',
         'RTK Fixed, xFill',

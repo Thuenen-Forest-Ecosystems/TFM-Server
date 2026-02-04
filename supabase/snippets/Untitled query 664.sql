@@ -1,25 +1,33 @@
-SELECT 
-    c.cluster_name,
-    p.plot_name,
-    c.is_training,
-    t.tree_number,
-    t.tree_species,
-    ts.name_de as tree_species_name,
-    t.dbh,
-    t.dbh_height,
-    t.tree_height,
-    t.azimuth,
-    t.distance,
-    t.tree_status
-FROM 
-    inventory_archive.cluster c
-INNER JOIN 
-    inventory_archive.plot p ON p.cluster_id = c.id
-INNER JOIN 
-    inventory_archive.tree t ON t.plot_id = p.id
-LEFT JOIN 
-    lookup.lookup_tree_species ts ON ts.code = t.tree_species
-WHERE 
-    c.is_training = TRUE
-ORDER BY 
-    c.cluster_name, p.plot_name, t.tree_number;
+CREATE TEMP TABLE null_only_columns (
+    table_name TEXT,
+    column_name TEXT
+);
+
+DO $$
+DECLARE
+    rec RECORD;
+    has_non_null BOOLEAN;
+BEGIN
+    FOR rec IN 
+        SELECT c.table_name, c.column_name
+        FROM information_schema.columns c
+        INNER JOIN information_schema.tables t 
+            ON c.table_name = t.table_name 
+            AND c.table_schema = t.table_schema
+        WHERE c.table_schema = 'inventory_archive'
+          AND t.table_type = 'BASE TABLE'
+          AND c.table_name NOT LIKE '%TEMPLATE%'
+    LOOP
+        EXECUTE format(
+            'SELECT EXISTS(SELECT 1 FROM inventory_archive.%I WHERE %I IS NOT NULL LIMIT 1)',
+            rec.table_name, rec.column_name
+        ) INTO has_non_null;
+        
+        IF NOT has_non_null THEN
+            INSERT INTO null_only_columns VALUES (rec.table_name, rec.column_name);
+        END IF;
+    END LOOP;
+END $$;
+
+SELECT * FROM null_only_columns ORDER BY table_name, column_name;
+--DROP TABLE null_only_columns;
