@@ -347,6 +347,18 @@ ALTER TABLE plot_support_points
 ADD CONSTRAINT FK_PlotSupport_Plot FOREIGN KEY (plot_id) REFERENCES plot (id) MATCH SIMPLE ON DELETE CASCADE;
 ALTER TABLE plot_support_points
 ADD CONSTRAINT FK_support_points_type FOREIGN KEY (point_type) REFERENCES lookup.lookup_support_point_type (code);
+------------------------------------------------- NOTES -------------------------------------------------
+CREATE TABLE notes (LIKE table_TEMPLATE INCLUDING ALL);
+ALTER TABLE notes
+	ADD COLUMN plot_id uuid NOT NULL,
+	ADD COLUMN time_stamp DATE NOT NULL,
+	ADD COLUMN user_name TEXT NOT NULL,
+	ADD COLUMN object_type SMALLINT NOT NULL,
+	ADD COLUMN note TEXT NOT NULL;
+ALTER TABLE notes
+ADD CONSTRAINT FK_PlotSupport_Plot FOREIGN KEY (plot_id) REFERENCES plot (id) MATCH SIMPLE ON DELETE CASCADE;
+ALTER TABLE notes
+ADD CONSTRAINT FK_object_type FOREIGN KEY (object_type) REFERENCES lookup.lookup_object_type (code);
 ------------------------------------------------- TREE -------------------------------------------------
 CREATE TABLE tree (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE tree
