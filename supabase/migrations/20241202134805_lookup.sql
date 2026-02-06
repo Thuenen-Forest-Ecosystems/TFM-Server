@@ -488,3 +488,112 @@ SET name_de = EXCLUDED.name_de,
     name_en = EXCLUDED.name_en,
     interval = EXCLUDED.interval,
     sort = EXCLUDED.sort;
+CREATE TABLE IF NOT EXISTS lookup_object_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_object_type (code, name_de, name_en, interval, sort)
+VALUES (0, 
+        'Aufnahmeland', 
+        'state responsible for inventory',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        1
+    ),
+    (
+        1, 
+        'Trakt insgesamt', 
+        'cluster total',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        2
+    ),
+        (2, 
+        'Traktecke insgesamt', 
+        'plot total',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        3
+    ),
+        (3, 
+        'Forsteinrichtung', 
+        'forest management',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        4
+    ),
+    (
+        9, 
+        'WZP/ZF4-Probebaum (WZP4)', 
+        'ACS/BAF4-sample tree (WZP4)', 
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        5
+    ),
+    (
+        11, 
+        'Wald- oder Bestandesrand (RAN)', 
+        'forest or stand structure (RAN)',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        6
+    ),
+    (
+        12, 
+        'Bäume der Baumgröße 1 bis 6 (früher P175, jetzt JUNG)', 
+        'trees of tree height 1 to 6 (earlier P175)',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        7
+    ),
+    (
+        13, 
+        'Bäume der Baumgröße 0 (früher P100, jetzt JUNG)', 
+        'trees of tree height 0 (earlier P100)', 
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        8
+    ),
+    (
+        14, 
+        'WZP/ZF1oder2-Probebaum (größer als 4 m, EBS)', 
+        'ACS/BAF1 or 2-sample tree (higher than 4 m, EBS)', 
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        9
+    ),
+    (
+        15,
+        '10m-Probebaum (kleiner gleich 4 m, EBS)', 
+        '10m sample tree (<= 4 m, EBS)', 
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        10
+    ),
+    (
+        17, 
+        'Totholzstück (TOT)', 
+        'piece of deadwood (DEAD)', 
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        11
+    ),
+    (
+        18, 
+        'Weg (WEG)', 
+        'path (WEG)', 
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        12
+    ),
+    (
+        21, 
+        'forstlich bedeutsame Art (FBA)', 
+        'important forest species',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        13
+    ),
+    (
+        22, 
+        'Vegetationsart (EWLT)', 
+        'vegetation type (EWLT)', 
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        14
+    ),
+    (
+        29, 
+        'Bodenerhebung (BOD)', 
+        'soil survey',
+        ARRAY ['bwi2012', 'ci2017', 'bwi2022', 'ci2027'],
+        15
+    ) ON CONFLICT (code) DO
+UPDATE
+SET name_de = EXCLUDED.name_de,
+    name_en = EXCLUDED.name_en,
+    interval = EXCLUDED.interval,
+    sort = EXCLUDED.sort;
