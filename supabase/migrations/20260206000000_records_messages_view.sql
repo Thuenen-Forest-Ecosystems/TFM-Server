@@ -7,6 +7,7 @@ CREATE TABLE public.records_messages (
     note text NULL,
     user_id uuid NULL,
     records_id uuid NOT NULL,
+    object_name text NULL,
     -- Denormalized access control fields from records table
     responsible_administration uuid NULL,
     responsible_state uuid NULL,
@@ -14,7 +15,8 @@ CREATE TABLE public.records_messages (
     responsible_troop uuid NULL,
     CONSTRAINT records_messages_pkey PRIMARY KEY (id),
     CONSTRAINT records_messages_id_key UNIQUE (id),
-    CONSTRAINT records_messages_records_id_fkey FOREIGN KEY (records_id) REFERENCES records (id) ON UPDATE CASCADE ON DELETE CASCADE
+    CONSTRAINT records_messages_records_id_fkey FOREIGN KEY (records_id) REFERENCES records (id) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT object_name_id_fkey FOREIGN KEY (object_name) REFERENCES lookup.lookup_object_type (code)
 ) TABLESPACE pg_default;
 -- Grant appropriate permissions
 GRANT SELECT,
