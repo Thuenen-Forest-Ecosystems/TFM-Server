@@ -35,12 +35,18 @@ bucket_definitions:
       #     responsible_state = bucket.organization_id OR
       #     responsible_provider = bucket.organization_id
       - SELECT * FROM "public"."troop" WHERE organization_id = bucket.organization_id
+      - SELECT * FROM "public"."records_messages"
+        WHERE responsible_administration = bucket.organization_id
+        OR responsible_state = bucket.organization_id
+        OR responsible_provider = bucket.organization_id
 
   troop_records:
     parameters:
       - SELECT troop_id FROM "public"."troop_members" WHERE user_id = request.user_id()
     data:
       - SELECT * FROM "public"."records" WHERE responsible_troop = bucket.troop_id
+      - SELECT * FROM "public"."records_messages"
+        WHERE responsible_troop = bucket.troop_id
 
   #organizations:
   #  parameters:

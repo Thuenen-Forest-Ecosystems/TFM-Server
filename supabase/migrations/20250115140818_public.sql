@@ -275,6 +275,23 @@ UPDATE ON records FOR EACH ROW EXECUTE PROCEDURE extensions.moddatetime (updated
 COMMENT ON TABLE "records" IS 'Forest inventory plot data collection records';
 COMMENT ON COLUMN "records"."current_troop_members" IS 'Array of user IDs currently assigned to work on this record. All IDs must exist in auth.users table.';
 -- ============================================================================
+-- FUNCTION: update_updated_by_column (TRIGGER FUNCTION)
+-- ============================================================================
+-- Automatically updates updated_by column with current user on record updates
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.update_updated_by_column() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = '' AS $$ BEGIN NEW.updated_by = auth.uid();
+RETURN NEW;
+END;
+$$;
+-- ============================================================================
+-- TRIGGER: handle_updated_by
+-- ============================================================================
+-- Auto-updates updated_by column on record modifications
+-- ============================================================================
+CREATE TRIGGER handle_updated_by BEFORE
+UPDATE ON records FOR EACH ROW EXECUTE FUNCTION update_updated_by_column();
+-- ============================================================================
 -- INDEXES: records
 -- ============================================================================
 -- Performance optimization for common query patterns

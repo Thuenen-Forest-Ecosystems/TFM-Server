@@ -950,7 +950,9 @@ CREATE OR REPLACE FUNCTION public.set_preliminary() RETURNS VOID LANGUAGE plpgsq
 ALTER TABLE public.records DISABLE TRIGGER trigger_validation_version_change;
 -- Update records.properties with values from inventory_archive.plot
 UPDATE public.records r
-SET properties = (to_jsonb(p) - 'id' - 'intkey' - 'cluster_id') || jsonb_build_object(
+SET properties = (
+        to_jsonb(p) - 'id' - 'intkey' - 'cluster_id' - 'trees_less_4meter_coverage' - 'trees_less_4meter_layer' - 'stand_structure' - 'stand_age' - 'stand_development_phase' - 'stand_layer_regeneration' - 'fence_regeneration' - 'trees_greater_4meter_mirrored' - 'trees_greater_4meter_basal_area_factor'
+    ) || jsonb_build_object(
         'tree',
         COALESCE(
             (
