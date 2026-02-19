@@ -21,3 +21,5 @@ supabase/seeds/intern
 .utils
 
 .certificates
+
+rscripts/.data
