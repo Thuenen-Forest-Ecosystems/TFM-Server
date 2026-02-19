@@ -1,0 +1,10 @@
+DO $$ 
+BEGIN
+    PERFORM pg_terminate_backend(pid) 
+    FROM pg_stat_activity 
+    WHERE pid != pg_backend_pid() 
+    AND state = 'active'
+    AND query ILIKE '%plot_nested_json%';
+EXCEPTION WHEN OTHERS THEN 
+    NULL; -- Ignore if insufficient privileges
+END $$;

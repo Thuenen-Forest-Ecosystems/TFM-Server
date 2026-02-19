@@ -213,7 +213,7 @@ ADD COLUMN harvest_method INTEGER NULL REFERENCES lookup.lookup_harvest_method (
 	-- NutzArt
 ADD COLUMN harvest_reason INTEGER NULL REFERENCES lookup.lookup_harvest_reason (code),
 	-- Nutzursache
-ADD COLUMN municipality INTEGER NOT NULL REFERENCES lookup.lookup_municipality (code);
+ADD COLUMN municipality INTEGER NULL REFERENCES lookup.lookup_municipality (code);
 -- 9780133
 --ALTER TABLE plot ADD CONSTRAINT FK_plot_ModifiedBy
 --    FOREIGN KEY (modified_by)
@@ -318,13 +318,7 @@ ADD COLUMN plot_id uuid UNIQUE NOT NULL,
 	-- bwi.koord.b0_ecke_soll
 ADD COLUMN cartesian_x float NOT NULL,
 	-- bwi.koord.b0_ecke_soll.Soll_Hoch
-ADD COLUMN cartesian_y float NOT NULL,
-	ADD COLUMN azimuth SMALLINT NULL CHECK (
-		azimuth >= 0
-		AND azimuth <= 399
-	),
-	-- bwi.koord.b0_ecke_soll.Soll_Azi
-ADD COLUMN distance INTEGER NULL CHECK (distance > 0);
+ADD COLUMN cartesian_y float NOT NULL;
 --- remove column intkey due to does not exist in the new data model
 ALTER TABLE plot_coordinates DROP COLUMN IF EXISTS intkey;
 ALTER TABLE plot_coordinates
@@ -350,7 +344,7 @@ ADD CONSTRAINT FK_support_points_type FOREIGN KEY (point_type) REFERENCES lookup
 ------------------------------------------------- NOTES -------------------------------------------------
 CREATE TABLE notes (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE notes
-	ADD COLUMN plot_id uuid NOT NULL,
+ADD COLUMN plot_id uuid NOT NULL,
 	ADD COLUMN time_stamp DATE NOT NULL,
 	ADD COLUMN user_name TEXT NOT NULL,
 	ADD COLUMN object_type SMALLINT NOT NULL,
@@ -481,7 +475,7 @@ ADD COLUMN stop_measurement timestamptz NULL,
 	-- UTCStopzeit
 ADD COLUMN device_gnss text NULL,
 	-- Geraet (smallint) || ToDo: Ist hier ein freies Eingabefeld nicht sinnvoller ???
-ADD COLUMN quality INTEGER NOT NULL;
+ADD COLUMN quality INTEGER NULL;
 -- GNSS_Qualitaet
 ALTER TABLE position
 ADD CONSTRAINT FK_Position_Plot FOREIGN KEY (plot_id) REFERENCES plot (id) ON DELETE CASCADE;
@@ -550,14 +544,14 @@ ADD CONSTRAINT FK_Saplings2m_LookupTreeSizeClass FOREIGN KEY (tree_size_class) R
 CREATE TABLE structure_lt4m (LIKE table_TEMPLATE INCLUDING ALL);
 ALTER TABLE structure_lt4m
 ADD COLUMN plot_id uuid NOT NULL,
-	ADD COLUMN tree_species INTEGER NULL,
+	ADD COLUMN tree_species INTEGER NOT NULL,
 	--Ba
 ADD COLUMN coverage INTEGER NOT NULL CHECK (
 		coverage >= 0
 		AND coverage <= 10
 	),
 	--Anteil TODO: enum_coverage NEU
-ADD COLUMN regeneration_type INTEGER NOT NULL;
+ADD COLUMN regeneration_type INTEGER NULL;
 --Vart lookup_trees_less_4meter_origin
 ALTER TABLE structure_lt4m
 ADD CONSTRAINT FK_StructureLt4m_Plot FOREIGN KEY (plot_id) REFERENCES plot(id) ON DELETE CASCADE;

@@ -7,7 +7,7 @@ CREATE TABLE public.records_messages (
     note text NULL,
     user_id uuid NULL,
     records_id uuid NOT NULL,
-    object_name text NULL,
+    object_name SMALLINT NOT NULL,
     -- Denormalized access control fields from records table
     responsible_administration uuid NULL,
     responsible_state uuid NULL,

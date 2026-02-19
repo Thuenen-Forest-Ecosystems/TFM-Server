@@ -4,7 +4,29 @@
 -- Creates a nested JSON view of plots with all related data (trees, deadwood, etc.)
 -- Optimized using CTEs and subqueries for better performance
 -- ============================================================================
-DROP VIEW IF EXISTS public.plot_nested_json;
+-- Drop in dependency order to avoid locks: Triggers → Functions → Mat.View → View
+DROP TRIGGER IF EXISTS before_record_insert_or_update ON public.records CASCADE;
+DROP TRIGGER IF EXISTS on_record_updated ON public.records CASCADE;
+DROP TRIGGER IF EXISTS trigger_validation_version_change ON public.records CASCADE;
+DROP TRIGGER IF EXISTS trigger_populate_troop_members ON public.records CASCADE;
+DROP FUNCTION IF EXISTS public.fill_previous_properties() CASCADE;
+DROP FUNCTION IF EXISTS public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.refresh_plot_nested_json_cached() CASCADE;
+DROP FUNCTION IF EXISTS public.fill_cluster_data(INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.update_records_cluster(INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.handle_record_changes() CASCADE;
+DROP FUNCTION IF EXISTS public.validate_json_properties_by_schema(UUID, JSONB) CASCADE;
+DROP FUNCTION IF EXISTS public.validate_record_properties() CASCADE;
+DROP FUNCTION IF EXISTS public.add_plot_ids_to_records(UUID, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.batch_update_records(INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.get_user_clusters() CASCADE;
+DROP FUNCTION IF EXISTS public.call_validation_function(JSONB, JSONB, UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.handle_validation_version_change() CASCADE;
+DROP FUNCTION IF EXISTS public.set_preliminary() CASCADE;
+DROP FUNCTION IF EXISTS public.populate_current_troop_members() CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS public.plot_nested_json_cached CASCADE;
+DROP VIEW IF EXISTS public.plot_nested_json CASCADE;
+DROP VIEW IF EXISTS public.view_records_details CASCADE;
 CREATE OR REPLACE VIEW public.plot_nested_json AS WITH base_plots AS (
         -- Filter plots first to reduce working set
         SELECT *
@@ -117,10 +139,13 @@ GRANT SELECT ON public.plot_nested_json TO service_role;
 -- Cached version of plot_nested_json for faster queries
 -- Must be refreshed manually using refresh_plot_nested_json_cached()
 -- ============================================================================
-DROP MATERIALIZED VIEW IF EXISTS public.plot_nested_json_cached;
+-- (Already dropped above with CASCADE)
+-- Create materialized view with NO DATA for fast migration
+-- Populate later with: SELECT public.refresh_plot_nested_json_cached();
 CREATE MATERIALIZED VIEW IF NOT EXISTS plot_nested_json_cached AS
 SELECT *
-FROM public.plot_nested_json;
+FROM public.plot_nested_json WITH NO DATA;
+-- Creates structure instantly, populate on demand
 -- ============================================================================
 -- INDEXES: plot_nested_json_cached
 -- ============================================================================
@@ -646,7 +671,7 @@ SELECT r.*,
     c.cluster_situation,
     c.state_responsible,
     c.states_affected,
-    c.is_training,
+    c.is_training AS cluster_is_training,
     c.grid_density
 FROM public.records r
     LEFT JOIN inventory_archive.plot p_bwi ON r.plot_name = p_bwi.plot_name

@@ -61,7 +61,7 @@ add_on_conflict_clause seeds/public/lookup.sql "code"
 
 
 
-for table in cluster plot deadwood edges regeneration structure_lt4m structure_gt4m tree subplots_relative_position
+for table in cluster cluster_move plot deadwood edges regeneration structure_lt4m structure_gt4m tree subplots_relative_position
     do docker exec -u postgres supabase_db_supabase pg_dump \
         -h 127.0.0.1 \
         -p 5432 \
@@ -77,7 +77,7 @@ for table in cluster plot deadwood edges regeneration structure_lt4m structure_g
 
 done;
 
-for table in plot_coordinates plot_landmark position tree_coordinates edges_coordinates subplots_relative_position_coordinates
+for table in plot_coordinates notes position tree_coordinates edges_coordinates subplots_relative_position_coordinates
     do docker exec -u postgres supabase_db_supabase pg_dump \
         -h 127.0.0.1 \
         -p 5432 \
