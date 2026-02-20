@@ -127,11 +127,26 @@ RETURNING id INTO v_cluster_id;
 -- ----------------------------------------------------------------
 -- 2. Project SW corner from WGS84 → DHDN (EPSG:31466-69)
 -- ----------------------------------------------------------------
-v_sw_dhdn := CASE WHEN p_longitude < 7.51 THEN ST_Transform(ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326), 31466)
-    		      WHEN p_longitude >= 7.51 AND p_longitude < 10.51 THEN ST_Transform(ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326), 31467)
-				  WHEN p_longitude >= 10.51 AND p_longitude < 13.51 THEN ST_Transform(ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326), 31468)
-				  WHEN p_longitude >= 13.51 THEN ST_Transform(ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326), 31469)            
-	       END;
+v_sw_dhdn := CASE
+    WHEN p_longitude < 7.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31466
+    )
+    WHEN p_longitude >= 7.51
+    AND p_longitude < 10.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31467
+    )
+    WHEN p_longitude >= 10.51
+    AND p_longitude < 13.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31468
+    )
+    WHEN p_longitude >= 13.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31469
+    )
+END;
 v_sw_x := ST_X(v_sw_dhdn);
 v_sw_y := ST_Y(v_sw_dhdn);
 -- ----------------------------------------------------------------
@@ -155,14 +170,17 @@ FROM (
     ) AS t(plot_num, dx, dy) LOOP -- Offset in EPSG:31466-69 (metric CRS — 1 unit = 1 m)
     v_cx := v_sw_x + v_corner.dx;
 v_cy := v_sw_y + v_corner.dy;
-v_pt_dhdn := CASE WHEN p_longitude < 7.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31466)
-    		      WHEN p_longitude >= 7.51 AND p_longitude < 10.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31467)
-				  WHEN p_longitude >= 10.51 AND p_longitude < 13.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31468)
-				  WHEN p_longitude >= 13.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31469)
-				END;
+v_pt_dhdn := CASE
+    WHEN p_longitude < 7.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31466)
+    WHEN p_longitude >= 7.51
+    AND p_longitude < 10.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31467)
+    WHEN p_longitude >= 10.51
+    AND p_longitude < 13.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31468)
+    WHEN p_longitude >= 13.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31469)
+END;
 -- Project back to WGS84 for center_location
 v_pt_4326 := ST_Transform(v_pt_dhdn, 4326);
--- Insert plot
+-- Upsert plot
 INSERT INTO inventory_archive.plot (
         cluster_id,
         cluster_name,
@@ -178,9 +196,16 @@ VALUES (
         p_federal_state,
         p_interval_name,
         p_acquisition_date
+    ) ON CONFLICT (cluster_name, plot_name, interval_name) DO
+UPDATE
+SET cluster_id = EXCLUDED.cluster_id,
+    federal_state = EXCLUDED.federal_state,
+    acquisition_date = COALESCE(
+        EXCLUDED.acquisition_date,
+        inventory_archive.plot.acquisition_date
     )
 RETURNING id INTO v_plot_id;
--- Insert plot_coordinates
+-- Upsert plot_coordinates
 INSERT INTO inventory_archive.plot_coordinates (
         plot_id,
         center_location,
@@ -192,7 +217,11 @@ VALUES (
         v_pt_4326,
         v_cx,
         v_cy
-    )
+    ) ON CONFLICT (plot_id) DO
+UPDATE
+SET center_location = EXCLUDED.center_location,
+    cartesian_x = EXCLUDED.cartesian_x,
+    cartesian_y = EXCLUDED.cartesian_y
 RETURNING id INTO v_coord_id;
 -- Emit result row
 out_cluster_id := v_cluster_id;

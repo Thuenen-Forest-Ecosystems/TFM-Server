@@ -10,10 +10,10 @@
 --   3 = NE  (+150 m North, +150 m East)
 --   4 = SE  (+150 m East)
 --
--- Coordinates are computed in ETRS89-LAEA (EPSG:3035) — the same
--- projection used by the BWI (X_ETRS_IAEA / Y_ETRS_IAEA) — then
+-- Coordinates are computed in DHDN (EPSG:31466-69) — the same
+-- projection originally used by the BWI (X_ETRS_IAEA / Y_ETRS_IAEA) — then
 -- projected back to WGS84 (EPSG:4326) for center_location.
--- cartesian_x = Easting (EPSG:3035), cartesian_y = Northing (EPSG:3035).
+-- cartesian_x = Easting (EPSG:31466-69), cartesian_y = Northing (EPSG:34166-69).
 --
 -- Returns one row per plot (4 rows total).
 -- Restricted to the postgres role only.
@@ -56,15 +56,15 @@ SET search_path = inventory_archive,
 DECLARE v_cluster_id UUID;
 v_plot_id UUID;
 v_coord_id UUID;
--- ETRS89-LAEA (EPSG:3035) representation of the SW corner
-v_sw_3035 extensions.GEOMETRY;
+-- DHDN (EPSG:31466, 31467, 31468, 31469, depending on longitude) representation of the SW corner
+v_sw_dhdn extensions.GEOMETRY;
 v_sw_x FLOAT;
--- Easting  EPSG:3035
+-- Easting  DHDN
 v_sw_y FLOAT;
--- Northing EPSG:3035
+-- Northing DHDN
 -- per-corner variables
 v_corner RECORD;
-v_pt_3035 extensions.GEOMETRY;
+v_pt_dhdn extensions.GEOMETRY;
 v_pt_4326 extensions.GEOMETRY;
 v_cx FLOAT;
 v_cy FLOAT;
@@ -125,14 +125,30 @@ SET state_responsible = COALESCE(
     is_training = EXCLUDED.is_training
 RETURNING id INTO v_cluster_id;
 -- ----------------------------------------------------------------
--- 2. Project SW corner from WGS84 → ETRS89-LAEA (EPSG:3035)
+-- 2. Project SW corner from WGS84 → DHDN (EPSG:31466-69)
 -- ----------------------------------------------------------------
-v_sw_3035 := ST_Transform(
-    ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
-    3035
-);
-v_sw_x := ST_X(v_sw_3035);
-v_sw_y := ST_Y(v_sw_3035);
+v_sw_dhdn := CASE
+    WHEN p_longitude < 7.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31466
+    )
+    WHEN p_longitude >= 7.51
+    AND p_longitude < 10.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31467
+    )
+    WHEN p_longitude >= 10.51
+    AND p_longitude < 13.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31468
+    )
+    WHEN p_longitude >= 13.51 THEN ST_Transform(
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326),
+        31469
+    )
+END;
+v_sw_x := ST_X(v_sw_dhdn);
+v_sw_y := ST_Y(v_sw_dhdn);
 -- ----------------------------------------------------------------
 -- 3. Insert each of the 4 corners
 --
@@ -151,13 +167,20 @@ FROM (
             (3, p_side_m, p_side_m),
             -- NE
             (4, p_side_m, 0.0) -- SE
-    ) AS t(plot_num, dx, dy) LOOP -- Offset in EPSG:3035 (metric CRS — 1 unit = 1 m)
+    ) AS t(plot_num, dx, dy) LOOP -- Offset in EPSG:31466-69 (metric CRS — 1 unit = 1 m)
     v_cx := v_sw_x + v_corner.dx;
 v_cy := v_sw_y + v_corner.dy;
-v_pt_3035 := ST_SetSRID(ST_MakePoint(v_cx, v_cy), 3035);
+v_pt_dhdn := CASE
+    WHEN p_longitude < 7.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31466)
+    WHEN p_longitude >= 7.51
+    AND p_longitude < 10.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31467)
+    WHEN p_longitude >= 10.51
+    AND p_longitude < 13.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31468)
+    WHEN p_longitude >= 13.51 THEN ST_SetSRID(ST_MakePoint(v_cx, v_cy), 31469)
+END;
 -- Project back to WGS84 for center_location
-v_pt_4326 := ST_Transform(v_pt_3035, 4326);
--- Insert plot
+v_pt_4326 := ST_Transform(v_pt_dhdn, 4326);
+-- Upsert plot
 INSERT INTO inventory_archive.plot (
         cluster_id,
         cluster_name,
@@ -173,9 +196,16 @@ VALUES (
         p_federal_state,
         p_interval_name,
         p_acquisition_date
+    ) ON CONFLICT (cluster_name, plot_name, interval_name) DO
+UPDATE
+SET cluster_id = EXCLUDED.cluster_id,
+    federal_state = EXCLUDED.federal_state,
+    acquisition_date = COALESCE(
+        EXCLUDED.acquisition_date,
+        inventory_archive.plot.acquisition_date
     )
 RETURNING id INTO v_plot_id;
--- Insert plot_coordinates
+-- Upsert plot_coordinates
 INSERT INTO inventory_archive.plot_coordinates (
         plot_id,
         center_location,
@@ -187,7 +217,11 @@ VALUES (
         v_pt_4326,
         v_cx,
         v_cy
-    )
+    ) ON CONFLICT (plot_id) DO
+UPDATE
+SET center_location = EXCLUDED.center_location,
+    cartesian_x = EXCLUDED.cartesian_x,
+    cartesian_y = EXCLUDED.cartesian_y
 RETURNING id INTO v_coord_id;
 -- Emit result row
 out_cluster_id := v_cluster_id;
@@ -202,7 +236,7 @@ RETURN NEXT;
 END LOOP;
 END;
 $$;
-COMMENT ON FUNCTION inventory_archive.add_cluster_with_plots IS 'Upserts a cluster and inserts all 4 plot corners as a square of p_side_m metres (default 150 m). p_longitude/p_latitude define the SW (bottom-left) corner in WGS84. cartesian_x/y are stored in ETRS89-LAEA (EPSG:3035). Returns one row per plot with coordinates. Callable by postgres only.';
+COMMENT ON FUNCTION inventory_archive.add_cluster_with_plots IS 'Upserts a cluster and inserts all 4 plot corners as a square of p_side_m metres (default 150 m). p_longitude/p_latitude define the SW (bottom-left) corner in WGS84. cartesian_x/y are stored in DHDN (EPSG:31466-69). Returns one row per plot with coordinates. Callable by postgres only.';
 -- Restrict to postgres only
 REVOKE ALL ON FUNCTION inventory_archive.add_cluster_with_plots
 FROM PUBLIC;

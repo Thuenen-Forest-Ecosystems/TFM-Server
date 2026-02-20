@@ -221,7 +221,6 @@ ADD COLUMN municipality INTEGER NULL REFERENCES lookup.lookup_municipality (code
 --ALTER TABLE plot ADD CONSTRAINT FK_plot_SupervisorId
 --    FOREIGN KEY (supervisor_id)
 --    REFERENCES auth.users (id);
---- make id unique
 ALTER TABLE plot
 ADD COLUMN IF NOT EXISTS plot_name integer NOT NULL CHECK (
 		plot_name >= 1
@@ -231,7 +230,7 @@ ALTER TABLE plot
 ADD COLUMN IF NOT EXISTS cluster_name integer NOT NULL;
 -- REFERENCES cluster (cluster_name);
 ALTER TABLE plot
-ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL REFERENCES cluster (id);
+ADD COLUMN IF NOT EXISTS cluster_id uuid NOT NULL REFERENCES cluster (id) ON DELETE CASCADE;
 ALTER TABLE plot
 ADD CONSTRAINT FK_Plot_Unique UNIQUE (cluster_name, plot_name, interval_name);
 ALTER TABLE plot

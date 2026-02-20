@@ -988,9 +988,24 @@ SET properties = (
                             'interval_name',
                             x.interval_name
                         ) || jsonb_set(
-                            to_jsonb(x.t) - 'plot_id',
-                            '{dbh}',
-                            'null'::jsonb
+                            jsonb_set(
+                                jsonb_set(
+                                    to_jsonb(x.t) - 'plot_id',
+                                    '{dbh}',
+                                    'null'::jsonb
+                                ),
+                                '{tree_age}',
+                                CASE
+                                    WHEN (to_jsonb(x.t)->'tree_age') IS NOT NULL
+                                    AND (to_jsonb(x.t)->'tree_age') != 'null'::jsonb THEN to_jsonb(((to_jsonb(x.t)->>'tree_age')::smallint + 5))
+                                    ELSE 'null'::jsonb
+                                END
+                            ),
+                            '{tree_status}',
+                            CASE
+                                WHEN (to_jsonb(x.t)->>'tree_status')::integer IN (11, 12) THEN '2022'::jsonb
+                                ELSE to_jsonb(x.t)->'tree_status'
+                            END
                         )
                     )
                 FROM (

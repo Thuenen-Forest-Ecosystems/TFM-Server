@@ -82,8 +82,11 @@ connect_db <- function() {
 #'                     closed on exit.
 #' @param sql_function Fully-qualified SQL function to call, e.g.
 #'                     `"inventory_archive.add_cluster_with_plots"`.
-#' @param side_m       Side length of the cluster square in metres (default 150).
-#' @param dry_run      If TRUE, print the SQL calls without executing them.
+#' @param side_m                Side length of the cluster square in metres (default 150).
+#' @param default_interval_name Fallback value for `interval_name` when the CSV column is
+#'                              absent or blank. Required if the CSV does not contain an
+#'                              `interval_name` column (e.g. `"BWI5"`).
+#' @param dry_run               If TRUE, print the SQL calls without executing them.
 #'
 #' @return A `data.frame` with all returned rows (4 per cluster), invisibly.
 #' @export
@@ -91,6 +94,7 @@ add_clusters_from_csv <- function(csv_path,
                                   con = NULL,
                                   sql_function = "inventory_archive.add_cluster_with_plots",
                                   side_m = 150.0,
+                                  default_interval_name = NULL,
                                   dry_run = FALSE) {
     stopifnot(file.exists(csv_path))
 
@@ -100,6 +104,15 @@ add_clusters_from_csv <- function(csv_path,
     missing <- setdiff(required_cols, names(data))
     if (length(missing) > 0) {
         stop("CSV is missing required columns: ", paste(missing, collapse = ", "))
+    }
+
+    # interval_name is NOT NULL in the DB — validate a fallback is available
+    has_interval_col <- "interval_name" %in% names(data)
+    if (!has_interval_col && is.null(default_interval_name)) {
+        stop(
+            "CSV has no 'interval_name' column and no default_interval_name was supplied.\n",
+            "Pass e.g.: add_clusters_from_csv(..., default_interval_name = \"BWI5\")"
+        )
     }
 
     # Open connection if none supplied
@@ -116,26 +129,30 @@ add_clusters_from_csv <- function(csv_path,
         row <- data[i, ]
 
         # Build named parameter list; NULLify NA optionals
-        coalesce_int <- function(x) if (is.na(x)) NA_integer_ else as.integer(x)
-        coalesce_chr <- function(x) if (is.na(x)) NA_character_ else as.character(x)
-        coalesce_bool <- function(x) if (is.na(x)) TRUE else as.logical(x)
-        coalesce_date <- function(x) if (is.na(x)) NA_character_ else as.character(x)
+        # length(x) == 0 guard handles columns absent from the CSV entirely (NULL)
+        coalesce_int <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) NA_integer_ else as.integer(x)
+        coalesce_chr <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) NA_character_ else as.character(x)
+        coalesce_bool <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) TRUE else as.logical(x)
+        coalesce_date <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) NA_character_ else as.character(x)
 
         params <- list(
-            p_cluster_name      = as.integer(row$cluster_name),
-            p_federal_state     = as.integer(row$federal_state),
-            p_longitude         = as.numeric(row$longitude),
-            p_latitude          = as.numeric(row$latitude),
+            p_cluster_name = as.integer(row$cluster_name),
+            p_federal_state = as.integer(row$federal_state),
+            p_longitude = as.numeric(row$longitude),
+            p_latitude = as.numeric(row$latitude),
             p_state_responsible = coalesce_int(row[["state_responsible"]]),
-            p_topo_map_sheet    = coalesce_int(row[["topo_map_sheet"]]),
-            p_grid_density      = coalesce_int(row[["grid_density"]]),
-            p_cluster_status    = coalesce_int(row[["cluster_status"]]),
+            p_topo_map_sheet = coalesce_int(row[["topo_map_sheet"]]),
+            p_grid_density = coalesce_int(row[["grid_density"]]),
+            p_cluster_status = coalesce_int(row[["cluster_status"]]),
             p_cluster_situation = coalesce_int(row[["cluster_situation"]]),
             p_inspire_grid_cell = coalesce_chr(row[["inspire_grid_cell"]]),
-            p_is_training       = coalesce_bool(row[["is_training"]]),
-            p_interval_name     = coalesce_chr(row[["interval_name"]]),
-            p_acquisition_date  = coalesce_date(row[["acquisition_date"]]),
-            p_side_m            = side_m
+            p_is_training = coalesce_bool(row[["is_training"]]),
+            p_interval_name = {
+                v <- coalesce_chr(row[["interval_name"]])
+                if (is.na(v)) default_interval_name else v
+            },
+            p_acquisition_date = coalesce_date(row[["acquisition_date"]]),
+            p_side_m = side_m
         )
 
         sql <- paste0(
@@ -205,6 +222,9 @@ local({
         if (!is.null(ofile) && nzchar(ofile)) dirname(normalizePath(ofile)) else getwd()
     }
     csv <- file.path(script_dir, ".data", "cluster_coordinates.csv")
-    result <- add_clusters_from_csv(csv_path = csv)
+    result <- add_clusters_from_csv(
+        csv_path              = csv,
+        default_interval_name = Sys.getenv("DEFAULT_INTERVAL_NAME", "ci2027")
+    )
     print(result)
 })
