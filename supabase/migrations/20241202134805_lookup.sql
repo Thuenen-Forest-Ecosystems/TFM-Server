@@ -66,6 +66,21 @@ ADD COLUMN IF NOT EXISTS genus text NULL;
 ALTER TABLE lookup_tree_species
 ADD COLUMN IF NOT EXISTS species text NULL;
 CREATE TABLE IF NOT EXISTS lookup_tree_status (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+INSERT INTO lookup.lookup_tree_status (code, name_de, name_en, interval, sort)
+VALUES (
+        2022,
+        'schon 2022 (BWI2022) ausgefallen',
+        'already failed during German National Forest Inventory 2022',
+        ARRAY ['bwi2022', 'ci2027'],
+        2022
+    ),
+    (
+        2017,
+        'schon 2017 (CI2017) ausgefallen',
+        'already failed during GHG inventory 2017',
+        ARRAY ['ci2017', 'bwi2022', 'ci2027'],
+        2017
+    );
 CREATE TABLE IF NOT EXISTS lookup_basal_area_factor (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 -- was commented out before
 --CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);

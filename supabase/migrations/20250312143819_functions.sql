@@ -571,30 +571,31 @@ LOOP WITH eligible_plots AS (
         p.plot_name,
         p.cluster_name,
         p.cluster_id
-from (select distinct(c.id)
-    FROM inventory_archive.plot p
-        JOIN inventory_archive.cluster c ON p.cluster_id = c.id
-    WHERE (
-            (
-                c.grid_density in (64, 256)
-                and p.federal_state in (1, 2, 4, 8, 9, 13)
-            )
-            or (
-                c.grid_density in (16, 32, 64, 256)
-                and p.federal_state in (5, 6, 7, 10, 16)
-            )
-            or (
-                c.grid_density in (4, 8, 16, 32, 64, 256)
-                and p.federal_state in (11, 12, 14, 15)
-            )
-            or p.sampling_stratum in (308, 316)
-            or c.is_training = true
-        )
-        AND p.interval_name IN ('bwi2022', 'ci2027')) cl
-join inventory_archive.plot p 
-on cl.id = p.cluster_id
-where p.interval_name IN ('bwi2022', 'ci2027') -- inkl. neue Testtrakte unter ci2027
-ORDER BY p.id
+    from (
+            select distinct(c.id)
+            FROM inventory_archive.plot p
+                JOIN inventory_archive.cluster c ON p.cluster_id = c.id
+            WHERE (
+                    (
+                        c.grid_density in (64, 256)
+                        and p.federal_state in (1, 2, 4, 8, 9, 13)
+                    )
+                    or (
+                        c.grid_density in (16, 32, 64, 256)
+                        and p.federal_state in (5, 6, 7, 10, 16)
+                    )
+                    or (
+                        c.grid_density in (4, 8, 16, 32, 64, 256)
+                        and p.federal_state in (11, 12, 14, 15)
+                    )
+                    or p.sampling_stratum in (308, 316)
+                    or c.is_training = true
+                )
+                AND p.interval_name IN ('bwi2022', 'ci2027')
+        ) cl
+        join inventory_archive.plot p on cl.id = p.cluster_id
+    where p.interval_name IN ('bwi2022', 'ci2027') -- inkl. neue Testtrakte unter ci2027
+    ORDER BY p.id
     LIMIT p_batch_size OFFSET total_processed
 )
 INSERT INTO public.records (
@@ -980,7 +981,7 @@ ALTER TABLE public.records DISABLE TRIGGER trigger_validation_version_change;
 -- Update records.properties with values from inventory_archive.plot
 UPDATE public.records r
 SET properties = (
-        to_jsonb(p) - 'id' - 'intkey' - 'cluster_id' - 'trees_less_4meter_coverage' - 'trees_less_4meter_layer' - 'stand_structure' - 'stand_age' - 'stand_development_phase' - 'stand_layer_regeneration' - 'fence_regeneration' - 'trees_greater_4meter_mirrored' - 'trees_greater_4meter_basal_area_factor'
+        to_jsonb(p) - 'id' - 'intkey' - 'cluster_id' - 'trees_less_4meter_coverage' - 'trees_less_4meter_layer' - 'stand_structure' - 'stand_age' - 'stand_development_phase' - 'stand_layer_regeneration' - 'fence_regeneration' - 'trees_greater_4meter_mirrored' - 'trees_greater_4meter_basal_area_factor' - 'harvest_method' - 'harvest_reason'
     ) || jsonb_build_object(
         'tree',
         COALESCE(
