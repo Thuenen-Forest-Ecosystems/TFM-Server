@@ -571,6 +571,7 @@ LOOP WITH eligible_plots AS (
         p.plot_name,
         p.cluster_name,
         p.cluster_id
+from (select distinct(c.id)
     FROM inventory_archive.plot p
         JOIN inventory_archive.cluster c ON p.cluster_id = c.id
     WHERE (
@@ -589,8 +590,11 @@ LOOP WITH eligible_plots AS (
             or p.sampling_stratum in (308, 316)
             or c.is_training = true
         )
-        AND p.interval_name = 'bwi2022'
-    ORDER BY p.id
+        AND p.interval_name IN ('bwi2022', 'ci2027')) cl
+join inventory_archive.plot p 
+on cl.id = p.cluster_id
+where p.interval_name IN ('bwi2022', 'ci2027') -- inkl. neue Testtrakte unter ci2027
+ORDER BY p.id
     LIMIT p_batch_size OFFSET total_processed
 )
 INSERT INTO public.records (
