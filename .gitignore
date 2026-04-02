@@ -17,6 +17,7 @@ volumes/auth
 
 supabase/tmp
 supabase/seeds/intern
+supabase/snippets/
 
 .utils
 

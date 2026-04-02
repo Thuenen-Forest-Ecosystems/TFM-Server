@@ -1,0 +1,1 @@
+DELETE FROM records WHERE cluster_name>=9999900 AND cluster_name<=9999999;

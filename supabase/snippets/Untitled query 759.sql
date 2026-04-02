@@ -1,21 +1,14 @@
--- Set search path to include extensions schema so PostGIS types resolve on remote Supabase
-SET search_path TO extensions,
-    public,
+-- Set search path to include public schema
+SET search_path TO public,
     inventory_archive;
 -- Create the radians function if it doesn't exist
 CREATE OR REPLACE FUNCTION radians(degrees float8) RETURNS float8 AS $$ BEGIN RETURN degrees * pi() / 180.0;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT
-SET search_path = extensions,
-    public,
-    inventory_archive;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT;
 -- Create the radians_from_gon function
 CREATE OR REPLACE FUNCTION radians_from_gon(gon float8) RETURNS float8 AS $$ BEGIN RETURN gon * pi() / 200.0;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT
-SET search_path = extensions,
-    public,
-    inventory_archive;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT;
 CREATE OR REPLACE FUNCTION create_linestring_from_edges(edges JSONB, start_point extensions.geometry) RETURNS extensions.geometry AS $$
 DECLARE point_array extensions.geometry [];
 current_point extensions.geometry;
@@ -31,12 +24,8 @@ FOR i IN 0..(jsonb_array_length(edges) - 1) LOOP azimuth_gon := ((edges->>i)::js
 azimuth_rad := radians_from_gon(azimuth_gon::float8);
 distance_cm := ((edges->>i)::jsonb->>'distance')::float8;
 distance_m := distance_cm / 100.0;
--- Calculate in the correct SRID (WGS84) -- ST_Project requires geography
-current_point := ST_Project(
-    current_point::extensions.geography,
-    distance_m,
-    azimuth_rad
-)::extensions.geometry;
+-- Calculate in the correct SRID (WGS84)
+current_point := ST_Project(current_point, distance_m, azimuth_rad);
 --current_point := ST_Translate(current_point,
 --                              distance_m * sin(azimuth_rad),
 --                              distance_m * cos(azimuth_rad));
@@ -45,10 +34,7 @@ END LOOP;
 RETURN ST_Transform(ST_MakeLine(point_array), 4326);
 --RETURN ST_MakeLine(point_array); -- No need for ST_SetSRID; it's already in WGS84
 END;
-$$ LANGUAGE plpgsql
-SET search_path = extensions,
-    public,
-    inventory_archive;
+$$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION update_geom_column() RETURNS TRIGGER AS $$
 DECLARE start_point extensions.geometry;
 BEGIN
@@ -63,10 +49,7 @@ END IF;
 NEW.geometry_edges := create_linestring_from_edges(NEW.edges, start_point);
 RETURN NEW;
 END;
-$$ LANGUAGE plpgsql
-SET search_path = extensions,
-    public,
-    inventory_archive;
+$$ LANGUAGE plpgsql;
 -- Deprecated: This trigger is not needed anymore as we handle geometry updates in the update_edges_coordinates function.
 DROP TRIGGER IF EXISTS update_geom_trigger ON inventory_archive.edges;
 --CREATE TRIGGER update_geom_trigger
@@ -94,10 +77,7 @@ UPDATE
 SET geometry_edges = EXCLUDED.geometry_edges;
 RETURN NEW;
 END;
-$$ LANGUAGE plpgsql
-SET search_path = extensions,
-    public,
-    inventory_archive;
+$$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS update_edges_coordinates_trigger ON inventory_archive.edges;
 CREATE TRIGGER update_edges_coordinates_trigger
 AFTER
@@ -122,12 +102,8 @@ END IF;
 azimuth_rad := radians_from_gon(CAST(NEW.azimuth AS float8));
 distance_m := NEW.distance / 100.0;
 -- Convert cm to m
--- Use ST_Project which handles geodetic calculations -- ST_Project requires geography
-new_center_point := ST_Project(
-    start_point::extensions.geography,
-    distance_m,
-    azimuth_rad
-)::extensions.geometry;
+-- Use ST_Project which handles geodetic calculations
+new_center_point := ST_Project(start_point, distance_m, azimuth_rad);
 -- Remove the unnecessary line
 -- NEW.radius := NEW.radius; 
 -- Ensure the record exists in subplots_relative_position before inserting
@@ -153,10 +129,7 @@ NEW.id;
 END IF;
 RETURN NEW;
 END;
-$$ LANGUAGE plpgsql
-SET search_path = extensions,
-    public,
-    inventory_archive;
+$$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS update_subplot_trigger ON inventory_archive.subplots_relative_position;
 CREATE TRIGGER update_subplot_trigger
 AFTER
@@ -182,22 +155,15 @@ END IF;
 azimuth_rad := radians_from_gon(CAST(NEW.azimuth AS float8));
 distance_m := NEW.distance / 100.0;
 -- Convert cm to m
--- Use ST_Project which handles geodetic calculations -- ST_Project requires geography
-new_center_point := ST_Project(
-    start_point::extensions.geography,
-    distance_m,
-    azimuth_rad
-)::extensions.geometry;
+-- Use ST_Project which handles geodetic calculations
+new_center_point := ST_Project(start_point, distance_m, azimuth_rad);
 INSERT INTO inventory_archive.tree_coordinates (tree_id, tree_location)
 VALUES (NEW.id, new_center_point) ON CONFLICT (tree_id) DO
 UPDATE
 SET tree_location = EXCLUDED.tree_location;
 RETURN NEW;
 END;
-$$ LANGUAGE plpgsql
-SET search_path = extensions,
-    public,
-    inventory_archive;
+$$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS update_tree_location_trigger ON inventory_archive.tree;
 CREATE TRIGGER update_tree_location_trigger
 AFTER

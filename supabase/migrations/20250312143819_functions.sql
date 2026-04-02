@@ -20,18 +20,26 @@ DROP FUNCTION IF EXISTS public.validate_record_properties() CASCADE;
 DROP FUNCTION IF EXISTS public.add_plot_ids_to_records(UUID, INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS public.batch_update_records(INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS public.get_user_clusters() CASCADE;
-DROP FUNCTION IF EXISTS public.call_validation_function(JSONB, JSONB, UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.handle_validation_version_change() CASCADE;
 DROP FUNCTION IF EXISTS public.set_preliminary() CASCADE;
+DROP FUNCTION IF EXISTS public.set_previous_properties(INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.set_previous_properties(INTEGER, INTEGER) CASCADE;
 DROP FUNCTION IF EXISTS public.populate_current_troop_members() CASCADE;
 DROP MATERIALIZED VIEW IF EXISTS public.plot_nested_json_cached CASCADE;
 DROP VIEW IF EXISTS public.plot_nested_json CASCADE;
-DROP VIEW IF EXISTS public.view_records_details CASCADE;
 CREATE OR REPLACE VIEW public.plot_nested_json AS WITH base_plots AS (
-        -- Filter plots first to reduce working set
-        SELECT *
+        -- Use bwi2022 rows as the primary base; fall back to ci2027 for clusters
+        -- that have no bwi2022 plot (e.g. new training clusters, ci2027-only plots).
+        SELECT DISTINCT ON (cluster_name, plot_name) *
         FROM inventory_archive.plot
-        WHERE interval_name = 'bwi2022'
+        WHERE interval_name IN ('bwi2022', 'ci2027')
+        ORDER BY cluster_name,
+            plot_name,
+            CASE
+                interval_name
+                WHEN 'bwi2022' THEN 1
+                ELSE 2
+            END
     ),
     -- Use subqueries for better performance with smaller result sets
     nested_data AS (
@@ -134,276 +142,17 @@ FROM authenticated;
 GRANT SELECT ON public.plot_nested_json TO postgres;
 GRANT SELECT ON public.plot_nested_json TO service_role;
 -- ============================================================================
--- MATERIALIZED VIEW: plot_nested_json_cached
+-- NOTE: The following functions have been moved to dedicated files:
+--
+-- 20250312143821_update_previoud_properties.sql:
+--   fill_cluster_data, get_plot_nested_json_by_id, fill_previous_properties,
+--   refresh_plot_nested_json_cached, reset_previous_properties,
+--   set_previous_properties, update_records_cluster, batch_update_records
+--
+-- 20250312143822_update_properties.sql:
+--   validate_json_properties_by_schema, validate_record_properties,
+--   call_validation_function, handle_validation_version_change, set_preliminary
 -- ============================================================================
--- Cached version of plot_nested_json for faster queries
--- Must be refreshed manually using refresh_plot_nested_json_cached()
--- ============================================================================
--- (Already dropped above with CASCADE)
--- Create materialized view with NO DATA for fast migration
--- Populate later with: SELECT public.refresh_plot_nested_json_cached();
-CREATE MATERIALIZED VIEW IF NOT EXISTS plot_nested_json_cached AS
-SELECT *
-FROM public.plot_nested_json WITH NO DATA;
--- Creates structure instantly, populate on demand
--- ============================================================================
--- INDEXES: plot_nested_json_cached
--- ============================================================================
-CREATE UNIQUE INDEX IF NOT EXISTS idx_plot_nested_json_cached_id ON plot_nested_json_cached (id);
-CREATE INDEX IF NOT EXISTS idx_plot_nested_json_cached_cluster ON plot_nested_json_cached (cluster_id);
-CREATE INDEX IF NOT EXISTS idx_plot_nested_json_cached_name ON plot_nested_json_cached (plot_name, cluster_name);
--- ============================================================================
--- PERMISSIONS: plot_nested_json_cached
--- ============================================================================
--- Restrict access to postgres and service_role only
-REVOKE ALL ON plot_nested_json_cached
-FROM PUBLIC;
-REVOKE ALL ON plot_nested_json_cached
-FROM anon;
-REVOKE ALL ON plot_nested_json_cached
-FROM authenticated;
-GRANT SELECT ON plot_nested_json_cached TO postgres;
-GRANT SELECT ON plot_nested_json_cached TO service_role;
--- ============================================================================
--- FUNCTION: refresh_plot_nested_json_cached
--- ============================================================================
--- Refreshes the materialized view with latest data
--- Usage: SELECT public.refresh_plot_nested_json_cached();
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.refresh_plot_nested_json_cached() RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN REFRESH MATERIALIZED VIEW plot_nested_json_cached;
-END;
-$$;
--- Permissions for refresh_plot_nested_json_cached
-REVOKE ALL ON FUNCTION public.refresh_plot_nested_json_cached()
-FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.refresh_plot_nested_json_cached()
-FROM anon;
-REVOKE ALL ON FUNCTION public.refresh_plot_nested_json_cached()
-FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.refresh_plot_nested_json_cached() TO postgres;
-GRANT EXECUTE ON FUNCTION public.refresh_plot_nested_json_cached() TO service_role;
--- ============================================================================
--- FUNCTION: get_plot_nested_json_by_id
--- ============================================================================
--- Retrieves nested JSON data for a specific plot from the cached view
--- Usage: SELECT public.get_plot_nested_json_by_id('plot-uuid', 123, 456);
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.get_plot_nested_json_by_id(
-        p_plot_id UUID,
-        p_cluster_name INTEGER DEFAULT NULL,
-        p_plot_name INTEGER DEFAULT NULL
-    ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = public,
-    inventory_archive AS $$
-DECLARE result jsonb;
-BEGIN
-SELECT row_to_json(t)::jsonb INTO result
-FROM public.plot_nested_json_cached t
-WHERE t.cluster_name = p_cluster_name
-    AND t.plot_name = p_plot_name;
-RETURN result;
-END;
-$$;
--- Permissions for get_plot_nested_json_by_id
-REVOKE ALL ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER)
-FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER)
-FROM anon;
-REVOKE ALL ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER)
-FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) TO postgres;
-GRANT EXECUTE ON FUNCTION public.get_plot_nested_json_by_id(UUID, INTEGER, INTEGER) TO service_role;
--- ============================================================================
--- FUNCTION: fill_cluster_data
--- ============================================================================
--- Fills the records.cluster field with data from inventory_archive.cluster
--- based on the cluster_name match. Returns JSONB representation of cluster.
--- Usage: SELECT public.fill_cluster_data(123);
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.fill_cluster_data(p_cluster_name INTEGER) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = public,
-    inventory_archive AS $$
-DECLARE cluster_data jsonb;
-BEGIN -- Fetch cluster data from inventory_archive.cluster
-SELECT row_to_json(c)::jsonb INTO cluster_data
-FROM inventory_archive.cluster c
-WHERE c.cluster_name = p_cluster_name;
-RETURN cluster_data;
-EXCEPTION
-WHEN OTHERS THEN RAISE NOTICE 'Error fetching cluster data for cluster_name %: %',
-p_cluster_name,
-SQLERRM;
-RETURN NULL;
-END;
-$$;
--- Permissions for fill_cluster_data
-REVOKE ALL ON FUNCTION public.fill_cluster_data(INTEGER)
-FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.fill_cluster_data(INTEGER)
-FROM anon;
-REVOKE ALL ON FUNCTION public.fill_cluster_data(INTEGER)
-FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.fill_cluster_data(INTEGER) TO postgres;
-GRANT EXECUTE ON FUNCTION public.fill_cluster_data(INTEGER) TO service_role;
--- ============================================================================
--- FUNCTION: update_records_cluster
--- ============================================================================
--- Updates the cluster field in records table for all records or a specific one
--- Processes in batches to avoid performance issues
--- Usage: SELECT public.update_records_cluster(); -- Updates all
---        SELECT public.update_records_cluster(1000); -- Batch size 1000
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.update_records_cluster(p_batch_size INTEGER DEFAULT 500) RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = public,
-    inventory_archive AS $$
-DECLARE batch_count INTEGER := 0;
-total_processed INTEGER := 0;
-BEGIN RAISE NOTICE 'Starting bulk update of records.cluster field...';
-LOOP WITH cluster_batch AS (
-    SELECT r.id,
-        c.cluster_name
-    FROM public.records r
-        LEFT JOIN inventory_archive.cluster c ON c.cluster_name = r.cluster_name
-    WHERE r.cluster IS NULL
-        OR r.cluster = '{}'::jsonb
-    LIMIT p_batch_size
-)
-UPDATE public.records r
-SET cluster = (
-        SELECT row_to_json(c)::jsonb
-        FROM inventory_archive.cluster c
-        WHERE c.cluster_name = cb.cluster_name
-    ),
-    updated_at = NOW()
-FROM cluster_batch cb
-WHERE r.id = cb.id;
-GET DIAGNOSTICS batch_count = ROW_COUNT;
-IF batch_count = 0 THEN EXIT;
-END IF;
-total_processed := total_processed + batch_count;
-RAISE NOTICE 'Processed % records in this batch (total: %)...',
-batch_count,
-total_processed;
--- Small delay to avoid overwhelming the database
-PERFORM pg_sleep(0.1);
-END LOOP;
-RAISE NOTICE 'Bulk update completed: % records processed',
-total_processed;
-RETURN total_processed;
-EXCEPTION
-WHEN OTHERS THEN RAISE NOTICE 'Error in bulk update: %',
-SQLERRM;
-RAISE;
-END;
-$$;
--- Permissions for update_records_cluster
-REVOKE ALL ON FUNCTION public.update_records_cluster(INTEGER)
-FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.update_records_cluster(INTEGER)
-FROM anon;
-REVOKE ALL ON FUNCTION public.update_records_cluster(INTEGER)
-FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.update_records_cluster(INTEGER) TO postgres;
-GRANT EXECUTE ON FUNCTION public.update_records_cluster(INTEGER) TO service_role;
--- ============================================================================
--- FUNCTION: fill_previous_properties (TRIGGER FUNCTION)
--- ============================================================================
--- Automatically fills previous_properties field with plot data when a record
--- is inserted or updated. Uses the cached plot_nested_json view for performance.
--- ============================================================================
-CREATE OR REPLACE FUNCTION fill_previous_properties() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = public,
-    inventory_archive AS $$
-DECLARE plot_data jsonb;
-position_data jsonb;
-cluster_data jsonb;
-BEGIN NEW.message := COALESCE(NEW.message, '') || 'Trigger fired for ' || TG_OP || ' operation';
-NEW.previous_properties := '{}'::jsonb;
-NEW.previous_position_data := '{}'::jsonb;
--- Fill cluster data if cluster_name is present
-IF NEW.cluster_name IS NOT NULL THEN BEGIN
-SELECT public.fill_cluster_data(NEW.cluster_name) INTO cluster_data;
-IF cluster_data IS NOT NULL THEN NEW.cluster := cluster_data;
-END IF;
-EXCEPTION
-WHEN OTHERS THEN RAISE NOTICE 'Error fetching cluster data for cluster_name %: %',
-NEW.cluster_name,
-SQLERRM;
-END;
-END IF;
-IF NEW.plot_id IS NOT NULL THEN BEGIN -- Use the function instead of direct view query for better caching
-SELECT public.get_plot_nested_json_by_id(NEW.plot_id, NEW.cluster_name, NEW.plot_name) INTO plot_data;
-IF plot_data IS NOT NULL THEN NEW.previous_properties := plot_data;
-NEW.message := 'Plot data found and set';
-ELSE NEW.message := 'No plot data found';
-END IF;
-EXCEPTION
-WHEN OTHERS THEN NEW.message := 'Error: ' || SQLERRM;
-RAISE NOTICE 'Error fetching plot data for %: %',
-NEW.plot_id,
-SQLERRM;
-END;
--- Populate previous_position_data from inventory_archive
-BEGIN
-SELECT json_object_agg(
-        p.interval_name,
-        json_build_object(
-            'longitude_median',
-            extensions.ST_X(pos.position_median),
-            'latitude_median',
-            extensions.ST_Y(pos.position_median),
-            'longitude_mean',
-            extensions.ST_X(pos.position_mean),
-            'latitude_mean',
-            extensions.ST_Y(pos.position_mean),
-            'hdop_mean',
-            pos.hdop_mean,
-            'pdop_mean',
-            pos.pdop_mean,
-            'satellites_count_mean',
-            pos.satellites_count_mean,
-            'measurement_count',
-            pos.measurement_count,
-            'rtcm_age',
-            pos.rtcm_age,
-            'start_measurement',
-            pos.start_measurement,
-            'stop_measurement',
-            pos.stop_measurement,
-            'device_gnss',
-            pos.device_gnss,
-            'quality',
-            pos.quality
-        )
-    ) INTO position_data
-FROM inventory_archive.plot p
-    JOIN inventory_archive.position pos ON pos.plot_id = p.id
-WHERE p.cluster_name = NEW.cluster_name
-    AND p.plot_name = NEW.plot_name;
-IF position_data IS NOT NULL THEN NEW.previous_position_data := position_data;
-END IF;
-EXCEPTION
-WHEN OTHERS THEN RAISE NOTICE 'Error fetching position data for %: %',
-NEW.plot_id,
-SQLERRM;
-END;
-ELSE NEW.message := 'plot_id IS NULL';
-END IF;
-RETURN NEW;
-END;
-$$;
--- ============================================================================
--- TRIGGER: before_record_insert_or_update
--- ============================================================================
--- Fires before INSERT or UPDATE to populate previous_properties and cluster fields
--- ============================================================================
-DROP TRIGGER IF EXISTS before_record_insert_or_update ON public.records;
-CREATE TRIGGER before_record_insert_or_update BEFORE
-INSERT
-    OR
-UPDATE OF previous_properties_updated_at,
-    plot_id,
-    cluster_name ON public.records FOR EACH ROW EXECUTE FUNCTION fill_previous_properties();
 -- ============================================================================
 -- FUNCTION: handle_record_changes (TRIGGER FUNCTION)
 -- ============================================================================
@@ -483,64 +232,6 @@ UPDATE OF is_valid,
     responsible_troop,
     record_changes_id ON public.records FOR EACH ROW EXECUTE FUNCTION public.handle_record_changes();
 -- ============================================================================
--- FUNCTION: validate_json_properties_by_schema (DEPRECATED)
--- ============================================================================
--- Validates properties JSON against a schema definition
--- NOTE: This function is deprecated and kept for backward compatibility
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.validate_json_properties_by_schema(schema_id uuid, properties jsonb) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE schema_def json;
--- Changed to jsonb
-BEGIN -- Get the schema definition
-SELECT schema INTO schema_def
-FROM public.schemas
-WHERE id = schema_id;
--- Cast to jsonb
--- Check if schema_def is null (schema not found) before calling jsonb_matches_schema
-IF schema_def IS NULL THEN RETURN FALSE;
--- Or handle the error as needed (e.g., RAISE EXCEPTION)
-END IF;
--- Check if properties is null or empty
-IF properties IS NULL
-OR properties = '{}'::jsonb THEN RETURN TRUE;
--- Or FALSE, depending on your requirements
-END IF;
-return extensions.jsonb_matches_schema(schema := schema_def, instance := properties);
-END;
-$$;
--- ============================================================================
--- FUNCTION: validate_record_properties (TRIGGER FUNCTION - DEPRECATED)
--- ============================================================================
--- Validates record properties and sets is_valid flag
--- NOTE: This function is deprecated and kept for backward compatibility
--- ============================================================================
-CREATE OR REPLACE FUNCTION public.validate_record_properties() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = '' AS $$ BEGIN
-SELECT id INTO NEW.schema_id
-FROM public.schemas
-WHERE interval_name = NEW.schema_name
-    AND is_visible = true
-ORDER BY created_at DESC
-LIMIT 1;
--- Only validate if both schema_id and properties are present
-IF NEW.schema_name IS NOT NULL
-AND NEW.properties IS NOT NULL
-AND jsonb_typeof(NEW.properties) = 'object' THEN -- Get Schema ID from interval_name, selecting the latest
-SELECT id INTO NEW.schema_id
-FROM public.schemas
-WHERE interval_name = NEW.schema_name
-    AND is_visible = true
-ORDER BY created_at DESC
-LIMIT 1;
--- Check if the JSON data is valid against the schema
-NEW.is_valid := public.validate_json_properties_by_schema(NEW.schema_id, NEW.properties);
-ELSE -- If either schema_id or properties is missing, mark as invalid
-NEW.is_valid := FALSE;
-END IF;
-RETURN NEW;
-END;
-$$;
--- ============================================================================
 -- FUNCTION: add_plot_ids_to_records
 -- ============================================================================
 -- Populates the records table with plots from inventory_archive
@@ -571,30 +262,37 @@ LOOP WITH eligible_plots AS (
         p.plot_name,
         p.cluster_name,
         p.cluster_id
-    from (
-            select distinct(c.id)
+    FROM (
+            SELECT DISTINCT c.id
             FROM inventory_archive.plot p
                 JOIN inventory_archive.cluster c ON p.cluster_id = c.id
             WHERE (
                     (
-                        c.grid_density in (64, 256)
-                        and p.federal_state in (1, 2, 4, 8, 9, 13)
+                        c.grid_density IN (64, 256)
+                        AND p.federal_state IN (1, 2, 4, 8, 9, 13)
                     )
-                    or (
-                        c.grid_density in (16, 32, 64, 256)
-                        and p.federal_state in (5, 6, 7, 10, 16)
+                    OR (
+                        c.grid_density IN (16, 32, 64, 256)
+                        AND p.federal_state IN (5, 6, 7, 10, 16)
                     )
-                    or (
-                        c.grid_density in (4, 8, 16, 32, 64, 256)
-                        and p.federal_state in (11, 12, 14, 15)
+                    OR (
+                        c.grid_density IN (4, 8, 16, 32, 64, 256)
+                        AND p.federal_state IN (11, 12, 14, 15)
                     )
-                    or p.sampling_stratum in (308, 316)
-                    or c.is_training = true
+                    OR p.sampling_stratum IN (308, 316)
+                    OR c.is_training = TRUE
                 )
                 AND p.interval_name IN ('bwi2022', 'ci2027')
         ) cl
-        join inventory_archive.plot p on cl.id = p.cluster_id
-    where p.interval_name IN ('bwi2022', 'ci2027') -- inkl. neue Testtrakte unter ci2027
+        JOIN inventory_archive.plot p ON cl.id = p.cluster_id
+    WHERE p.interval_name IN ('bwi2022', 'ci2027') -- inkl. Testtrakte unter ci2027
+        AND NOT EXISTS (
+            -- Skip plots already in records — fixes offset-by-conflicts bug
+            SELECT 1
+            FROM public.records r
+            WHERE r.cluster_name = p.cluster_name
+                AND r.plot_name = p.plot_name
+        )
     ORDER BY p.id
     LIMIT p_batch_size OFFSET total_processed
 )
@@ -612,13 +310,8 @@ SELECT id,
     cluster_name,
     cluster_id,
     root_org_id
-FROM eligible_plots ON CONFLICT (cluster_name, plot_name) DO
-UPDATE
-SET plot_id = EXCLUDED.plot_id,
-    schema_id = EXCLUDED.schema_id,
-    cluster_id = EXCLUDED.cluster_id,
-    responsible_administration = EXCLUDED.responsible_administration,
-    updated_at = NOW();
+FROM eligible_plots;
+-- NOT EXISTS above ensures no duplicates; ON CONFLICT not needed
 GET DIAGNOSTICS batch_count = ROW_COUNT;
 IF batch_count = 0 THEN EXIT;
 END IF;
@@ -626,7 +319,6 @@ total_processed := total_processed + batch_count;
 RAISE NOTICE 'Processed % records in this batch (total: %)...',
 batch_count,
 total_processed;
-PERFORM pg_sleep(0.1);
 END LOOP;
 ALTER TABLE public.records ENABLE TRIGGER before_record_insert_or_update;
 ALTER TABLE public.records ENABLE TRIGGER on_record_updated;
@@ -652,56 +344,6 @@ FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) TO postgres;
 GRANT EXECUTE ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) TO service_role;
 -- ============================================================================
--- VIEW: view_records_details
--- ============================================================================
--- Comprehensive view joining records with plot data from multiple intervals
--- Includes cluster information and coordinates
--- ============================================================================
-DROP VIEW IF EXISTS public.view_records_details;
-CREATE OR REPLACE VIEW public.view_records_details AS
-SELECT r.*,
-    -- Add the plot_coordinates to the view
-    p_coordinates.center_location,
-    p_bwi.federal_state,
-    p_bwi.growth_district,
-    p_bwi.forest_status AS forest_status_bwi2022,
-    p_bwi.accessibility,
-    p_bwi.forest_office,
-    p_bwi.ffh_forest_type_field,
-    p_bwi.property_type,
-    p_ci2017.forest_status AS forest_status_ci2017,
-    p_ci2012.forest_status AS forest_status_ci2012,
-    -- Add cluster_status from inventory_archive.cluster
-    c.cluster_status,
-    c.cluster_situation,
-    c.state_responsible,
-    c.states_affected,
-    c.is_training AS cluster_is_training,
-    c.grid_density
-FROM public.records r
-    LEFT JOIN inventory_archive.plot p_bwi ON r.plot_name = p_bwi.plot_name
-    AND r.cluster_name = p_bwi.cluster_name
-    AND p_bwi.interval_name = 'bwi2022'
-    LEFT JOIN inventory_archive.plot_coordinates p_coordinates ON p_bwi.id = p_coordinates.plot_id
-    LEFT JOIN inventory_archive.plot p_ci2017 ON p_bwi.plot_name = p_ci2017.plot_name
-    AND p_bwi.cluster_name = p_ci2017.cluster_name
-    AND p_ci2017.interval_name = 'ci2017'
-    LEFT JOIN inventory_archive.plot p_ci2012 ON p_bwi.plot_name = p_ci2012.plot_name
-    AND p_bwi.cluster_name = p_ci2012.cluster_name
-    AND p_ci2012.interval_name = 'bwi2012'
-    LEFT JOIN inventory_archive.cluster c ON r.cluster_name = c.cluster_name;
--- ============================================================================
--- PERMISSIONS: view_records_details
--- ============================================================================
--- Only authenticated users can access this view
-REVOKE ALL ON public.view_records_details
-FROM PUBLIC;
-REVOKE ALL ON public.view_records_details
-FROM anon;
-GRANT SELECT ON public.view_records_details TO authenticated;
--- ============================================================================
--- INDEXES: Performance optimization for view_records_details
--- ============================================================================
 -- Indexes on underlying tables to improve view query performance
 -- ============================================================================
 CREATE INDEX IF NOT EXISTS idx_records_responsible_administration ON public.records (responsible_administration);
@@ -714,58 +356,6 @@ CREATE INDEX IF NOT EXISTS idx_plot_id_interval ON inventory_archive.plot (id, i
 CREATE INDEX IF NOT EXISTS idx_plot_cluster_name ON inventory_archive.plot (cluster_name, plot_name, interval_name);
 CREATE INDEX IF NOT EXISTS idx_cluster_id ON inventory_archive.cluster (id);
 CREATE INDEX IF NOT EXISTS idx_plot_coordinates_plot_id ON inventory_archive.plot_coordinates (plot_id);
--- ============================================================================
--- FUNCTION: batch_update_records
--- ============================================================================
--- Updates previous_properties for records in batches
--- Processes records that are NULL, empty, or older than 1 day
--- Usage: SELECT public.batch_update_records(1000);
--- ============================================================================
-DROP FUNCTION IF EXISTS public.batch_update_records;
-CREATE OR REPLACE FUNCTION public.batch_update_records(batch_size INTEGER) RETURNS VOID AS $$
-DECLARE processed INTEGER := 0;
-rows_updated INTEGER;
-BEGIN -- Disable the validation trigger to avoid unnecessary validation during batch update
-ALTER TABLE public.records DISABLE TRIGGER trigger_validation_version_change;
-LOOP -- Update only rows that have not yet been processed in previous runs
-UPDATE public.records
-SET previous_properties_updated_at = NOW(),
-    plot_id = plot_id
-WHERE id IN (
-        SELECT id
-        FROM public.records
-        WHERE previous_properties IS NULL
-            OR -- empty
-            previous_properties = '{}'::jsonb
-            OR -- empty
-            previous_properties_updated_at IS NULL
-            OR previous_properties_updated_at < NOW() - INTERVAL '1 day'
-        ORDER BY id
-        LIMIT batch_size
-    );
-GET DIAGNOSTICS rows_updated = ROW_COUNT;
-IF rows_updated = 0 THEN EXIT;
-END IF;
-processed := processed + rows_updated;
-RAISE NOTICE 'Processed % records total',
-processed;
-PERFORM pg_sleep(0.1);
-END LOOP;
-RAISE NOTICE 'Finished processing % records total',
-processed;
--- Re-enable the validation trigger
-ALTER TABLE public.records ENABLE TRIGGER trigger_validation_version_change;
-END;
-$$ LANGUAGE plpgsql;
--- Permissions for batch_update_records
-REVOKE ALL ON FUNCTION public.batch_update_records(INTEGER)
-FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.batch_update_records(INTEGER)
-FROM anon;
-REVOKE ALL ON FUNCTION public.batch_update_records(INTEGER)
-FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.batch_update_records(INTEGER) TO postgres;
-GRANT EXECUTE ON FUNCTION public.batch_update_records(INTEGER) TO service_role;
 -- ============================================================================
 -- FUNCTION: get_user_clusters
 -- ============================================================================
@@ -809,277 +399,6 @@ FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_user_clusters() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_user_clusters() TO postgres;
 GRANT EXECUTE ON FUNCTION public.get_user_clusters() TO service_role;
--- ============================================================================
--- VALIDATION FUNCTIONS AND TRIGGERS
--- ============================================================================
--- Functions to call external Edge Function for record validation
--- ============================================================================
--- ============================================================================
--- FUNCTION: call_validation_function
--- ============================================================================
--- Calls Supabase Edge Function to validate record properties
--- Returns validation_errors and plausibility_errors as JSONB
--- ============================================================================
-DROP FUNCTION IF EXISTS public.call_validation_function;
-CREATE OR REPLACE FUNCTION public.call_validation_function(
-        p_properties jsonb,
-        p_previous_properties jsonb,
-        p_schema_id uuid
-    ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE validation_result jsonb;
-function_url text;
-payload text;
-response record;
-version_directory text;
-debug text;
-service_role_key text;
-BEGIN -- Construct the Edge Function URL
-function_url := current_setting('app.settings.supabase_functions_url', true) || '/validate-record';
--- If the setting is not available, use a default (adjust as needed)
-IF function_url IS NULL
-OR function_url = '/validate-record' THEN function_url := 'https://ci.thuenen.de/functions/v1/validate-record';
-END IF;
--- Get the Supabase service role key for authorization
-service_role_key := current_setting('app.settings.service_role_key', true);
--- get public.schema.directory from p_schema_id First
-SELECT directory INTO version_directory
-FROM public.schemas
-WHERE id = p_schema_id;
--- Prepare the payload as a JSON string
-payload := jsonb_build_object(
-    'properties',
-    p_properties,
-    'previous_properties',
-    p_previous_properties,
-    'validation_version',
-    version_directory
-)::text;
--- Call the Edge Function using http extension with correct signature
---SELECT * INTO response FROM http_post(
---    function_url,
---    payload,
---    'application/json'
---);
--- Call the Edge Function using http() with headers
-SELECT * INTO response
-FROM http(
-        (
-            'POST',
-            function_url,
-            ARRAY [
-            http_header('Authorization', 'Bearer ' || COALESCE(service_role_key, ''))
-        ],
-            'application/json',
-            payload
-        )::http_request
-    );
--- Check if the request was successful
-IF response.status >= 200
-AND response.status < 300 THEN validation_result := response.content::jsonb;
-ELSE -- Handle HTTP errors
-debug := format(
-    'HTTP Error %s: %s',
-    response.status,
-    response.content
-);
-RAISE NOTICE 'HTTP request failed: %',
-debug;
-RETURN jsonb_build_object(
-    'validation_errors',
-    jsonb_build_object('error', 'HTTP request failed', 'debug', debug),
-    'plausibility_errors',
-    jsonb_build_object('error', 'HTTP request failed', 'debug', debug)
-);
-END IF;
-RETURN validation_result;
-EXCEPTION
-WHEN OTHERS THEN -- Capture the error message and debug information
-debug := 'Error calling Edge Function: ' || SQLERRM;
--- Log the error for debugging purposes
-RAISE NOTICE 'Validation function error: %',
-debug;
--- Return error response if the function call fails
-RETURN jsonb_build_object(
-    'validation_errors',
-    jsonb_build_object(
-        'error',
-        'Validation service unavailable',
-        'debug',
-        debug
-    ),
-    'plausibility_errors',
-    jsonb_build_object(
-        'error',
-        'Plausibility service unavailable',
-        'debug',
-        debug
-    )
-);
-END;
-$$;
--- Permissions for call_validation_function
-REVOKE ALL ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid)
-FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid)
-FROM anon;
-REVOKE ALL ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid)
-FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid) TO postgres;
-GRANT EXECUTE ON FUNCTION public.call_validation_function(jsonb, jsonb, uuid) TO service_role;
--- ============================================================================
--- FUNCTION: handle_validation_version_change (TRIGGER FUNCTION)
--- ============================================================================
--- Triggers validation when schema_id or properties change
--- Updates validation_errors, is_valid, plausibility_errors, and is_plausible
--- ============================================================================
-DROP TRIGGER IF EXISTS trigger_validation_version_change ON public.records;
-DROP FUNCTION IF EXISTS public.handle_validation_version_change;
-CREATE OR REPLACE FUNCTION public.handle_validation_version_change() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE validation_result jsonb;
-BEGIN -- Only proceed if schema_id or properties have actually changed
-IF OLD.schema_id IS DISTINCT
-FROM NEW.schema_id
-    OR OLD.properties IS DISTINCT
-FROM NEW.properties THEN -- Call the validation function
-SELECT public.call_validation_function(
-        NEW.properties,
-        NEW.previous_properties,
-        NEW.schema_id -- assuming schema_id is used as validation_version uuid
-    ) INTO validation_result;
--- Update the validation and plausibility errors
-IF validation_result IS NOT NULL THEN NEW.validation_errors := validation_result->'validation_errors';
-NEW.is_valid := (NEW.validation_errors = '{}'::jsonb);
--- Set is_valid based on validation_errors
-NEW.plausibility_errors := validation_result->'plausibility_errors';
-NEW.is_plausible := (NEW.plausibility_errors = '{}'::jsonb);
--- Set is_plausible based on plausibility_errors
-END IF;
-END IF;
-RETURN NEW;
-END;
-$$;
--- ============================================================================
--- TRIGGER: trigger_validation_version_change
--- ============================================================================
--- Fires on schema_id, properties, or previous_properties updates
--- ============================================================================
-CREATE TRIGGER trigger_validation_version_change BEFORE
-UPDATE OF schema_id,
-    properties,
-    previous_properties ON public.records FOR EACH ROW EXECUTE FUNCTION public.handle_validation_version_change();
--- ============================================================================
--- FUNCTION: set_preliminary
--- ============================================================================
--- Sets preliminary properties from previous monitoring interval (bwi2022)
--- Copies field values from inventory_archive.plot to records.properties
--- Reference: https://github.com/Thuenen-Forest-Ecosystems/TFM-Documentation/issues/79
--- Usage: SELECT public.set_preliminary();
--- ============================================================================
-DROP FUNCTION IF EXISTS public.set_preliminary;
-CREATE OR REPLACE FUNCTION public.set_preliminary() RETURNS VOID LANGUAGE plpgsql AS $$ BEGIN -- Disable validation trigger to avoid unnecessary API calls during bulk update
-ALTER TABLE public.records DISABLE TRIGGER trigger_validation_version_change;
--- Update records.properties with values from inventory_archive.plot
-UPDATE public.records r
-SET properties = (
-        to_jsonb(p) - 'id' - 'intkey' - 'cluster_id' - 'trees_less_4meter_coverage' - 'trees_less_4meter_layer' - 'stand_structure' - 'stand_age' - 'stand_development_phase' - 'stand_layer_regeneration' - 'fence_regeneration' - 'trees_greater_4meter_mirrored' - 'trees_greater_4meter_basal_area_factor' - 'harvest_method' - 'harvest_reason'
-    ) || jsonb_build_object(
-        'tree',
-        COALESCE(
-            (
-                SELECT jsonb_agg(
-                        jsonb_build_object(
-                            'acquisition_date',
-                            x.acquisition_date,
-                            'interval_name',
-                            x.interval_name
-                        ) || jsonb_set(
-                            jsonb_set(
-                                jsonb_set(
-                                    to_jsonb(x.t) - 'plot_id',
-                                    '{dbh}',
-                                    'null'::jsonb
-                                ),
-                                '{tree_age}',
-                                CASE
-                                    WHEN (to_jsonb(x.t)->'tree_age') IS NOT NULL
-                                    AND (to_jsonb(x.t)->'tree_age') != 'null'::jsonb THEN to_jsonb(((to_jsonb(x.t)->>'tree_age')::smallint + 5))
-                                    ELSE 'null'::jsonb
-                                END
-                            ),
-                            '{tree_status}',
-                            CASE
-                                WHEN (to_jsonb(x.t)->>'tree_status')::integer IN (11, 12) THEN '2022'::jsonb
-                                ELSE to_jsonb(x.t)->'tree_status'
-                            END
-                        )
-                    )
-                FROM (
-                        SELECT pl.acquisition_date,
-                            pl.interval_name,
-                            t,
-                            row_number() OVER(
-                                PARTITION BY pl.cluster_name,
-                                pl.plot_name,
-                                t.tree_number
-                                ORDER BY pl.acquisition_date DESC
-                            ) as rn
-                        FROM inventory_archive.plot pl
-                            JOIN inventory_archive.tree t ON pl.id = t.plot_id
-                        WHERE pl.cluster_name = r.cluster_name
-                            AND pl.plot_name = r.plot_name
-                    ) x
-                WHERE x.rn = 1
-            ),
-            '[]'::jsonb
-        ),
-        'edges',
-        COALESCE(
-            (
-                SELECT jsonb_agg(
-                        jsonb_build_object(
-                            'acquisition_date',
-                            x.acquisition_date,
-                            'interval_name',
-                            x.interval_name
-                        ) || (to_jsonb(x.e) - 'plot_id')
-                    )
-                FROM (
-                        SELECT pl.acquisition_date,
-                            pl.interval_name,
-                            e,
-                            row_number() OVER(
-                                PARTITION BY pl.cluster_name,
-                                pl.plot_name,
-                                e.edge_number
-                                ORDER BY pl.acquisition_date DESC
-                            ) as rn
-                        FROM inventory_archive.plot pl
-                            JOIN inventory_archive.edges e ON pl.id = e.plot_id
-                        WHERE pl.cluster_name = r.cluster_name
-                            AND pl.plot_name = r.plot_name
-                    ) x
-                WHERE x.rn = 1
-            ),
-            '[]'::jsonb
-        )
-    )
-FROM inventory_archive.plot p
-WHERE r.cluster_name = p.cluster_name
-    AND r.plot_name = p.plot_name
-    AND p.interval_name = 'bwi2022';
--- Re-enable validation trigger
-ALTER TABLE public.records ENABLE TRIGGER trigger_validation_version_change;
-END;
-$$;
--- Permissions for set_preliminary
-REVOKE ALL ON FUNCTION public.set_preliminary()
-FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.set_preliminary()
-FROM anon;
-REVOKE ALL ON FUNCTION public.set_preliminary()
-FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.set_preliminary() TO postgres;
-GRANT EXECUTE ON FUNCTION public.set_preliminary() TO service_role;
 -- ============================================================================
 -- FUNCTION: populate_current_troop_members (TRIGGER FUNCTION)
 -- ============================================================================
