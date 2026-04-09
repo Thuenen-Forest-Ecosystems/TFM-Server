@@ -29,7 +29,3 @@ $$;
 COMMENT ON FUNCTION public.guard_records_write() IS 'Blocks record writes not originating from the Flutter app (supabase-flutter SDK). Admins are exempt.';
 -- Apply trigger to records table
 DROP TRIGGER IF EXISTS guard_records_write ON public.records;
--- CREATE TRIGGER guard_records_write BEFORE
--- UPDATE
---     OR
--- INSERT ON public.records FOR EACH ROW EXECUTE FUNCTION public.guard_records_write();

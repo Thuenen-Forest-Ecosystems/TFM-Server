@@ -156,64 +156,11 @@ UPDATE to public using (
         )
     );
 -- Stellt sicher, dass created_by nicht geändert wird
--- Function to check if the current user is a member of a troop
---CREATE OR REPLACE FUNCTION public.is_troop_member(troop_id uuid)
---RETURNS boolean
---LANGUAGE sql
---SECURITY DEFINER
---AS $$
---    SELECT EXISTS (
---        SELECT 1 
---        FROM public.troop
---        WHERE id = troop_id 
---        AND (
---            supervisor_id = auth.uid() 
---            OR auth.uid()::uuid = ANY(user_ids)
---        )
---    );
---$$;
 -- Enable RLS
 ALTER TABLE public.records ENABLE ROW LEVEL SECURITY;
 -- Drop existing policies to avoid conflicts
 DROP POLICY IF EXISTS "record_access_policy" ON public.records;
--- Create a single unified policy for all operations
---CREATE POLICY "record_access_policy"
---ON public.records
---FOR ALL
---USING (
---    -- User is record supervisor
---    supervisor_id = auth.uid()
---    OR
---    -- User is a member of the troop associated with the record
---    public.is_troop_member(troop_id)
---    OR
---    -- User is an admin
---    EXISTS (
---        SELECT 1
---        FROM public.users_profile
---        WHERE id = auth.uid() AND is_admin = true
---    )
---)
---WITH CHECK (
---    -- Same conditions for write operations
---    supervisor_id = auth.uid()
---    OR
---    public.is_troop_member(troop_id)
---    OR
---    EXISTS (
---        SELECT 1
---        FROM public.users_profile
---        WHERE id = auth.uid() AND is_admin = true
---    )
---);
 -- Troop
--- Create policy for supervisors to have full access to their troops
---CREATE POLICY "troop_supervisor_all_policy"
---ON public.troop
---FOR ALL
---USING (supervisor_id = auth.uid())
---WITH CHECK (supervisor_id = auth.uid());
--- Create policy for troop members to read troops they belong to
 DROP POLICY IF EXISTS "troop_member_read_policy" ON public.troop;
 CREATE POLICY "troop_member_read_policy" ON public.troop FOR
 SELECT USING (true);

@@ -344,19 +344,6 @@ FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) TO postgres;
 GRANT EXECUTE ON FUNCTION public.add_plot_ids_to_records(UUID, INTEGER) TO service_role;
 -- ============================================================================
--- Indexes on underlying tables to improve view query performance
--- ============================================================================
-CREATE INDEX IF NOT EXISTS idx_records_responsible_administration ON public.records (responsible_administration);
-CREATE INDEX IF NOT EXISTS idx_records_responsible_state ON public.records (responsible_state);
-CREATE INDEX IF NOT EXISTS idx_records_responsible_provider ON public.records (responsible_provider);
-CREATE INDEX IF NOT EXISTS idx_records_responsible_troop ON public.records (responsible_troop);
-CREATE INDEX IF NOT EXISTS idx_records_cluster_id ON public.records (cluster_id);
-CREATE INDEX IF NOT EXISTS idx_records_plot_id ON public.records (plot_id);
-CREATE INDEX IF NOT EXISTS idx_plot_id_interval ON inventory_archive.plot (id, interval_name);
-CREATE INDEX IF NOT EXISTS idx_plot_cluster_name ON inventory_archive.plot (cluster_name, plot_name, interval_name);
-CREATE INDEX IF NOT EXISTS idx_cluster_id ON inventory_archive.cluster (id);
-CREATE INDEX IF NOT EXISTS idx_plot_coordinates_plot_id ON inventory_archive.plot_coordinates (plot_id);
--- ============================================================================
 -- FUNCTION: get_user_clusters
 -- ============================================================================
 -- Returns all clusters a user has access to based on their organization permissions

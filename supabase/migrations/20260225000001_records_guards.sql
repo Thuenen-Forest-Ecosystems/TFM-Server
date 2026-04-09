@@ -1,10 +1,45 @@
 -- ============================================================================
--- PATCH: Allow root organisation admins to change responsible_state
+-- GUARD: Restrict record writes to the TFM Flutter app
 -- ============================================================================
--- Extends guard_records_immutable_columns so that authenticated users who hold
--- is_organization_admin = true in users_permissions for at least one
--- organisation with type = 'root' may update the responsible_state column.
--- All other immutable-column restrictions remain unchanged.
+-- Prevents users from modifying records via R, Python, or other REST clients.
+-- The supabase_flutter SDK automatically sends an X-Client-Info header
+-- (e.g. "supabase-flutter/2.10.3") on every request.
+-- Raw HTTP clients (httr, requests, curl) do not send this header.
+--
+-- RLS policies remain unchanged → PowerSync sync (SELECT) is unaffected.
+-- No app changes required.
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.guard_records_write() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = '' AS $$
+DECLARE headers json;
+client_info text;
+BEGIN -- PostgREST exposes request headers via a GUC variable
+headers := current_setting('request.headers', true)::json;
+client_info := headers->>'x-client-info';
+-- Allow writes from the Flutter app (supabase-flutter SDK)
+IF client_info IS NOT NULL
+AND client_info LIKE 'supabase-flutter%' THEN RETURN NEW;
+END IF;
+-- Block everything else
+RAISE EXCEPTION 'Direct API writes are not permitted. Use the TFM app to modify records.' USING ERRCODE = '42501';
+-- insufficient_privilege
+RETURN NULL;
+END;
+$$;
+COMMENT ON FUNCTION public.guard_records_write() IS 'Blocks record writes not originating from the Flutter app (supabase-flutter SDK). Admins are exempt.';
+-- Apply trigger to records table
+DROP TRIGGER IF EXISTS guard_records_write ON public.records;
+-- ============================================================================
+-- GUARD: Immutable columns on public.records for authenticated users
+-- ============================================================================
+-- Prevents authenticated users from changing fields that are only managed
+-- by server-side processes (data import, admin operations, etc.).
+-- service_role and other elevated roles bypass this trigger.
+-- Root organisation admins may update responsible_state.
+-- Protected columns:
+--   plot_id, cluster_id, cluster_name, plot_name,
+--   responsible_administration, responsible_state (except root admins),
+--   is_training, previous_position_data, cluster, previous_properties
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.guard_records_immutable_columns() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = '' AS $$
@@ -59,3 +94,7 @@ RETURN NEW;
 END;
 $$;
 COMMENT ON FUNCTION public.guard_records_immutable_columns() IS 'Prevents authenticated users from modifying server-managed columns on records. service_role bypasses this guard. responsible_state may be changed by admins of root organisations.';
+-- Apply trigger
+DROP TRIGGER IF EXISTS guard_records_immutable_columns ON public.records;
+CREATE TRIGGER guard_records_immutable_columns BEFORE
+UPDATE ON public.records FOR EACH ROW EXECUTE FUNCTION public.guard_records_immutable_columns();

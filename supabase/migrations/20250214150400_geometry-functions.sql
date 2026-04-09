@@ -37,43 +37,17 @@ current_point := ST_Project(
     distance_m,
     azimuth_rad
 )::extensions.geometry;
---current_point := ST_Translate(current_point,
---                              distance_m * sin(azimuth_rad),
---                              distance_m * cos(azimuth_rad));
 point_array := point_array || current_point;
 END LOOP;
 RETURN ST_Transform(ST_MakeLine(point_array), 4326);
---RETURN ST_MakeLine(point_array); -- No need for ST_SetSRID; it's already in WGS84
 END;
 $$ LANGUAGE plpgsql
 SET search_path = extensions,
     public,
     inventory_archive;
-CREATE OR REPLACE FUNCTION update_geom_column() RETURNS TRIGGER AS $$
-DECLARE start_point extensions.geometry;
-BEGIN
-SELECT position_mean INTO start_point
-FROM inventory_archive.position
-WHERE plot_id = NEW.plot_id;
-IF start_point IS NULL THEN RAISE NOTICE 'No start point found for plot_id: %',
-NEW.plot_id;
-RETURN NEW;
-END IF;
--- Start point is ALREADY in WGS84 (EPSG:4326)
-NEW.geometry_edges := create_linestring_from_edges(NEW.edges, start_point);
-RETURN NEW;
-END;
-$$ LANGUAGE plpgsql
-SET search_path = extensions,
-    public,
-    inventory_archive;
--- Deprecated: This trigger is not needed anymore as we handle geometry updates in the update_edges_coordinates function.
 DROP TRIGGER IF EXISTS update_geom_trigger ON inventory_archive.edges;
---CREATE TRIGGER update_geom_trigger
---BEFORE UPDATE OR INSERT ON inventory_archive.edges
---FOR EACH ROW
---EXECUTE PROCEDURE update_geom_column();
--- EDGET_COORDINATES TRIGGER --
+DROP FUNCTION IF EXISTS update_geom_column();
+-- EDGES COORDINATES TRIGGER --
 CREATE OR REPLACE FUNCTION inventory_archive.update_edges_coordinates() RETURNS TRIGGER AS $$
 DECLARE start_point extensions.geometry;
 new_geometry extensions.geometry;
