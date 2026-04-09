@@ -121,6 +121,7 @@ SET name_de = EXCLUDED.name_de,
     sort = EXCLUDED.sort;
 CREATE TABLE IF NOT EXISTS lookup_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_edge_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_edge_type_deprecated (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_edge_type (code, name_de, name_en, interval, sort)
 VALUES (
         10,

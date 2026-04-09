@@ -11,7 +11,7 @@
 -- Processes in batches with pg_sleep pauses to avoid I/O saturation.
 --
 -- Usage:
-SELECT public.fill_previous_properties(9999911);
+--   SELECT public.fill_previous_properties(9999911);
 --   SELECT public.fill_previous_properties();              -- all records, default batch 200
 --   SELECT public.fill_previous_properties(1234);          -- only cluster 1234
 --   SELECT public.fill_previous_properties(NULL, 500);     -- all records, batch 500
