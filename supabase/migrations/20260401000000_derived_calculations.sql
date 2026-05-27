@@ -65,7 +65,7 @@ ALTER TABLE derived.tree ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_read_derived_tree" ON derived.tree;
 DROP POLICY IF EXISTS "allow_service_role_all" ON derived.tree;
 CREATE POLICY "allow_read_derived_tree" ON derived.tree FOR
-SELECT TO authenticated USING (true);
+SELECT TO authenticated, anon USING (true);
 CREATE POLICY "allow_service_role_all" ON derived.tree FOR ALL TO service_role USING (true);
 -- =============================================================================
 -- derived.regeneration — one row per inventory_archive.regeneration
@@ -94,7 +94,7 @@ ALTER TABLE derived.regeneration ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_read_derived_regen" ON derived.regeneration;
 DROP POLICY IF EXISTS "allow_service_role_all_regen" ON derived.regeneration;
 CREATE POLICY "allow_read_derived_regen" ON derived.regeneration FOR
-SELECT TO authenticated USING (true);
+SELECT TO authenticated, anon USING (true);
 CREATE POLICY "allow_service_role_all_regen" ON derived.regeneration FOR ALL TO service_role USING (true);
 -- =============================================================================
 -- derived.deadwood — one row per inventory_archive.deadwood
@@ -117,7 +117,7 @@ ALTER TABLE derived.deadwood ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_read_derived_dw" ON derived.deadwood;
 DROP POLICY IF EXISTS "allow_service_role_all_dw" ON derived.deadwood;
 CREATE POLICY "allow_read_derived_dw" ON derived.deadwood FOR
-SELECT TO authenticated USING (true);
+SELECT TO authenticated, anon USING (true);
 CREATE POLICY "allow_service_role_all_dw" ON derived.deadwood FOR ALL TO service_role USING (true);
 -- =============================================================================
 -- FUNCTION: derived.calc_basal_area(dbh_mm)

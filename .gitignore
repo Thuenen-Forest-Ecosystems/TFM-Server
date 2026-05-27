@@ -24,3 +24,5 @@ supabase/snippets/
 .certificates
 
 rscripts/.data
+
+test/data
