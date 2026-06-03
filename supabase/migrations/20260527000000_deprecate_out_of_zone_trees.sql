@@ -30,6 +30,9 @@ BEGIN
     WHERE (elem ->> 'id') = ANY(p_tree_ids)
       AND COALESCE((elem ->> '_deprecated')::boolean, false) = false;
   ELSE
+    -- Skip audit triggers for this maintenance update.
+    PERFORM set_config('app.skip_updated_by', 'on', true);
+    PERFORM set_config('app.skip_updated_at', 'on', true);
     UPDATE public.records r
     SET
       properties       = (
