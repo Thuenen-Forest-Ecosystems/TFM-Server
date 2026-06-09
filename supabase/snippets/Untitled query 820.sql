@@ -48,17 +48,107 @@ LOOP WITH batch AS (
     LIMIT p_batch_size
 )
 UPDATE public.records r
-SET -- previous_properties: full nested plot JSON from base view
+SET -- previous_properties: inline equivalent of plot_nested_json, but with the
+    -- cluster_name/plot_name filter pushed into the base plot lookup so the
+    -- planner can use idx_plot_cluster_name rather than scanning the whole view.
     previous_properties = COALESCE(
         (
-            SELECT row_to_json(v)::jsonb
-            FROM public.plot_nested_json v
-            WHERE v.cluster_name = b.cluster_name
-                AND v.plot_name = b.plot_name
-        ),
-        '{}'::jsonb
-    ),
-    -- cluster
+            SELECT row_to_json(nested.*)::jsonb
+            FROM (
+                    SELECT p.*,
+                        COALESCE(
+                            (
+                                SELECT row_to_json(pc)
+                                FROM inventory_archive.plot_coordinates pc
+                                WHERE pc.plot_id = p.id
+                            ),
+                            '{}'::json
+                        ) AS plot_coordinates,
+                        COALESCE(
+                            (
+                                SELECT json_agg(psp)
+                                FROM inventory_archive.plot_support_points psp
+                                WHERE psp.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS plot_support_points,
+                        COALESCE(
+                            (
+                                SELECT json_agg(srp)
+                                FROM inventory_archive.subplots_relative_position srp
+                                WHERE srp.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS subplots_relative_position,
+                        COALESCE(
+                            (
+                                SELECT json_agg(row_to_json(t.*))
+                                FROM inventory_archive.tree t
+                                WHERE t.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS tree,
+                        COALESCE(
+                            (
+                                SELECT json_agg(row_to_json(d.*))
+                                FROM inventory_archive.deadwood d
+                                WHERE d.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS deadwood,
+                        COALESCE(
+                            (
+                                SELECT json_agg(row_to_json(rg.*))
+                                FROM inventory_archive.regeneration rg
+                                WHERE rg.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS regeneration,
+                        COALESCE(
+                            (
+                                SELECT json_agg(row_to_json(s.*))
+                                FROM inventory_archive.structure_lt4m s
+                                WHERE s.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS structure_lt4m,
+                        COALESCE(
+                            (
+                                SELECT json_agg(row_to_json(e.*))
+                                FROM inventory_archive.edges e
+                                WHERE e.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS edges,
+                        COALESCE(
+                            (
+                                SELECT json_agg(row_to_json(gt4m.*))
+                                FROM inventory_archive.structure_gt4m gt4m
+                                WHERE gt4m.plot_id = p.id
+                            ),
+                            '[]'::json
+                        ) AS structure_gt4m,
+                        COALESCE(
+                            (
+                                SELECT row_to_json(pos)
+                                FROM inventory_archive.position pos
+                                WHERE pos.plot_id = p.id
+                            ),
+                            '{}'::json
+                        ) AS position
+                    FROM inventory_archive.plot p
+                    WHERE p.cluster_name = b.cluster_name
+                        AND p.plot_name = b.plot_name
+                        AND p.interval_name IN ('bwi2022', 'ci2027')
+                    ORDER BY CASE
+                            p.interval_name
+                            WHEN 'bwi2022' THEN 1
+                            ELSE 2
+                        END
+                    LIMIT 1
+                ) nested
+        ), '{}'::jsonb
+    ), -- cluster
     cluster = COALESCE(
         (
             SELECT row_to_json(c)::jsonb

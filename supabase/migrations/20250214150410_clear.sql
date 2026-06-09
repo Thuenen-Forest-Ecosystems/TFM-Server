@@ -1,2 +1,0 @@
---DROP TABLE IF EXISTS inventory_archive.table_template CASCADE;
---DROP TABLE IF EXISTS lookup.lookup_template CASCADE;

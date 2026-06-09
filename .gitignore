@@ -17,9 +17,12 @@ volumes/auth
 
 supabase/tmp
 supabase/seeds/intern
+supabase/snippets/
 
 .utils
 
 .certificates
 
 rscripts/.data
+
+test/data

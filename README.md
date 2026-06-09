@@ -1,7 +1,9 @@
 # TFM Server
 
 ## Requirements
+
 Make sure you have the following installed:
+
 - [Git](https://git-scm.com/downloads)
 - [Docker](https://docs.docker.com/engine/install/)
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
@@ -9,14 +11,14 @@ Make sure you have the following installed:
 ## Clone Repository
 
 ```bash
-git clone --recurse-submodules -j8 https://github.com/Thuenen-Forest-Ecosystems/TFM-Server.git
+git clone --branch version_2 --recurse-submodules -j8 https://github.com/Thuenen-Forest-Ecosystems/TFM-Server.git
 cd TFM-Server
 cp .env.example .env
 ```
 
 ### Thünen internal seeds repository
 
-For ***Thünen employees only*** with access to *DMZ*, you can clone the internal seeds repository:
+For **_Thünen employees only_** with access to _DMZ_, you can clone the internal seeds repository:
 
 ```bash
 git clone https://git-dmz.thuenen.de/tfm-seeds/intern.git supabase/seeds/intern
@@ -25,11 +27,13 @@ git clone https://git-dmz.thuenen.de/tfm-seeds/intern.git supabase/seeds/intern
 ## Local development
 
 ### Start Supabase and Powersync
+
 ```bash
 supabase start
 ```
 
 ### Stop Supabase and Powersync
+
 ```bash
 supabase stop
 ```
@@ -37,13 +41,15 @@ supabase stop
 ## Sync Service
 
 ### Start Powersync
+
 ```bash
 docker compose --env-file .env.local -f docker-compose.local.yaml up -d
 ```
 
 ### Stop Powersync
+
 ```bash
-docker compose --env-file .env.local -f docker-compose.local.yaml down 
+docker compose --env-file .env.local -f docker-compose.local.yaml down
 ```
 
 ## Remote Server

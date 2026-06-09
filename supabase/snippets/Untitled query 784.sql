@@ -23,7 +23,6 @@ SET search_path = public,
     inventory_archive AS $$
 DECLARE batch_count integer;
 total integer := 0;
-v_started_at timestamptz := clock_timestamp();
 BEGIN
 ALTER TABLE public.records DISABLE TRIGGER before_record_insert_or_update;
 RAISE NOTICE 'set_previous_properties (cluster %, batch %) ...',
@@ -43,7 +42,6 @@ LOOP WITH batch AS (
             r.previous_properties IS NULL
             OR r.previous_properties = '{}'::jsonb
         )
-        AND r.previous_properties_updated_at < v_started_at
     ORDER BY r.id
     LIMIT p_batch_size
 )

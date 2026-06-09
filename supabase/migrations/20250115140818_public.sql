@@ -213,9 +213,9 @@ CREATE TABLE IF NOT EXISTS "records" (
   "cluster_name" integer NULL,
   "plot_name" smallint NULL,
   -- Data and validation
-  "properties" json NOT NULL DEFAULT '{}'::json,
-  "previous_properties" json NOT NULL DEFAULT '{}'::json,
-  "previous_properties_updated_at" timestamp with time zone NOT NULL DEFAULT now(),
+  "properties" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "previous_properties" jsonb NOT NULL DEFAULT '{}'::jsonb,
+  "previous_properties_updated_at" timestamp with time zone NULL DEFAULT NULL,
   "schema_id" uuid NULL REFERENCES public.schemas(id),
   "schema_name" text NULL DEFAULT 'ci2027',
   -- Validation results
@@ -242,6 +242,7 @@ CREATE TABLE IF NOT EXISTS "records" (
     "message" text NULL,
     "note" text NULL,
     "record_changes_id" uuid NULL,
+    "is_training" boolean NOT NULL DEFAULT false,
     CONSTRAINT unique_cluster_plot UNIQUE (cluster_name, plot_name)
 );
 ALTER TABLE "records"

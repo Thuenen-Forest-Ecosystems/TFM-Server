@@ -5,7 +5,6 @@ ALTER SCHEMA lookup OWNER TO postgres;
 COMMENT ON SCHEMA lookup IS 'Lookup Tabellen';
 SET search_path TO lookup;
 CREATE TABLE IF NOT EXISTS lookup_TEMPLATE (
-    --abbreviation text UNIQUE NOT NULL,
     code serial UNIQUE NOT NULL,
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL,
     name_de text NOT NULL,
@@ -33,7 +32,6 @@ CREATE TABLE IF NOT EXISTS lookup_growth_district (LIKE lookup.lookup_TEMPLATE I
 ALTER TABLE lookup.lookup_growth_district
 ADD COLUMN IF NOT EXISTS growth_region smallint NULL REFERENCES lookup.lookup_growth_region (code);
 CREATE TABLE IF NOT EXISTS lookup_harvest_condition (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
--- formerly lookup_harvesting_method
 CREATE TABLE IF NOT EXISTS lookup_harvest_method (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_harvest_reason (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_land_use (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -82,12 +80,9 @@ VALUES (
         2017
     );
 CREATE TABLE IF NOT EXISTS lookup_basal_area_factor (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
--- was commented out before
---CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_trees_greater_4meter_mirrored (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_trees_less_4meter_origin (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_harvest_restriction (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
---CREATE TABLE IF NOT EXISTS lookup_harvest_restriction_source (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_accessibility (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_biotope (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_damage_peel (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
@@ -102,14 +97,11 @@ CREATE TABLE IF NOT EXISTS lookup_biosphaere (LIKE lookup.lookup_TEMPLATE INCLUD
 ALTER TABLE lookup_biosphaere
 ADD COLUMN bfn_code varchar(20) NULL;
 CREATE TABLE lookup_natur_schutzgebiet (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
---CREATE TABLE lookup_forestry_office (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_district (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE lookup_municipality (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 ALTER TABLE lookup_municipality
 ADD COLUMN IF NOT EXISTS code_district INTEGER NULL REFERENCES lookup.lookup_district (code);
---CREATE TABLE lookup_usage_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 CREATE TABLE IF NOT EXISTS lookup_interval (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
--- change code to type text
 ALTER TABLE lookup.lookup_interval
 ALTER COLUMN code TYPE text USING code::text;
 INSERT INTO lookup.lookup_interval (code, name_de, name_en, sort)
@@ -128,8 +120,8 @@ SET name_de = EXCLUDED.name_de,
     interval = EXCLUDED.interval,
     sort = EXCLUDED.sort;
 CREATE TABLE IF NOT EXISTS lookup_layer (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
--- 
 CREATE TABLE IF NOT EXISTS lookup_edge_type (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS lookup_edge_type_deprecated (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_edge_type (code, name_de, name_en, interval, sort)
 VALUES (
         10,
@@ -213,20 +205,6 @@ SET name_de = EXCLUDED.name_de,
     name_en = EXCLUDED.name_en,
     interval = EXCLUDED.interval,
     sort = EXCLUDED.sort;
-CREATE TABLE IF NOT EXISTS lookup_edge_type_deprecated (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
---INSERT INTO lookup.lookup_edge_type_deprecated (code, name_de, name_en, interval, sort)
---VALUES
---    (10, 'neue, erstmals eingemessene Grenze zu Nichtwald', 'New boundary to non-forest, measured for the first time', ARRAY['bwi2027'], 10),
---    (11, 'neue, erstmals eingemessene Grenze zu Nichtwald, welche auch für frühere Aufnahmen gilt', 'New boundary to non-forest, measured for the first time, which also applies to earlier surveys', ARRAY['bwi2027'], 11),
---    (12, 'aus früherer Aufnahme übernommene, immer noch gültige Grenze zu Nichtwald', 'Still valid boundary to non-forest, taken over from previous recording', ARRAY['bwi2027'], 12),
---    (20, 'neue, erstmals eingemessene Grenze zu Nichtholzboden', 'New boundary to unstocked forest land, measured for the first time', ARRAY['bwi2027'], 20),
---    (21, 'neue, erstmals eingemessene Grenze zu Nichtholzboden, welche auch für frühere Aufnahmen gilt', 'New boundary to unstocked forest land, measured for the first time, which also applies to earlier surveys', ARRAY['bwi2027'], 21),
---    (22, 'aus früherer Aufnahme übernommene, immer noch gültige Grenze zu Nichtholzboden', 'Still valid boundary to unstocked forest land, taken over from previous recording', ARRAY['bwi2027'], 22),
---    (30, 'neue, erstmals eingemessene Grenze zu nicht begehbaren Holzboden', 'New boundary to non-accessible forest floor measured for the first time', ARRAY['bwi2027'], 30),
---    (31, 'neue, erstmals eingemessene Grenze zu nicht begehbaren Holzboden, welche auch für frühere Aufnahmen gilt', 'New boundary to non-accessible forest, measured for the first time, which also applies to earlier surveys', ARRAY['bwi2027'], 31),
---    (32, 'aus früherer Aufnahme übernommene, immer noch gültige Grenze zu nicht begehbaren Holzboden', 'Still valid boundary to non-accessible forest, taken over from previous recording', ARRAY['bwi2027'], 32),
---    (42, 'aus früherer Aufnahme übernommene, immer noch gültige Bestandesgrenze', 'Still valid boundary between different stands, taken over from previous recording', ARRAY['bwi2027'], 42),
---    (99, 'Grenze einer früheren Aufnahme, die zum aktuellen Inventurzeitpunkt nicht mehr auffindbar bzw. nicht mehr gültig ist', 'Boundary of a previous inventory that can no longer be found or is no longer valid at the current survey', ARRAY['bwi2027'], 99);
 CREATE TABLE IF NOT EXISTS lookup_edge_stand_difference (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_edge_stand_difference (code, name_de, name_en, interval, sort)
 VALUES (
@@ -311,7 +289,6 @@ SET name_de = EXCLUDED.name_de,
     name_en = EXCLUDED.name_en,
     interval = EXCLUDED.interval,
     sort = EXCLUDED.sort;
--- NEW Table: lookup_cover_percentage
 CREATE TABLE IF NOT EXISTS lookup.lookup_cover_percentage (LIKE lookup.lookup_TEMPLATE INCLUDING ALL);
 INSERT INTO lookup.lookup_cover_percentage (code, name_de, name_en, interval, sort)
 VALUES (

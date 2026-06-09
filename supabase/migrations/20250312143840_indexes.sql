@@ -20,3 +20,7 @@ DROP INDEX IF EXISTS idx_plot_support_points_plot_id;
 CREATE INDEX IF NOT EXISTS idx_plot_support_points_plot_id ON inventory_archive.plot_support_points (plot_id);
 DROP INDEX IF EXISTS idx_position_plot_id;
 CREATE INDEX IF NOT EXISTS idx_position_plot_id ON inventory_archive.position (plot_id);
+CREATE INDEX IF NOT EXISTS idx_records_responsible_administration ON public.records (responsible_administration);
+CREATE INDEX IF NOT EXISTS idx_plot_id_interval ON inventory_archive.plot (id, interval_name);
+CREATE INDEX IF NOT EXISTS idx_plot_cluster_name ON inventory_archive.plot (cluster_name, plot_name, interval_name);
+CREATE INDEX IF NOT EXISTS idx_cluster_id ON inventory_archive.cluster (id);

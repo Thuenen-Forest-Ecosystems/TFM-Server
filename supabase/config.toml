@@ -8,7 +8,7 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` is always included.
-schemas = ["inventory_archive", "derived", "lookup",  "public", "graphql_public"]
+schemas = ["inventory_archive", "derived", "lookup", "public", "graphql_public"]
 # Extra schemas to add to the search_path of every request. `public` is always included.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
@@ -102,7 +102,7 @@ site_url = "http://localhost:5173/TFM-Documentation/"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
     "http://localhost:5173/TFM-Documentation/**",
-    "https://thuenen-forest-ecosystems.github.io/TFM-Documentation/**"
+    "https://thuenen-forest-ecosystems.github.io/TFM-Documentation/**",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week). 86400 = 24 Std
 jwt_expiry = 86400
@@ -138,7 +138,7 @@ otp_expiry = 86400 #one day 3600
 # Use a production-ready SMTP server
 [auth.email.smtp]
 host = "env(SMTP_HOST)"
-port = "env(SMTP_PORT)"  # Ensure this is an integer env(SMTP_PORT)
+port = "env(SMTP_PORT)"               # Ensure this is an integer env(SMTP_PORT)
 user = "env(SMTP_USER)"
 pass = "env(SMTP_PASS)"
 admin_email = "env(SMTP_ADMIN_EMAIL)"
@@ -259,7 +259,7 @@ policy = "oneshot"
 inspector_port = 8083
 
 [analytics]
-enabled = true
+enabled = false
 port = 54327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
