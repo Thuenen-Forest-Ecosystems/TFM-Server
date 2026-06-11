@@ -10,13 +10,13 @@ that are out of zone, dead, or harvested.
 ## 1. Populate records with plots
 
 ```sql
-SELECT public.add_plot_ids_to_records('[public.schema.id]', 1000);
+SELECT public.add_plot_ids_to_records('[public.schemas.id]', 1000);
 ```
 
 Inserts plots from `inventory_archive` into the `records` table. Filters plots by
 `grid_density`, `federal_state`, `sampling_stratum`, and training status, and processes
 them in batches (here, 1000 per batch) to avoid performance issues. Skips plots that are
-already present, so it is safe to re-run. Replace `[public.schema.id]` with the target
+already present, so it is safe to re-run. Replace `[public.schemas.id]` with the target
 schema UUID; the second argument is the batch size.
 
 ## 2. Fill previous properties
