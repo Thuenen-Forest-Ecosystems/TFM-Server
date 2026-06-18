@@ -85,7 +85,7 @@ SET -- previous_properties: inline equivalent of plot_nested_json, but with the
                         ) AS subplots_relative_position,
                         COALESCE(
                             (
-                                SELECT json_agg(row_to_json(x.t))
+                                SELECT json_agg(row_to_json(x))
                                 FROM (
                                     SELECT pl.acquisition_date,
                                         pl.interval_name,
