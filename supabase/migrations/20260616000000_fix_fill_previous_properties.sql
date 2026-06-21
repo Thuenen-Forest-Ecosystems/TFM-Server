@@ -85,7 +85,13 @@ SET -- previous_properties: inline equivalent of plot_nested_json, but with the
                         ) AS subplots_relative_position,
                         COALESCE(
                             (
-                                SELECT json_agg(row_to_json(x))
+                                SELECT json_agg(
+                                        (jsonb_build_object(
+                                            'acquisition_date',
+                                            x.acquisition_date,
+                                            'interval_name',
+                                            x.interval_name
+                                        ) || row_to_json(x.t)::jsonb)::json)
                                 FROM (
                                     SELECT pl.acquisition_date,
                                         pl.interval_name,
@@ -131,7 +137,13 @@ SET -- previous_properties: inline equivalent of plot_nested_json, but with the
                         ) AS structure_lt4m,
                         COALESCE(
                             (
-                                SELECT json_agg(row_to_json(x.e))
+                                SELECT json_agg(
+                                        (jsonb_build_object(
+                                            'acquisition_date',
+                                            x.acquisition_date,
+                                            'interval_name',
+                                            x.interval_name
+                                        ) || row_to_json(x.e)::jsonb)::json)
                                 FROM (
                                     SELECT pl.acquisition_date,
                                         pl.interval_name,
