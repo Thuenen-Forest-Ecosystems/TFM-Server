@@ -18,9 +18,12 @@ CREATE TABLE IF NOT EXISTS "public"."schemas" (
   "title" text not null,
   "description" text,
   "is_visible" boolean not null default false,
+  "is_deprecated" boolean not null default false,
   "bucket_schema_file_name" text,
   "bucket_plausability_file_name" text,
-  "schema" json,
+  "schema" jsonb NULL,
+  "style_default" jsonb NULL,
+  "plausability_script" text NULL,
   "version" integer,
   "directory" text
 );
@@ -212,7 +215,7 @@ CREATE TABLE IF NOT EXISTS "records" (
   -- Data and validation
   "properties" jsonb NOT NULL DEFAULT '{}'::jsonb,
   "previous_properties" jsonb NOT NULL DEFAULT '{}'::jsonb,
-  "previous_properties_updated_at" timestamp with time zone NOT NULL DEFAULT now(),
+  "previous_properties_updated_at" timestamp with time zone NULL DEFAULT NULL,
   "schema_id" uuid NULL REFERENCES public.schemas(id),
   "schema_name" text NULL DEFAULT 'ci2027',
   -- Validation results
@@ -239,6 +242,7 @@ CREATE TABLE IF NOT EXISTS "records" (
     "message" text NULL,
     "note" text NULL,
     "record_changes_id" uuid NULL,
+    "is_training" boolean NOT NULL DEFAULT false,
     CONSTRAINT unique_cluster_plot UNIQUE (cluster_name, plot_name)
 );
 ALTER TABLE "records"
@@ -246,6 +250,17 @@ ADD COLUMN IF NOT EXISTS "current_troop_members" uuid [] NULL DEFAULT '{}';
 ALTER TABLE "records"
 ADD COLUMN IF NOT EXISTS "previous_position_data" jsonb NULL DEFAULT '{}'::jsonb;
 COMMENT ON COLUMN "records"."previous_position_data" IS 'Position data from previous inventory intervals stored by interval_name. Contains all fields from inventory_archive.position table.';
+ALTER TABLE "records"
+ADD COLUMN IF NOT EXISTS "local_updated_at" timestamp with time zone NULL;
+COMMENT ON COLUMN "public"."records"."local_updated_at" IS 'Timestamp of last local modification before sync. NULL means no pending changes. Used to determine if record has unsynced local changes.';
+ALTER TABLE "records"
+ADD COLUMN IF NOT EXISTS "is_to_be_recorded_by_troop" boolean NOT NULL DEFAULT true;
+--not nullable default true
+COMMENT ON COLUMN "public"."records"."is_to_be_recorded_by_troop" IS 'Indicates if the plot is marked to be recorded in the current inventory interval. TRUE means it should be recorded. FALSE means it should not be recorded.';
+ALTER TABLE "records"
+ADD COLUMN IF NOT EXISTS "cluster" jsonb NULL DEFAULT NULL;
+COMMENT ON COLUMN "public"."records"."cluster" IS 'Snapshot of cluster data from inventory_archive.cluster at the time of record creation or last update.';
+-- ============================================================================
 -- Auto-update updated_at timestampop_members contains only valid auth.users IDs
 -- ALTER TABLE "records" ADD CONSTRAINT check_current_troop_members_valid_users
 -- CHECK (
@@ -260,6 +275,23 @@ CREATE TRIGGER handle_updated_at BEFORE
 UPDATE ON records FOR EACH ROW EXECUTE PROCEDURE extensions.moddatetime (updated_at);
 COMMENT ON TABLE "records" IS 'Forest inventory plot data collection records';
 COMMENT ON COLUMN "records"."current_troop_members" IS 'Array of user IDs currently assigned to work on this record. All IDs must exist in auth.users table.';
+-- ============================================================================
+-- FUNCTION: update_updated_by_column (TRIGGER FUNCTION)
+-- ============================================================================
+-- Automatically updates updated_by column with current user on record updates
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.update_updated_by_column() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = '' AS $$ BEGIN NEW.updated_by = auth.uid();
+RETURN NEW;
+END;
+$$;
+-- ============================================================================
+-- TRIGGER: handle_updated_by
+-- ============================================================================
+-- Auto-updates updated_by column on record modifications
+-- ============================================================================
+CREATE TRIGGER handle_updated_by BEFORE
+UPDATE ON records FOR EACH ROW EXECUTE FUNCTION update_updated_by_column();
 -- ============================================================================
 -- INDEXES: records
 -- ============================================================================

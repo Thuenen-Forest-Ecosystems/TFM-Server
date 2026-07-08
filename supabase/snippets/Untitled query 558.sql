@@ -1,0 +1,1 @@
+SELECT * FROM plot_nested_json WHERE cluster_name>1000000058

@@ -2,7 +2,7 @@ services:
   # MongoDB Service used internally
   mongo:
     image: mongo:7.0
-    command: 
+    command:
       - --replSet
       - rs0
       - --bind_ip_all
@@ -22,22 +22,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    
+
     deploy:
       resources:
         limits:
-          memory: 4G  # Limit to 4GB instead of consuming 8GB+
-          cpus: '2.0'  # Limit to 2 CPU cores
+          memory: 7G
+          cpus: "2.0"
         reservations:
-          memory: 2G
-          cpus: '1.0'
+          memory: 4G
+          cpus: "1.0"
 
   # Initializes the MongoDB replica set. This service will not usually be actively running
   mongo-rs-init:
     image: mongo:7.0
     depends_on:
       mongo:
-        condition: service_healthy  # Wait for mongo to be healthy
+        condition: service_healthy # Wait for mongo to be healthy
     restart: on-failure
     entrypoint:
       - bash

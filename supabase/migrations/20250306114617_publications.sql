@@ -31,3 +31,5 @@ ALTER PUBLICATION powersync
 ADD TABLE public.records;
 ALTER PUBLICATION powersync
 ADD TABLE public.troop_members;
+ALTER PUBLICATION powersync
+ADD TABLE public.users_permissions;
