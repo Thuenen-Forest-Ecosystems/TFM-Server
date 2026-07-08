@@ -21,17 +21,58 @@ bucket_definitions:
   #  data:
   #    #- SELECT * FROM "inventory_archive"."plot" WHERE TRUE = bucket.is_admin
   #    - SELECT * FROM "public"."records" WHERE TRUE = bucket.is_admin
-      
 
-  organizations:
+  user_organizations:
     parameters:
-      - SELECT organization_id FROM "public"."users_profile" WHERE id = request.user_id()
+      # This query returns multiple rows if user has multiple organizations
+      - SELECT organization_id FROM "public"."users_permissions" WHERE user_id = request.user_id()
     data:
+      # Each bucket gets data for its specific organization_id
       - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
       - SELECT * FROM "public"."organizations_lose" WHERE organization_id = bucket.organization_id
-      - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
-      - SELECT * FROM "public"."records" WHERE responsible_administration = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_provider = bucket.organization_id
-  
+      # - SELECT * FROM "public"."records" WHERE
+      #     responsible_administration = bucket.organization_id OR
+      #     responsible_state = bucket.organization_id OR
+      #     responsible_provider = bucket.organization_id
+      - SELECT * FROM "public"."troop" WHERE organization_id = bucket.organization_id
+      - SELECT * FROM "public"."records_messages"
+        WHERE responsible_administration = bucket.organization_id
+        OR responsible_state = bucket.organization_id
+        OR responsible_provider = bucket.organization_id
+
+  troop_records:
+    parameters:
+      - SELECT troop_id FROM "public"."troop_members" WHERE user_id = request.user_id()
+    data:
+      - SELECT * FROM "public"."records" WHERE responsible_troop = bucket.troop_id OR responsible_control_troop = bucket.troop_id
+      - SELECT * FROM "public"."records_messages"
+        WHERE responsible_troop = bucket.troop_id OR responsible_control_troop = bucket.troop_id
+
+#  organization_admin_records:
+#    parameters:
+#      # Only for users who are organization admins
+#      - SELECT organization_id FROM "public"."users_permissions" WHERE
+#        user_id = request.user_id() AND is_organization_admin = true
+#    data:
+      # All records where the organization is responsible in any role
+#      - SELECT * FROM "public"."records" WHERE
+#          responsible_administration = bucket.organization_id OR
+#          responsible_state = bucket.organization_id OR
+#          responsible_provider = bucket.organization_id
+#      - SELECT * FROM "public"."records_messages" WHERE
+#          responsible_administration = bucket.organization_id OR
+#          responsible_state = bucket.organization_id OR
+#          responsible_provider = bucket.organization_id
+
+  #organizations:
+  #  parameters:
+  #    - SELECT organization_id FROM "public"."users_profile" WHERE id = request.user_id()
+  #  data:
+  #    - SELECT * FROM "public"."organizations" WHERE id = bucket.organization_id OR parent_organization_id = bucket.organization_id
+  #    - SELECT * FROM "public"."organizations_lose" WHERE organization_id = bucket.organization_id
+  #    - SELECT * FROM "public"."users_profile" WHERE id = bucket.organization_id
+  #    - SELECT * FROM "public"."records" WHERE responsible_administration = bucket.organization_id OR responsible_state = bucket.organization_id OR responsible_provider = bucket.organization_id
+
   permissions:
     parameters:
       - SELECT request.user_id() as user_id
@@ -44,7 +85,15 @@ bucket_definitions:
       - SELECT * FROM "public"."organizations"
       - SELECT * FROM "public"."users_profile"
       - SELECT * FROM "public"."troop"
+      - SELECT * FROM "lookup"."lookup_tree_species"
       # - SELECT * FROM "inventory_archive"."cluster"
+
+      # NEW
+      - SELECT * FROM "lookup"."lookup_trees_greater_4meter_mirrored"
+      - SELECT * FROM "lookup"."lookup_cover_percentage"
+      - SELECT * FROM "lookup"."lookup_edge_stand_difference"
+      - SELECT * FROM "lookup"."lookup_support_point_type"
+      - SELECT * FROM "lookup"."lookup_municipality"
 
       # Lookup Tables
       - SELECT * FROM "lookup"."lookup_accessibility"
@@ -101,7 +150,7 @@ bucket_definitions:
       - SELECT * FROM "lookup"."lookup_terrain"
       - SELECT * FROM "lookup"."lookup_terrain_form"
       - SELECT * FROM "lookup"."lookup_tree_size_class"
-      - SELECT * FROM "lookup"."lookup_tree_species"
+
       - SELECT * FROM "lookup"."lookup_tree_species_group"
       - SELECT * FROM "lookup"."lookup_tree_status"
       - SELECT * FROM "lookup"."lookup_trees_less_4meter_layer"

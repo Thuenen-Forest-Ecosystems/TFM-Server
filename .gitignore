@@ -16,6 +16,7 @@ volumes/storage
 volumes/auth
 
 supabase/tmp
+supabase/.temp
 supabase/seeds/intern
 
 .utils

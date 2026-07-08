@@ -464,9 +464,11 @@ services:
       - -c
       - config_file=/etc/postgresql/postgresql.conf
       - -c
+      - max_connections=200        # ← add this
+      - -c
       - log_min_messages=fatal # prevents Realtime polling queries from appearing in logs
       - -c
-      - max_slot_wal_keep_size=2GB
+      - max_slot_wal_keep_size=8GB
       - -c
       - wal_keep_size=1GB
       - -c
@@ -479,6 +481,12 @@ services:
       - max_replication_slots=10
       - -c
       - max_wal_senders=10
+      - -c
+      - tcp_keepalives_idle=60
+      - -c
+      - tcp_keepalives_interval=10
+      - -c
+      - tcp_keepalives_count=6
     restart: unless-stopped
     environment:
       POSTGRES_HOST: /var/run/postgresql
