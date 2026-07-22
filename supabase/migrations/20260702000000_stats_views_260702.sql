@@ -7,220 +7,280 @@
 SET search_path TO public;
 
 -- for PlotsDeliveredByTroopAndDate
-create view public.v_stats_troop_completed_latest with (security_invoker = true) as
+create or replace view v_stats_troop_completed_latest
+with
+  (security_invoker = true) as
 select
-  a.responsible_state,
-  a.responsible_administration,
-  a.responsible_provider,
-  a.lil,
-  a.cluster_name,
-  a.plot_name,
-  a.responsible_troop,
-  a.troop_name,
-  a.kt,
-  max(a.completed_at_troop) as completed_as_troop_latest,
-  a.wald2027,
-  a.begehbar2027
+  responsible_state,
+  responsible_administration,
+  responsible_provider,
+  o.name as lil,
+  cluster_name,
+  plot_name,
+  responsible_troop,
+  t.name as troop_name,
+  t.is_control_troop as kt,
+  completed_as_troop_latest,
+  wald2027,
+  begehbar2027
 from
   (
     select
-      r.id,
       r.responsible_state,
-      o.name as lil,
-      r.cluster_id,
-      r.cluster_name,
-      r.plot_name,
       r.responsible_administration,
       r.responsible_provider,
-      r.responsible_troop,
-      t.name as troop_name,
-      r.completed_at_troop,
-      t.is_control_troop as kt,
-      r.properties ->> 'forest_status'::text as wald2027,
-      r.properties ->> 'accessibility'::text as begehbar2027
+      r.cluster_name,
+      r.plot_name,
+      coalesce(r.responsible_troop, c.responsible_troop) as responsible_troop,
+      coalesce(r.completed_at_troop, c.completed_at_troop) as completed_as_troop_latest,
+      wald2027,
+      begehbar2027
     from
-      record_changes r
-      join troop t on r.responsible_troop = t.id
-      join organizations o on r.responsible_state = o.id
-    where
-      r.completed_at_troop is not null
-  ) a
-group by
-  a.responsible_state,
-  a.responsible_administration,
-  a.responsible_provider,
-  a.lil,
-  a.cluster_name,
-  a.plot_name,
-  a.responsible_troop,
-  a.troop_name,
-  a.kt,
-  a.wald2027,
-  a.begehbar2027
+      (
+        select
+          id,
+          responsible_state,
+          cluster_name,
+          plot_name,
+          responsible_administration,
+          responsible_provider,
+          responsible_troop,
+          completed_at_troop,
+          properties ->> 'forest_status' as wald2027,
+          properties ->> 'accessibility' as begehbar2027
+        from
+          public.records
+        where
+          completed_at_troop is not null
+          and cluster_name < 1000000000
+          and (cluster_name not between 9999900 and 10000000)
+      ) as r
+      left outer join (
+        select
+          cluster_name,
+          plot_name,
+          responsible_troop,
+          max(completed_at_troop) as completed_at_troop
+        from
+          public.record_changes
+        where
+          completed_at_troop is not null
+          and cluster_name < 1000000000
+          and (cluster_name not between 9999900 and 10000000)
+        group by
+          cluster_name,
+          plot_name,
+          responsible_troop
+      ) as c on r.cluster_name = c.cluster_name
+      and r.plot_name = c.plot_name
+      and r.responsible_troop = c.responsible_troop
+  ) as rr
+  join public.troop as t on rr.responsible_troop = t.id
+  join public.organizations as o on rr.responsible_state = o.id
+  --where responsible_troop = 'db24221c-f73b-45dd-95d1-14a5f9bc8b9e'
 order by
-  a.lil,
-  a.cluster_name,
-  a.plot_name,
-  a.troop_name;
+  lil,
+  cluster_name,
+  plot_name,
+  troop_name
 -- for PerformanceByTroopCumulativeByMonth
-create view public.v_stats_performance_by_troop_cumulative_by_month with (security_invoker = true) as
+create or replace view v_stats_performance_by_troop_by_month
+with
+  (security_invoker = true) as
 select
-  b.responsible_state,
-  b.responsible_administration,
-  b.responsible_provider,
-  b.lil,
-  b.responsible_troop,
-  b.troop_name,
-  b.kt,
-  to_char(b.completed_as_troop_latest, 'YYYY-MM'::text) as monat,
+  responsible_state,
+  responsible_administration,
+  responsible_provider,
+  lil,
+  responsible_troop,
+  troop_name,
+  kt,
+  to_char(completed_as_troop_latest, 'YYYY-MM') as monat,
   count(*) as anzahl
 from
   (
     select
-      a.responsible_state,
-      a.responsible_administration,
-      a.responsible_provider,
-      a.lil,
-      a.responsible_troop,
-      a.troop_name,
-      a.kt,
-      a.cluster_name,
-      a.plot_name,
-      max(a.completed_at_troop) as completed_as_troop_latest
+      responsible_state,
+      responsible_administration,
+      responsible_provider,
+      o.name as lil,
+      cluster_name,
+      plot_name,
+      responsible_troop,
+      t.name as troop_name,
+      t.is_control_troop as kt,
+      completed_as_troop_latest,
+      wald2027,
+      begehbar2027
     from
       (
         select
-          r.id,
           r.responsible_state,
-          o.name as lil,
-          r.cluster_id,
-          r.cluster_name,
-          r.plot_name,
           r.responsible_administration,
           r.responsible_provider,
-          r.responsible_troop,
-          t.name as troop_name,
-          r.completed_at_troop,
-          t.is_control_troop as kt,
-          r.properties ->> 'forest_status'::text as wald2027,
-          r.properties ->> 'accessibility'::text as begehbar2027
+          r.cluster_name,
+          r.plot_name,
+          coalesce(r.responsible_troop, c.responsible_troop) as responsible_troop,
+          coalesce(r.completed_at_troop, c.completed_at_troop) as completed_as_troop_latest,
+          wald2027,
+          begehbar2027
         from
-          record_changes r
-          join troop t on r.responsible_troop = t.id
-          join organizations o on r.responsible_state = o.id
-        where
-          r.completed_at_troop is not null
-          and r.cluster_name < 1000000000
-          and (
-            r.cluster_name < 9999900
-            or r.cluster_name > 10000000
-          )
-      ) a
-    group by
-      a.responsible_state,
-      a.responsible_administration,
-      a.responsible_provider,
-      a.lil,
-      a.responsible_troop,
-      a.troop_name,
-      a.kt,
-      a.cluster_name,
-      a.plot_name
-  ) b
+          (
+            select
+              id,
+              responsible_state,
+              cluster_name,
+              plot_name,
+              responsible_administration,
+              responsible_provider,
+              responsible_troop,
+              completed_at_troop,
+              properties ->> 'forest_status' as wald2027,
+              properties ->> 'accessibility' as begehbar2027
+            from
+              public.records
+            where
+              completed_at_troop is not null
+              and cluster_name < 1000000000
+              and (cluster_name not between 9999900 and 10000000)
+          ) as r
+          left outer join (
+            select
+              cluster_name,
+              plot_name,
+              responsible_troop,
+              max(completed_at_troop) as completed_at_troop
+            from
+              public.record_changes
+            where
+              completed_at_troop is not null
+              and cluster_name < 1000000000
+              and (cluster_name not between 9999900 and 10000000)
+            group by
+              cluster_name,
+              plot_name,
+              responsible_troop
+          ) as c on r.cluster_name = c.cluster_name
+          and r.plot_name = c.plot_name
+          and r.responsible_troop = c.responsible_troop
+      ) as rr
+      join public.troop as t on rr.responsible_troop = t.id
+      join public.organizations as o on rr.responsible_state = o.id
+  ) as a
+  --where responsible_troop = 'db24221c-f73b-45dd-95d1-14a5f9bc8b9e'
 group by
-  b.responsible_state,
-  b.responsible_administration,
-  b.responsible_provider,
-  b.lil,
-  b.responsible_troop,
-  b.troop_name,
-  b.kt,
-  (
-    to_char(b.completed_as_troop_latest, 'YYYY-MM'::text)
-  )
+  responsible_state,
+  responsible_administration,
+  responsible_provider,
+  lil,
+  responsible_troop,
+  troop_name,
+  kt,
+  to_char(completed_as_troop_latest, 'YYYY-MM')
 order by
-  b.lil,
-  b.troop_name,
-  (
-    to_char(b.completed_as_troop_latest, 'YYYY-MM'::text)
-  );
+  lil,
+  troop_name,
+  to_char(completed_as_troop_latest, 'YYYY-MM')
+  lil,
+  troop_name,
+  to_char(completed_as_troop_latest, 'YYYY-MM')
 -- for PerformanceByTroopCumulativeByWeek
-create view public.v_stats_performance_by_troop_cumulative_by_week with (security_invoker = true) as
+create or replace view v_stats_performance_by_troop_by_week
+with
+  (security_invoker = true) as
 select
-  b.responsible_state,
-  b.responsible_administration,
-  b.responsible_provider,
-  b.lil,
-  b.responsible_troop,
-  b.troop_name,
-  b.kt,
-  to_char(b.completed_as_troop_latest, 'IYYY-IW'::text) as woche,
+  responsible_state,
+  responsible_administration,
+  responsible_provider,
+  lil,
+  responsible_troop,
+  troop_name,
+  kt,
+  to_char(completed_as_troop_latest, 'IYYY-IW') as woche,
   count(*) as anzahl
 from
   (
     select
-      a.responsible_state,
-      a.responsible_administration,
-      a.responsible_provider,
-      a.lil,
-      a.responsible_troop,
-      a.troop_name,
-      a.kt,
-      a.cluster_name,
-      a.plot_name,
-      max(a.completed_at_troop) as completed_as_troop_latest
+      responsible_state,
+      responsible_administration,
+      responsible_provider,
+      o.name as lil,
+      cluster_name,
+      plot_name,
+      responsible_troop,
+      t.name as troop_name,
+      t.is_control_troop as kt,
+      completed_as_troop_latest,
+      wald2027,
+      begehbar2027
     from
       (
         select
-          r.id,
           r.responsible_state,
-          o.name as lil,
-          r.cluster_id,
-          r.cluster_name,
-          r.plot_name,
           r.responsible_administration,
           r.responsible_provider,
-          r.responsible_troop,
-          t.name as troop_name,
-          r.completed_at_troop,
-          t.is_control_troop as kt,
-          r.properties ->> 'forest_status'::text as wald2027,
-          r.properties ->> 'accessibility'::text as begehbar2027
+          r.cluster_name,
+          r.plot_name,
+          coalesce(r.responsible_troop, c.responsible_troop) as responsible_troop,
+          coalesce(r.completed_at_troop, c.completed_at_troop) as completed_as_troop_latest,
+          wald2027,
+          begehbar2027
         from
-          record_changes r
-          join troop t on r.responsible_troop = t.id
-          join organizations o on r.responsible_state = o.id
-        where
-          r.completed_at_troop is not null
-          and r.cluster_name < 1000000000
-          and (
-            r.cluster_name < 9999900
-            or r.cluster_name > 10000000
-          )
-      ) a
-    group by
-      a.responsible_state,
-      a.responsible_administration,
-      a.responsible_provider,
-      a.lil,
-      a.responsible_troop,
-      a.troop_name,
-      a.kt,
-      a.cluster_name,
-      a.plot_name
-  ) b
+          (
+            select
+              id,
+              responsible_state,
+              cluster_name,
+              plot_name,
+              responsible_administration,
+              responsible_provider,
+              responsible_troop,
+              completed_at_troop,
+              properties ->> 'forest_status' as wald2027,
+              properties ->> 'accessibility' as begehbar2027
+            from
+              public.records
+            where
+              completed_at_troop is not null
+              and cluster_name < 1000000000
+              and (cluster_name not between 9999900 and 10000000)
+          ) as r
+          left outer join (
+            select
+              cluster_name,
+              plot_name,
+              responsible_troop,
+              max(completed_at_troop) as completed_at_troop
+            from
+              public.record_changes
+            where
+              completed_at_troop is not null
+              and cluster_name < 1000000000
+              and (cluster_name not between 9999900 and 10000000)
+            group by
+              cluster_name,
+              plot_name,
+              responsible_troop
+          ) as c on r.cluster_name = c.cluster_name
+          and r.plot_name = c.plot_name
+          and r.responsible_troop = c.responsible_troop
+      ) as rr
+      join public.troop as t on rr.responsible_troop = t.id
+      join public.organizations as o on rr.responsible_state = o.id
+  ) as a
 group by
-  b.responsible_state,
-  b.responsible_administration,
-  b.responsible_provider,
-  b.lil,
-  b.responsible_troop,
-  b.troop_name,
-  b.kt,
-  (
-    to_char(b.completed_as_troop_latest, 'IYYY-IW'::text)
-  )
+  responsible_state,
+  responsible_administration,
+  responsible_provider,
+  lil,
+  responsible_troop,
+  troop_name,
+  kt,
+  to_char(completed_as_troop_latest, 'IYYY-IW')
 order by
+  lil,
+  troop_name,
+  to_char(completed_as_troop_latest, 'IYYY-IW')
   b.lil,
   b.troop_name,
   (to_char(b.completed_as_troop_latest, 'IYYY-IW'::text));
