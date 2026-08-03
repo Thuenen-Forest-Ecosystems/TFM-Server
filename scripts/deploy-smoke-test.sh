@@ -23,6 +23,12 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
 
+# Private scratch dir. Fixed names under /tmp break when the script is run first as a
+# user and then as root: fs.protected_regular blocks even root from O_CREAT-opening
+# another user's file in a world-writable sticky directory.
+RUN_TMP="$(mktemp -d)"
+trap 'rm -rf "$RUN_TMP"' EXIT
+
 RESET=0
 SEED_LOOKUP=0
 WITH_POWERSYNC=1
@@ -118,11 +124,11 @@ esac
 # Compose interpolates and validates the whole file before selecting services, so a
 # variable missing from .env is fatal even for services this run never starts (an empty
 # PS_PORT collapses "${PS_PORT}:${PS_PORT}" to ":" -> "no port specified: :<empty>").
-if docker compose config -q 2>/tmp/tfm-config.err; then
+if docker compose config -q 2>"$RUN_TMP/config.err"; then
     ok "compose file resolves with this .env"
 else
     fail "docker compose config failed:"
-    sed 's/^/      /' /tmp/tfm-config.err
+    sed 's/^/      /' "$RUN_TMP/config.err"
     warn "a variable used by docker-compose.yaml is missing from .env"
     summary
     exit 1
@@ -163,7 +169,12 @@ fi
 # ── Stage 3: database first start ────────────────────────────────────────────
 stage "3. Start database"
 
-docker compose up -d db >/dev/null 2>&1 || die "docker compose up -d db failed"
+if ! docker compose up -d db >/dev/null 2>"$RUN_TMP/up-db.err"; then
+    fail "docker compose up -d db failed:"
+    sed 's/^/      /' "$RUN_TMP/up-db.err"
+    summary
+    exit 1
+fi
 
 if retry 180 "db healthy" docker compose exec -T db pg_isready -U postgres -q; then
     ok "postgres accepting connections"
@@ -185,12 +196,12 @@ stage "4. Apply migrations"
 applied=0
 for f in supabase/migrations/*.sql; do
     if docker compose exec -T db psql -U postgres -d "${POSTGRES_DB}" \
-        --no-psqlrc -q --set ON_ERROR_STOP=on -f - < "$f" >/dev/null 2>/tmp/tfm-migrate.err
+        --no-psqlrc -q --set ON_ERROR_STOP=on -f - < "$f" >/dev/null 2>"$RUN_TMP/migrate.err"
     then
         applied=$((applied+1))
     else
         fail "migration failed: $f"
-        sed 's/^/      /' /tmp/tfm-migrate.err
+        sed 's/^/      /' "$RUN_TMP/migrate.err"
         summary
         exit 1
     fi
@@ -246,15 +257,25 @@ stage "6. Start remaining services"
 CORE_SERVICES="kong auth rest realtime storage imgproxy meta functions studio"
 
 if [ "$WITH_POWERSYNC" -eq 1 ]; then
-    docker compose up -d >/dev/null 2>&1 || die "docker compose up -d failed"
-    ok "full stack started"
+    up_ok=0
+    docker compose up -d >/dev/null 2>"$RUN_TMP/up.err" && up_ok=1
+    label="full stack started"
 else
     # mongo/mongo-rs-init arrive through include:, so services must be named
     # explicitly to keep them down.
+    up_ok=0
     # shellcheck disable=SC2086
-    docker compose up -d db $CORE_SERVICES >/dev/null 2>&1 \
-        || die "docker compose up -d (without powersync) failed"
-    ok "stack started without powersync/mongo"
+    docker compose up -d db $CORE_SERVICES >/dev/null 2>"$RUN_TMP/up.err" && up_ok=1
+    label="stack started without powersync/mongo"
+fi
+
+if [ "$up_ok" -eq 1 ]; then
+    ok "$label"
+else
+    fail "docker compose up -d failed:"
+    sed 's/^/      /' "$RUN_TMP/up.err"
+    summary
+    exit 1
 fi
 
 for svc in db kong auth rest functions; do
