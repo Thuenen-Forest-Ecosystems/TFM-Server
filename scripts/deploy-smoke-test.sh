@@ -167,7 +167,7 @@ else
 fi
 
 # ── Stage 3: database first start ────────────────────────────────────────────
-stage "3. Start database"
+stage "3. Start database and auth"
 
 if ! docker compose up -d db >/dev/null 2>"$RUN_TMP/up-db.err"; then
     fail "docker compose up -d db failed:"
@@ -188,6 +188,26 @@ if [ "$(psql_q "select count(*) from pg_roles where rolname = 'authenticator';")
     ok "volumes/db init scripts ran (supabase roles exist)"
 else
     die "supabase roles missing — PGDATA was not empty, rerun with --reset"
+fi
+
+# GoTrue owns the auth schema and adds columns such as auth.users.email_confirmed_at
+# through its own migrations at startup. Application migrations reference those columns
+# (e.g. the on_auth_user_created trigger in 20250115140818_public.sql), so auth must have
+# migrated before any of them can be applied.
+if ! docker compose up -d auth >/dev/null 2>"$RUN_TMP/up-auth.err"; then
+    fail "docker compose up -d auth failed:"
+    sed 's/^/      /' "$RUN_TMP/up-auth.err"
+    summary
+    exit 1
+fi
+
+if retry 180 "auth migrations" bash -c \
+    "[ \"\$(docker compose exec -T db psql -U postgres -d ${POSTGRES_DB} --no-psqlrc -t -A -c \"select count(*) from information_schema.columns where table_schema='auth' and table_name='users' and column_name='email_confirmed_at';\" 2>/dev/null)\" = '1' ]"
+then
+    ok "auth schema migrated (auth.users.email_confirmed_at present)"
+else
+    docker compose logs --tail=40 auth
+    die "GoTrue did not migrate the auth schema within 180s — migrations would fail"
 fi
 
 # ── Stage 4: migrations ──────────────────────────────────────────────────────
