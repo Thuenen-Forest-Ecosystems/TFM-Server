@@ -37,7 +37,6 @@ where
   and (
     (r.properties ->> 'accessibility'::text) = any (array[6::text, 7::text, 8::text])
   );
-  a.grenzart = '42'::jsonb;
 
 -- v_stats_count_controlled_by_kt
 create or replace view public.v_stats_count_controlled_by_kt with ( security_invoker = true ) as
