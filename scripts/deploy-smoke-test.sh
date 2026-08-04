@@ -82,6 +82,18 @@ retry() {
     return 0
 }
 
+# Remove the bind-mounted Postgres data directory. Its files are owned by the
+# container's postgres uid, so plain rm fails for an unprivileged host user —
+# fall back to deleting through a container, where the daemon has the rights.
+remove_data_dir() {
+    rm -rf volumes/db/data 2>/dev/null
+    if [ -e volumes/db/data ]; then
+        docker run --rm -v "$REPO_ROOT/volumes/db:/mnt" alpine:3 \
+            rm -rf /mnt/data >/dev/null 2>&1
+    fi
+    [ ! -e volumes/db/data ]
+}
+
 # psql inside the db container — no host client and no port guessing needed.
 psql_q() {
     docker compose exec -T db psql -U postgres -d "${POSTGRES_DB}" \
@@ -156,7 +168,8 @@ if [ "$RESET" -eq 1 ]; then
         [ "$answer" = "reset" ] || die "aborted"
     fi
     docker compose down -v --remove-orphans >/dev/null 2>&1
-    rm -rf volumes/db/data
+    remove_data_dir \
+        || die "could not remove volumes/db/data — remove it manually: sudo rm -rf volumes/db/data"
     ok "stack down, data directory removed"
 else
     stage "2. Reset (skipped)"
@@ -227,6 +240,9 @@ for f in supabase/migrations/*.sql; do
     fi
 done
 ok "$applied/$MIGRATION_COUNT migrations applied"
+warn "applied per-file (no CLI history) — a later 'supabase db push' / deploy.sh against"
+warn "THIS database would re-apply everything and fail. Reset first, or backfill with"
+warn "'supabase migration repair --status applied <versions>'."
 
 for schema in lookup inventory_archive derived public; do
     if [ "$(psql_q "select count(*) from information_schema.schemata where schema_name = '$schema';")" = "1" ]; then
@@ -369,8 +385,11 @@ fi
 if [ "$TEARDOWN" -eq 1 ]; then
     stage "8. Teardown"
     docker compose down -v --remove-orphans >/dev/null 2>&1
-    rm -rf volumes/db/data
-    ok "stack removed, data directory cleaned"
+    if remove_data_dir; then
+        ok "stack removed, data directory cleaned"
+    else
+        fail "stack removed, but volumes/db/data could not be deleted — sudo rm -rf volumes/db/data"
+    fi
 else
     stage "8. Teardown (skipped)"
     printf '  Stack left running. Clean up with:\n'
