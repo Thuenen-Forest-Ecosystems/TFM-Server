@@ -104,6 +104,16 @@ http_code() {
     curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$@" 2>/dev/null
 }
 
+# The daemon's health flag, not our own pg_isready probe. A slow first initdb
+# (Docker Desktop bind mounts on Windows/macOS) exhausts the db healthcheck's
+# 10 retries, and the container stays flagged unhealthy until the next 5s probe
+# passes — a window in which "compose up" of a dependent service aborts
+# immediately instead of waiting.
+db_reported_healthy() {
+    [ "$(docker inspect -f '{{.State.Health.Status}}' \
+        "$(docker compose ps -q db 2>/dev/null)" 2>/dev/null)" = "healthy" ]
+}
+
 # ── Stage 1: preflight ───────────────────────────────────────────────────────
 stage "1. Preflight"
 
@@ -201,6 +211,12 @@ if [ "$(psql_q "select count(*) from pg_roles where rolname = 'authenticator';")
     ok "volumes/db init scripts ran (supabase roles exist)"
 else
     die "supabase roles missing — PGDATA was not empty, rerun with --reset"
+fi
+
+if retry 60 "db health flag" db_reported_healthy; then
+    ok "container healthcheck reports healthy"
+else
+    die "supabase-db never reported healthy — check: docker inspect supabase-db"
 fi
 
 # GoTrue owns the auth schema and adds columns such as auth.users.email_confirmed_at
