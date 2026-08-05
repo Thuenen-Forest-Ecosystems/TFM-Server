@@ -24,7 +24,7 @@ port = 54322
 # Port used by db diff command to initialize the shadow database.
 shadow_port = 54320
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
-# server_version;` on the remote database to check.
+# server_version;` on the remote database to check. // supabase/postgres:15.6.1.146
 major_version = 15
 # Additional PostgreSQL configuration parameters
 settings = { max_slot_wal_keep_size = '2GB', wal_keep_size = '1GB', max_wal_size = '2GB', max_replication_slots = 10, max_wal_senders = 10 }
@@ -43,7 +43,7 @@ max_client_conn = 100
 
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.
-enabled = true
+enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory. For example:
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']

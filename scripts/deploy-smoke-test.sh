@@ -6,8 +6,15 @@
 # and asserts every stage. Intended for a disposable VM.
 #
 #   ./scripts/deploy-smoke-test.sh --reset --seed-lookup
+#   ./scripts/deploy-smoke-test.sh --reset --seed         # all public seeds (~1.3 GB)
+#   ./scripts/deploy-smoke-test.sh --reset --seed-intern  # + intern seeds (~1.8 GB)
 #   ./scripts/deploy-smoke-test.sh --reset --no-powersync
 #   ./scripts/deploy-smoke-test.sh --reset --seed-lookup --teardown
+#
+# Seeds are loaded in stage 5, before PowerSync starts in stage 6: every lookup
+# and inventory_archive table is in the "powersync" publication, so seeding
+# while it replicates pushes millions of rows through logical decoding instead
+# of one initial snapshot.
 #
 # See TFM-Documentation → Server → Deploy on Linux, appendix "Testing the
 # deployment".
@@ -31,6 +38,8 @@ trap 'rm -rf "$RUN_TMP"' EXIT
 
 RESET=0
 SEED_LOOKUP=0
+SEED_PUBLIC=0
+SEED_INTERN=0
 WITH_POWERSYNC=1
 TEARDOWN=0
 ASSUME_YES=0
@@ -39,11 +48,13 @@ for arg in "$@"; do
     case "$arg" in
         --reset)         RESET=1 ;;
         --seed-lookup)   SEED_LOOKUP=1 ;;
+        --seed)          SEED_LOOKUP=1; SEED_PUBLIC=1 ;;
+        --seed-intern)   SEED_LOOKUP=1; SEED_PUBLIC=1; SEED_INTERN=1 ;;
         --no-powersync)  WITH_POWERSYNC=0 ;;
         --teardown)      TEARDOWN=1 ;;
         --yes|-y)        ASSUME_YES=1 ;;
         --help|-h)
-            sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *)
             echo "Unknown option: $arg (try --help)" >&2
@@ -98,6 +109,11 @@ remove_data_dir() {
 psql_q() {
     docker compose exec -T db psql -U postgres -d "${POSTGRES_DB}" \
         --no-psqlrc -t -A --set ON_ERROR_STOP=on -c "$1" 2>/dev/null
+}
+
+psql_f() {
+    docker compose exec -T db psql -U postgres -d "${POSTGRES_DB}" \
+        --no-psqlrc -q --set ON_ERROR_STOP=on -f - < "$1"
 }
 
 http_code() {
@@ -161,7 +177,24 @@ fi
 if [ "$SEED_LOOKUP" -eq 1 ]; then
     [ -f supabase/seeds/public/lookup.sql ] \
         || die "supabase/seeds/public/lookup.sql missing (git submodule update --init)"
-    ok "public seeds present"
+    if [ "$SEED_PUBLIC" -eq 1 ]; then
+        public_seeds="$(ls supabase/seeds/public/*.sql 2>/dev/null | wc -l | tr -d ' ')"
+        ok "$public_seeds public seed files present ($(du -sh supabase/seeds/public | cut -f1))"
+    else
+        ok "public seeds present (lookup.sql only)"
+    fi
+fi
+
+# The intern seeds live in a separate DMZ-only repository, so a checkout without
+# them is normal — warn and carry on instead of failing the run.
+if [ "$SEED_INTERN" -eq 1 ]; then
+    intern_seeds="$(ls supabase/seeds/intern/*.sql 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$intern_seeds" -gt 0 ]; then
+        ok "$intern_seeds intern seed files present ($(du -sh supabase/seeds/intern | cut -f1))"
+    else
+        warn "no intern seeds in supabase/seeds/intern — skipping them (needs DMZ access)"
+        SEED_INTERN=0
+    fi
 fi
 
 MIGRATION_COUNT="$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l | tr -d ' ')"
@@ -277,13 +310,51 @@ ia_tables="$(psql_q "select count(*) from information_schema.tables where table_
     && ok "publication powersync created" \
     || fail "publication powersync missing"
 
-# ── Stage 5: seed mechanics (lookup only) ────────────────────────────────────
-if [ "$SEED_LOOKUP" -eq 1 ]; then
-    stage "5. Seed lookup schema"
+# ── Stage 5: seeds ───────────────────────────────────────────────────────────
+# Loads one seed file, printing its size and elapsed time. The bulk files run to
+# hundreds of MB each, and a silent 20-minute stage is indistinguishable from a hang.
+load_seed() {
+    local f=$1 t0=$SECONDS
+    printf '    → %-50s %5s ' "$(basename "$f")" "$(du -h "$f" | cut -f1)"
+    if psql_f "$f" >/dev/null 2>"$RUN_TMP/seed.err"; then
+        printf '%s✓%s %ds\n' "$GREEN" "$OFF" "$((SECONDS-t0))"
+    else
+        printf '%s✗%s\n' "$RED" "$OFF"
+        sed 's/^/      /' "$RUN_TMP/seed.err"
+        die "seed failed: $f"
+    fi
+}
 
-    docker compose exec -T db psql -U postgres -d "${POSTGRES_DB}" \
-        --no-psqlrc -q --set ON_ERROR_STOP=on -f - < supabase/seeds/public/lookup.sql \
-        >/dev/null 2>&1 || die "lookup.sql failed to load"
+# Every seed file starts with "SET session_replication_role = replica", so FK
+# triggers are off during the load and the glob order needs no dependency sorting.
+load_seed_dir() {
+    local dir=$1 f
+    for f in "$dir"/*.sql; do
+        [ -e "$f" ] || continue
+        if [ "$(basename "$f")" = "lookup.sql" ]; then continue; fi   # already loaded
+        load_seed "$f"
+    done
+}
+
+# count_check <schema.table> — non-empty is a pass, empty a failure.
+count_check() {
+    local n
+    n="$(psql_q "select count(*) from $1;")"
+    [ "${n:-0}" -gt 0 ] \
+        && ok "$1: $n rows" \
+        || fail "$1 is empty after seeding"
+}
+
+if [ "$SEED_LOOKUP" -eq 1 ]; then
+    if [ "$SEED_INTERN" -eq 1 ]; then
+        stage "5. Seed lookup + public + intern"
+    elif [ "$SEED_PUBLIC" -eq 1 ]; then
+        stage "5. Seed lookup + public"
+    else
+        stage "5. Seed lookup schema"
+    fi
+
+    load_seed supabase/seeds/public/lookup.sql
 
     first="$(psql_q "select count(*) from lookup.lookup_cover_percentage;")"
     [ "${first:-0}" -gt 0 ] \
@@ -292,15 +363,37 @@ if [ "$SEED_LOOKUP" -eq 1 ]; then
 
     # lookup.sql carries ON CONFLICT (code) DO NOTHING — loading it twice must
     # not change anything. This validates the idempotency claim in the docs.
-    docker compose exec -T db psql -U postgres -d "${POSTGRES_DB}" \
-        --no-psqlrc -q --set ON_ERROR_STOP=on -f - < supabase/seeds/public/lookup.sql \
-        >/dev/null 2>&1 || die "lookup.sql is not re-runnable"
+    # The bulk files are plain INSERTs and are deliberately not re-run here.
+    psql_f supabase/seeds/public/lookup.sql >/dev/null 2>&1 \
+        || die "lookup.sql is not re-runnable"
     second="$(psql_q "select count(*) from lookup.lookup_cover_percentage;")"
     [ "$first" = "$second" ] \
         && ok "lookup seed is idempotent ($second rows after second load)" \
         || fail "row count changed on second load: $first -> $second"
+
+    if [ "$SEED_PUBLIC" -eq 1 ]; then
+        load_seed_dir supabase/seeds/public
+        ok "public seeds loaded"
+
+        for t in cluster cluster_move deadwood edges plot regeneration \
+                 structure_gt4m structure_lt4m subplots_relative_position tree; do
+            count_check "inventory_archive.$t"
+        done
+    fi
+
+    if [ "$SEED_INTERN" -eq 1 ]; then
+        load_seed_dir supabase/seeds/intern
+        ok "intern seeds loaded"
+
+        for t in edges_coordinates plot_coordinates \
+                 subplots_relative_position_coordinates tree_coordinates '"position"'; do
+            count_check "inventory_archive.$t"
+        done
+        # notes.sql ships without rows — report it, do not assert on it.
+        ok "inventory_archive.notes: $(psql_q "select count(*) from inventory_archive.notes;") rows (seed file carries no data)"
+    fi
 else
-    stage "5. Seed lookup schema (skipped)"
+    stage "5. Seed (skipped)"
 fi
 
 # ── Stage 6: full stack ──────────────────────────────────────────────────────
