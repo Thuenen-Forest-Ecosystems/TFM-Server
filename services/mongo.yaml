@@ -1,7 +1,7 @@
 services:
   # MongoDB Service used internally
   mongo:
-    image: mongo:7.0
+    image: mongo:7.0.39@sha256:35a5926f71f8b6cb19206bee928c5a85f241a8be99f20c81abe35ae78a73415d
     command:
       - --replSet
       - rs0
@@ -34,7 +34,7 @@ services:
 
   # Initializes the MongoDB replica set. This service will not usually be actively running
   mongo-rs-init:
-    image: mongo:7.0
+    image: mongo:7.0.39@sha256:35a5926f71f8b6cb19206bee928c5a85f241a8be99f20c81abe35ae78a73415d
     depends_on:
       mongo:
         condition: service_healthy # Wait for mongo to be healthy

@@ -1,7 +1,7 @@
 ARG INSTALL_CERTS=false
 
 # Base image without certs (for local development)
-FROM supabase/gotrue:v2.164.0 AS base-false
+FROM supabase/gotrue:v2.195.0@sha256:362659ca70eaa75ba05bbaf963caa84c1c5afe5e8fbf0777e17b830dd5f0f60a AS base-false
 
 # Base image with certs (for production)
 FROM base-false AS base-true

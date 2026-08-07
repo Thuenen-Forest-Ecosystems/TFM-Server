@@ -36,6 +36,58 @@ services:
       - default
       - supabase-net
 
+  # ====== ENVOY API GATEWAY ======
+  # Stage 1: runs alongside Kong on loopback and carries NO traffic. Cutover happens by repointing
+  # the reverse proxy from :8000 to :8001, at which point `kong` gets `profiles: [disabled]`.
+  #
+  # Deviations from upstream docker-compose.envoy.yml, all deliberate:
+  #   1. supabase-net, not `default` — every Supabase service here is on the custom network.
+  #   2. alias `envoy` only. The `kong` alias is added at cutover; two containers sharing one
+  #      Docker network alias makes DNS round-robin between them, intermittently.
+  #   3. published on 127.0.0.1:8001 — a second public entrance running config nobody has
+  #      validated yet is the one way this stage could make things worse. Loopback is not optional.
+  #   4. no `functions.depends_on: !override` — functions keeps depending on Kong until cutover.
+  #
+  # Config is vendored in volumes/api/envoy/ (see UPSTREAM.txt for the pinned commit) and is
+  # tracked in git, so it deploys to the host with a normal `git pull`.
+  # See .todo/upgrade-2026-08-pg15-services-envoy.md
+  api-gw:
+    container_name: supabase-envoy
+    image: envoyproxy/envoy:v1.39.0@sha256:d59f7f5fa10cff6d5892b6c5e7df5c9297ddfb2c3683e33fbfb82da24de4fa66
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000/tcp" # cutover: ${KONG_HTTP_PORT}:8000/tcp
+    volumes:
+      - ./volumes/api/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./volumes/api/envoy/cds.yaml:/etc/envoy/cds.yaml:ro
+      - ./volumes/api/envoy/lds.template.yaml:/etc/envoy/lds.template.yaml:ro
+      - ./volumes/api/envoy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+    depends_on:
+      studio:
+        condition: service_healthy
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      # Asymmetric key format is a separate, later change — TFM-app and PowerSync authenticate
+      # with the HS256 JWT_SECRET. Left empty, Envoy logs "legacy API key mode", which is correct.
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      ANON_KEY_ASYMMETRIC: ${ANON_KEY_ASYMMETRIC:-}
+      SERVICE_ROLE_KEY_ASYMMETRIC: ${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+    healthcheck:
+      # TCP check because this image ships neither curl nor wget.
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/8000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      supabase-net:
+        aliases:
+          - envoy # cutover adds: - kong
+
   # ====== SUPABASE ======
   studio:
     container_name: supabase-studio
@@ -46,23 +98,33 @@ services:
     volumes:
       - ./supabase:/supabase
       - ./supabase/seed.sql:/docker-entrypoint-initdb.d/seed.sql
-    image: supabase/studio:2025.06.30-sha-6f5982d
+    image: supabase/studio:2026.08.03-sha-022b374@sha256:606aca9fdaa753b60968d5c304e2ada83869b76c9043684e63d5885aca9550e8
     restart: unless-stopped
-    # healthcheck:
-    #   test:
-    #     [
-    #       "CMD",
-    #       "node",
-    #       "-e",
-    #       "const fs = require('fs'); if (fs.existsSync('/tmp/.next.pid')) { console.log('OK'); process.exit(0); } else { process.exit(1); }"
-    #     ]
-    #   timeout: 20s
-    #   interval: 10s
-    #   retries: 5
-    #   start_period: 30s
+    # Required by the Envoy gateway (api-gw depends on studio being healthy).
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})\"",
+        ]
+      timeout: 10s
+      interval: 5s
+      retries: 3
+      start_period: 20s
     environment:
+      # Listen on all IPv4 interfaces
+      HOSTNAME: "0.0.0.0"
+
       STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
+      PGRST_DB_MAX_ROWS: ${PGRST_DB_MAX_ROWS:-1000}
+      PGRST_DB_EXTRA_SEARCH_PATH: ${PGRST_DB_EXTRA_SEARCH_PATH:-public}
 
       DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION}
       DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT}
@@ -74,6 +136,10 @@ services:
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
 
+  # Legacy gateway. Still serves all traffic; Envoy (`api-gw`) runs alongside it on loopback
+  # carrying none. Deliberately NOT upgraded to kong/kong:3.9.3 — Envoy replaces it at cutover,
+  # and this block plus volumes/api/kong.yml is the rollback.
+  # See .todo/upgrade-2026-08-pg15-services-envoy.md
   kong:
     container_name: supabase-kong
     networks:
@@ -145,6 +211,7 @@ services:
       GOTRUE_JWT_EXP: ${JWT_EXPIRY}
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_ISSUER: ${API_EXTERNAL_URL}
 
       GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP}
       GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS}
@@ -208,18 +275,29 @@ services:
     container_name: supabase-rest
     networks:
       - supabase-net
-    image: postgrest/postgrest:v12.2.0
+    image: postgrest/postgrest:v14.16@sha256:bea1c76a856fa39d1e542d25911cf95d02fe2bf971992d033044ff209f1504b8
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     environment:
       PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
+      PGRST_DB_MAX_ROWS: ${PGRST_DB_MAX_ROWS:-1000}
+      PGRST_DB_EXTRA_SEARCH_PATH: ${PGRST_DB_EXTRA_SEARCH_PATH:-public}
       PGRST_DB_ANON_ROLE: anon
       PGRST_DB_POOL: "10"
       PGRST_DB_POOL_ACQUISITION_TIMEOUT: "10"
+
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_ADMIN_SERVER_HOST: localhost
+
       PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
@@ -233,7 +311,7 @@ services:
     container_name: realtime-dev.supabase-realtime
     networks:
       - supabase-net
-    image: supabase/realtime:v2.33.70
+    image: supabase/realtime:v2.124.0@sha256:7cced80c83b23ea0d344620ac2eabd50a0d1dd14634ee24574db768be50b0b32
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -263,22 +341,26 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_NAME: ${POSTGRES_DB}
       DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
-      DB_ENC_KEY: supabaserealtime
+      # DO NOT rotate: this key decrypts the existing _realtime.tenants row. Changing it means
+      # Realtime can no longer read its own tenant config. Rotation = delete + re-seed the tenant.
+      DB_ENC_KEY: ${REALTIME_DB_ENC_KEY:-supabaserealtime}
       API_JWT_SECRET: ${JWT_SECRET}
-      SECRET_KEY_BASE: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       ERL_AFLAGS: -proto_dist inet_tcp
       DNS_NODES: "''"
       RLIMIT_NOFILE: "10000"
       APP_NAME: realtime
-      SEED_SELF_HOST: true
-      RUN_JANITOR: true
+      SEED_SELF_HOST: "true"
+      RUN_JANITOR: "true"
+      DISABLE_HEALTHCHECK_LOGGING: "true"
 
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
   storage:
     container_name: supabase-storage
     networks:
       - supabase-net
-    image: supabase/storage-api:v1.11.13
+    image: supabase/storage-api:v1.68.9@sha256:8394f685338ecb1a07d79c35de48913b23449bab0a15c1caa4df7326c2f72f17
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -305,17 +387,24 @@ services:
       ANON_KEY: ${ANON_KEY}
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
       POSTGREST_URL: http://rest:3000
-      PGRST_JWT_SECRET: ${JWT_SECRET}
+      # v1.60+ renamed PGRST_JWT_SECRET -> AUTH_JWT_SECRET
+      AUTH_JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+      REQUEST_ALLOW_X_FORWARDED_PATH: "true"
       FILE_SIZE_LIMIT: 52428800
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
-      TENANT_ID: stub
+      # Keep the historical "stub" values — they are baked into existing storage.objects rows.
+      TENANT_ID: ${STORAGE_TENANT_ID:-stub}
       # TODO: https://github.com/supabase/storage-api/issues/55
-      REGION: stub
-      GLOBAL_S3_BUCKET: stub
+      REGION: ${REGION:-stub}
+      GLOBAL_S3_BUCKET: ${GLOBAL_S3_BUCKET:-stub}
       ENABLE_IMAGE_TRANSFORMATION: "true"
       IMGPROXY_URL: http://imgproxy:5001
+      # S3 protocol endpoint (storage's own S3-compatible API)
+      S3_PROTOCOL_ACCESS_KEY_ID: ${S3_PROTOCOL_ACCESS_KEY_ID}
+      S3_PROTOCOL_ACCESS_KEY_SECRET: ${S3_PROTOCOL_ACCESS_KEY_SECRET}
     volumes:
       - ./volumes/storage:/var/lib/storage:z
 
@@ -323,7 +412,8 @@ services:
     container_name: supabase-imgproxy
     networks:
       - supabase-net
-    image: darthsim/imgproxy:v3.8.0
+    # v4.x is a full rewrite and is not yet used by upstream Supabase — staying on the 3.x line.
+    image: darthsim/imgproxy:v3.30.1@sha256:3b709e4a0e5e8e0e959b556b7031229202b4b8e7e7d955c517ea7abed68ee34d
     healthcheck:
       test: ["CMD", "imgproxy", "health"]
       timeout: 5s
@@ -333,7 +423,9 @@ services:
       IMGPROXY_BIND: ":5001"
       IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
       IMGPROXY_USE_ETAG: "true"
-      IMGPROXY_ENABLE_WEBP_DETECTION: ${IMGPROXY_ENABLE_WEBP_DETECTION}
+      # renamed from IMGPROXY_ENABLE_WEBP_DETECTION
+      IMGPROXY_AUTO_WEBP: ${IMGPROXY_AUTO_WEBP}
+      IMGPROXY_MAX_SRC_RESOLUTION: 16.8
     volumes:
       - ./volumes/storage:/var/lib/storage:z
 
@@ -341,7 +433,7 @@ services:
     container_name: supabase-meta
     networks:
       - supabase-net
-    image: supabase/postgres-meta:v0.84.2
+    image: supabase/postgres-meta:v0.96.8@sha256:6ef6296e5129615ddb877c85e0af659cf6ee10668afce2b09f606a8b5c8b12e2
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -352,18 +444,27 @@ services:
       PG_META_DB_HOST: ${POSTGRES_HOST}
       PG_META_DB_PORT: ${POSTGRES_PORT}
       PG_META_DB_NAME: ${POSTGRES_DB}
+      # Upstream moved this to `postgres` as part of removing superuser access.
+      # Kept as supabase_admin here — not required by the version bump, own change.
       PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
 
   functions:
     container_name: supabase-edge-functions
     networks:
       - supabase-net
-    image: supabase/edge-runtime:v1.65.3
+    image: supabase/edge-runtime:v1.74.3@sha256:c52405002a890ca9fcf77978671c57f3a988e03174afb277f84ac65bc917013c
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/9000'"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
     environment:
       JWT_SECRET: ${JWT_SECRET}
       SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
@@ -372,6 +473,7 @@ services:
       WEBHOOK_TOKEN: "${WEBHOOK_TOKEN}"
     volumes:
       - ./volumes/functions:/home/deno/functions:Z
+      - deno-cache:/root/.cache/deno
     command:
       - start
       - --main-service
@@ -384,7 +486,11 @@ services:
     shm_size: "1g" # Increase shared memory to 1 GB
     networks:
       - supabase-net
-    image: supabase/postgres:15.6.1.146
+    # Deliberately staying on PostgreSQL 15 (upstream compose is authored against 17).
+    # PG15 is supported until 2027-11; this is the latest 15.x, closing 15.7-15.14 CVEs as a
+    # drop-in minor bump on the existing PGDATA. Do not let a future upstream merge undo this.
+    # See .todo/upgrade-2026-08-pg15-services-envoy.md
+    image: supabase/postgres:15.14.1.159@sha256:9e80ce14ed9cfb753f24486a5eb46b9e5fd541cb279f235cb6a0305c6cf485d6
     healthcheck:
       test: pg_isready -U postgres -h localhost
       interval: 5s
@@ -496,6 +602,7 @@ services:
 
 volumes:
   db-config:
+  deno-cache:
 
 networks:
   supabase-net:

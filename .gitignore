@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.bak-*
 .vscode
 
 tmp/
@@ -8,12 +9,37 @@ tmp/
 
 .DS_Store
 
-volumes/api
-volumes/logs
-volumes/pooler
-volumes/db
-volumes/storage
-volumes/auth
+# ---------------------------------------------------------------------------
+# volumes/
+#
+# Config under volumes/ IS tracked, so `git pull` deploys it to the host.
+# Runtime state — the Postgres cluster, uploaded objects — is not.
+#
+# Every tracked file here templates its secrets from .env at runtime
+# (`$JWT_SECRET`, `${LOGFLARE_API_KEY}`, `System.get_env(...)`). None contains
+# a literal credential. Keep it that way before adding anything new.
+#
+# Tracked:   volumes/api/     gateway config (kong.yml + vendored envoy/)
+#            volumes/logs/    vector log-shipping config
+#            volumes/pooler/  supavisor tenant bootstrap
+#            volumes/db/*.sql init scripts (only run on an empty PGDATA)
+#            volumes/auth/certs/  HARICA CA certs, needed by Dockerfile.auth
+#
+# Note: git cannot re-include a file whose parent directory is excluded, which
+# is why these exclude directory *contents* (`dir/*`) and then whitelist.
+# ---------------------------------------------------------------------------
+
+# Postgres cluster — data, data.bak-*, data.corrupt-*, … Never commit these.
+volumes/db/*
+!volumes/db/*.sql
+!volumes/db/init/
+
+# Uploaded objects
+volumes/storage/
+
+# Auth: certs only, nothing else
+volumes/auth/*
+!volumes/auth/certs/
 
 supabase/tmp
 supabase/.temp
