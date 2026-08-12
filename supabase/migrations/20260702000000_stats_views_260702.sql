@@ -855,10 +855,10 @@ select
   responsible_provider,
   responsible_troop,
   troop_name,
-  is_control_troop,
-  max(completed_at_troop) completed_at_troop_latest,
-  foreststatus27,
-  begehbar27
+  kt,
+  max(completed_at_troop) completed_as_troop_latest,
+  foreststatus27 as wald2027,
+  begehbar27 as begehbar2027
 from
   (
     select
@@ -871,7 +871,7 @@ from
       r1.responsible_provider,
       r1.responsible_troop,
       t1.name as troop_name,
-      t1.is_control_troop,
+      t1.is_control_troop as kt,
       r1.completed_at_troop,
       CAST(r1.properties ->> 'forest_status' as integer) as foreststatus27,
       CAST(r1.properties ->> 'accessibility' as integer) as begehbar27
@@ -894,7 +894,7 @@ from
       c2.responsible_provider,
       c2.responsible_troop,
       t2.name as troop_name,
-      t2.is_control_troop,
+      t2.is_control_troop as kt,
       c2.completed_at_troop,
       CAST(c2.properties ->> 'forest_status' as integer) as foreststatus27,
       CAST(c2.properties ->> 'accessibility' as integer) as begehbar27
@@ -917,7 +917,7 @@ group by
   responsible_provider,
   responsible_troop,
   troop_name,
-  is_control_troop,
+  kt,
   foreststatus27,
   begehbar27
 order by
