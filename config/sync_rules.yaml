@@ -85,6 +85,7 @@ bucket_definitions:
       - SELECT * FROM "lookup"."lookup_edge_stand_difference"
       - SELECT * FROM "lookup"."lookup_support_point_type"
       - SELECT * FROM "lookup"."lookup_municipality"
+      - SELECT * FROM "lookup"."lookup_bark_condition"
 
       # Lookup Tables
       - SELECT * FROM "lookup"."lookup_basal_area_factor"
