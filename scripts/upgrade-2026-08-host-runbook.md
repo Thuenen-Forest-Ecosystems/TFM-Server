@@ -11,6 +11,14 @@ Prerequisite: `kong_upgrade` contains the two stats commits from `origin/main`
 Rule for the whole window: **never run a bare `docker compose up -d` until step B7.**
 Services are recreated one at a time, in order.
 
+**Status 2026-08-14:** A1 ✅ · A2 ✅ · branch checked out on host · **Envoy sidecar deployed
+and validated on loopback `:8001`** (differential test: table paths identical to Kong;
+`/rest/v1/` root is service-role-only by design — see Phase C note). Key fingerprints
+`.env` = Envoy = Kong verified identical. Outstanding: A2b (sync-rules diff, functions
+reflog), A3/A4 baseline + dumps, A6 `.env` keys + zero-warning check, A7 pull/build,
+then schedule the Phase B window. Host is ARMED: new pins on disk — no `up -d` on any
+other service until B2 backups exist (`restart` is safe).
+
 ---
 
 ## Phase A — preparation (stack keeps serving, no downtime)
