@@ -842,83 +842,87 @@ where
   and (r.properties ->> 'marker_status'::text) = '4'::text;
 
 -- v_stats_troop_completed_latest
-create or replace view public.v_stats_troop_completed_latest with ( security_invoker = true ) as
+create or replace view public.v_stats_troop_completed_latest
+with
+  (security_invoker = true) as
 select
-  rr.responsible_state,
-  rr.responsible_administration,
-  rr.responsible_provider,
-  o.name as lil,
-  rr.cluster_name,
-  rr.plot_name,
-  rr.responsible_troop,
-  t.name as troop_name,
-  t.is_control_troop as kt,
-  rr.completed_as_troop_latest,
-  rr.wald2027,
-  rr.begehbar2027
+  responsible_state,
+  lil,
+  cluster_id,
+  cluster_name,
+  plot_name,
+  responsible_administration,
+  responsible_provider,
+  responsible_troop,
+  troop_name,
+  kt,
+  max(completed_at_troop) completed_as_troop_latest,
+  foreststatus27 as wald2027,
+  begehbar27 as begehbar2027
 from
   (
     select
-      r.responsible_state,
-      r.responsible_administration,
-      r.responsible_provider,
-      r.cluster_name,
-      r.plot_name,
-      COALESCE(r.responsible_troop, c.responsible_troop) as responsible_troop,
-      COALESCE(r.completed_at_troop, c.completed_at_troop) as completed_as_troop_latest,
-      r.wald2027,
-      r.begehbar2027
+      r1.responsible_state,
+      o1.name as lil,
+      r1.cluster_id,
+      r1.cluster_name,
+      r1.plot_name,
+      r1.responsible_administration,
+      r1.responsible_provider,
+      r1.responsible_troop,
+      t1.name as troop_name,
+      t1.is_control_troop as kt,
+      r1.completed_at_troop,
+      CAST(r1.properties ->> 'forest_status' as integer) as foreststatus27,
+      CAST(r1.properties ->> 'accessibility' as integer) as begehbar27
     from
-      (
-        select
-          records.id,
-          records.responsible_state,
-          records.cluster_name,
-          records.plot_name,
-          records.responsible_administration,
-          records.responsible_provider,
-          records.responsible_troop,
-          records.completed_at_troop,
-          records.properties ->> 'forest_status'::text as wald2027,
-          records.properties ->> 'accessibility'::text as begehbar2027
-        from
-          records
-        where
-          records.completed_at_troop is not null
-          and records.cluster_name < 1000000000
-          and (
-            records.cluster_name < 9999900
-            or records.cluster_name > 10000000
-          )
-      ) r
-      left join (
-        select
-          record_changes.cluster_name,
-          record_changes.plot_name,
-          record_changes.responsible_troop,
-          max(record_changes.completed_at_troop) as completed_at_troop
-        from
-          record_changes
-        where
-          record_changes.completed_at_troop is not null
-          and record_changes.cluster_name < 1000000000
-          and (
-            record_changes.cluster_name < 9999900
-            or record_changes.cluster_name > 10000000
-          )
-        group by
-          record_changes.cluster_name,
-          record_changes.plot_name,
-          record_changes.responsible_troop
-      ) c on r.cluster_name = c.cluster_name
-      and r.plot_name = c.plot_name
-      and r.responsible_troop = c.responsible_troop
-  ) rr
-  join troop t on rr.responsible_troop = t.id
-  join organizations o on rr.responsible_state = o.id
+      public.records as r1
+      join public.troop as t1 on r1.responsible_troop = t1.id
+      join public.organizations as o1 on r1.responsible_state = o1.id
+    where
+      cluster_name < 1000000000
+      and (cluster_name not between 9999900 and 10000000)
+      and completed_at_troop is not null
+    union
+    select
+      c2.responsible_state,
+      o2.name as lil,
+      c2.cluster_id,
+      c2.cluster_name,
+      c2.plot_name,
+      c2.responsible_administration,
+      c2.responsible_provider,
+      c2.responsible_troop,
+      t2.name as troop_name,
+      t2.is_control_troop as kt,
+      c2.completed_at_troop,
+      CAST(c2.properties ->> 'forest_status' as integer) as foreststatus27,
+      CAST(c2.properties ->> 'accessibility' as integer) as begehbar27
+    from
+      public.record_changes as c2
+      join public.troop as t2 on c2.responsible_troop = t2.id
+      join public.organizations as o2 on c2.responsible_state = o2.id
+    where
+      cluster_name < 1000000000
+      and (cluster_name not between 9999900 and 10000000)
+      and completed_at_troop is not null
+  ) as t
+group by
+  responsible_state,
+  lil,
+  cluster_id,
+  cluster_name,
+  plot_name,
+  responsible_administration,
+  responsible_provider,
+  responsible_troop,
+  troop_name,
+  kt,
+  foreststatus27,
+  begehbar27
 order by
-  o.name,
-  rr.cluster_name,
-  rr.plot_name,
-  t.name;
+  lil,
+  troop_name,
+  cluster_name,
+  plot_name;
  
