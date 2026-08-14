@@ -299,6 +299,64 @@ docker run --rm --entrypoint sh tfm-server-auth -c \
 
 ---
 
+## Scheduling the window
+
+**Do not start Phase B until the A4 dumps are copied off the host and
+`pg_restore --list` has passed on the receiving machine.** The `scp` is not technically
+blocking — it reads a file off disk while Phase B touches containers and
+`volumes/db/data` — but it is the off-host safety net, and B2 is where the data it
+protects starts changing. Running the window with the only backup on the disk you are
+mutating defeats the point. B2's 29 GB copy would also compete with the transfer for disk
+bandwidth.
+
+Anchor data point: **the A4 dump of this database took 12 minutes** (19:57–20:09 UTC,
+2026-08-14, while serving).
+
+| Step | Estimate | Notes |
+| --- | --- | --- |
+| B1 stop writers | ~2 min | |
+| **B2 snapshot 29 GB** | **5–15 min** | disk-bound; needs an interactive `sudo` password |
+| B3 Postgres + `ANALYZE` | 10–20 min | **+30–60 min if REINDEX is required — see below** |
+| B4 Mongo | ~2 min | |
+| B5 services, one at a time | 15–20 min | storage's 57 migrations land here |
+| B6 PowerSync | ~5 min | |
+| B7 full `up -d` | ~2 min | |
+| **Phase C smoke (12 items)** | **30–45 min** | manual, and it gates B8 |
+
+**Realistic total 1.5–2.5 h. Book 3.5–4 h.**
+
+`sda` reports rotational, but it is a *Virtual Disk* — that flag is unreliable on a VM, so
+B2's range is deliberately wide. Measure real throughput once to tighten it.
+
+### The one thing that can blow the estimate
+
+Everything above is predictable except **B3's collation branch**. If the new image ships a
+different glibc, `datcollversion` moves off `2.39` and `REINDEX DATABASE` becomes mandatory
+on 7.5 GB — the longest single operation in the window, and not optional, because the
+failure mode is silently wrong query results rather than an error.
+
+It is binary and unknowable until the container starts, so either book the wider slot or
+settle it in advance:
+
+```bash
+# throwaway container on a COPY of the data — answers the question without touching prod
+docker run --rm -e POSTGRES_PASSWORD=x \
+  supabase/postgres:15.14.1.159 \
+  postgres -c 'shared_buffers=128MB' &
+# then: SELECT datname, datcollversion FROM pg_database;   -- 2.39 => no REINDEX needed
+```
+
+This pairs naturally with the `pg_restore --disable-triggers` rehearsal noted in
+[Rollback](#rollback) — both want a scratch PG 15.14 container, so do them together.
+
+### Timing
+
+Phase C is followed by a **1–2 week Envoy soak** before unit 4, so pick a slot that leaves
+someone attentive afterwards. **B8 is the point of no cheap return:** once writers resume,
+rollback means losing field data written since.
+
+---
+
 ## Phase B — maintenance window
 
 ### B1. Stop writers
