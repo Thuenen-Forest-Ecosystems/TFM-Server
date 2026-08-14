@@ -16,10 +16,10 @@ A6 ✅ · A7 ✅ · **Envoy sidecar deployed and validated on loopback `:8001`**
 test: table paths identical to Kong; `/rest/v1/` root is service-role-only by design — see
 Phase C note). Key fingerprints `.env` = Envoy = Kong verified identical.
 
-**Next action: schedule the Phase B maintenance window.** One task carries over — copy the
-A4 dumps off the host (the two `scp` commands in A4); they currently sit on the same disk as
-the data they protect. Host is ARMED: new pins on disk — no `up -d` on any other service
-until B2 backups exist (`restart` is safe).
+**Next action: schedule the Phase B maintenance window** — see
+[Scheduling the window](#scheduling-the-window). The A4 dump is copied off-host and verified
+(2654 TOC entries), so the sequencing precondition for Phase B is met. Host is ARMED: new
+pins on disk — no `up -d` on any other service until B2 backups exist (`restart` is safe).
 
 Four findings from A2b–A7 that change how the window runs — read all four before Phase B:
 
@@ -169,8 +169,15 @@ Completed 19:57–20:09 UTC (~12 min) while the stack kept serving.
 `tfm-preupgrade.dump` **1.4 GB**, 2654 TOC entries, `pg_restore --list` reads cleanly,
 dumped from 15.6. `roles-preupgrade.sql` 6.4 KB, 47 role statements.
 **Read the circular-FK caveat in [Rollback](#rollback) before relying on this dump.**
-Still to do from your laptop: the two `scp` copies below — the dumps are currently only on
-the host, which is the same disk as the data they protect.
+
+**Copied off-host and verified 2026-08-14 — both files.** `pg_restore --list` on the
+receiving machine reports the same **2654 TOC entries**, `Format: CUSTOM`, dumped from 15.6;
+`roles-preupgrade.sql` copied alongside it. (That machine's newer `pg_restore` prints
+`Compression: gzip` where the host printed `-1` — same thing, `-1` means default, which is
+gzip. Not a discrepancy.)
+
+Keep the two together. A data restore without the roles file leaves every grant and role
+membership to be reconstructed by hand, which is not a thing to discover mid-incident.
 
 ```bash
 docker compose exec -T db sh -c 'pg_dump -U postgres -Fc "$PGDATABASE"' \
