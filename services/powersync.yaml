@@ -1,15 +1,9 @@
 services:
   powersync:
     restart: unless-stopped
-    # This currently uses a development image for the Next version of the PowerSync
-    # service. This Next version contains a new module system which will enable plugable
-    # functionality in the future. Functionality in this version should be the same as the
-    # latest stable version.
-    # Please report any issues experienced. Thank you for testing.
-    # Feel free to revert to the stable version by using
-    #   image: journeyapps/powersync-service:latest
-    #   image: journeyapps/powersync-service:0.0.0-dev-20240920084840
-    image: journeyapps/powersync-service:latest
+    # Pinned by digest. This container owns the field-data replication path — running `:latest`
+    # meant any `docker compose pull` could silently swap the replication engine.
+    image: journeyapps/powersync-service:1.23.3@sha256:b6b22fa7d0d862f04bdff62846e656756d17bcf3dd6eca399a0633671051438b
     # The unified service runs an API server and replication worker in the same container.
     # These services can be executed in different containers by using individual entry commands e.g.
     # Start only the API server with

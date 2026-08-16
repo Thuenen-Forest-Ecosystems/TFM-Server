@@ -19,26 +19,33 @@ default network (where MongoDB lives).
 
 | Service           | Container                    | Image / build                    | Purpose                                          |
 | ----------------- | ---------------------------- | -------------------------------- | ------------------------------------------------ |
-| `db`              | `supabase-db`                | `supabase/postgres:15.6.1.146`   | Postgres (PostGIS, logical replication)          |
-| `kong`            | `supabase-kong`              | `kong:2.8.1`                     | API gateway — single public entry point          |
-| `auth`            | `supabase-auth`              | built from `Dockerfile.auth`     | GoTrue authentication                            |
-| `rest`            | `supabase-rest`              | `postgrest/postgrest:v12.2.0`    | REST API (`/rest/v1`)                            |
-| `realtime`        | `realtime-dev.supabase-realtime` | `supabase/realtime:v2.33.70` | Realtime channels                                |
-| `storage`         | `supabase-storage`           | `supabase/storage-api:v1.11.13`  | File storage                                     |
-| `imgproxy`        | `supabase-imgproxy`          | `darthsim/imgproxy:v3.8.0`       | Image transformations                            |
-| `meta`            | `supabase-meta`              | `supabase/postgres-meta:v0.84.2` | Schema introspection for Studio                  |
-| `functions`       | `supabase-edge-functions`    | `supabase/edge-runtime:v1.65.3`  | Edge functions from `volumes/functions`          |
-| `studio`          | `supabase-studio`            | `supabase/studio:2025.06.30-…`   | Admin dashboard — **do not expose publicly**     |
-| `powersync`       | —                            | `journeyapps/powersync-service:latest` | Sync service for the TFM app               |
-| `mongo`           | —                            | `mongo:7.0`                      | PowerSync bucket storage (replica set `rs0`)     |
-| `mongo-rs-init`   | —                            | `mongo:7.0`                      | One-shot replica-set initialisation              |
+| `db`              | `supabase-db`                | `supabase/postgres:15.14.1.159`  | Postgres (PostGIS, logical replication)          |
+| `kong`            | `supabase-kong`              | `kong:2.8.1`                     | Legacy gateway — still serves all traffic; retired at Envoy cutover |
+| `api-gw`          | `supabase-envoy`             | `envoyproxy/envoy:v1.39.0`       | New API gateway — currently loopback-only (`127.0.0.1:8001`), carries no traffic |
+| `auth`            | `supabase-auth`              | built from `Dockerfile.auth` (`gotrue:v2.195.0`) | GoTrue authentication            |
+| `rest`            | `supabase-rest`              | `postgrest/postgrest:v14.16`     | REST API (`/rest/v1`)                            |
+| `realtime`        | `realtime-dev.supabase-realtime` | `supabase/realtime:v2.124.0` | Realtime channels                                |
+| `storage`         | `supabase-storage`           | `supabase/storage-api:v1.68.9`   | File storage                                     |
+| `imgproxy`        | `supabase-imgproxy`          | `darthsim/imgproxy:v3.30.1`      | Image transformations                            |
+| `meta`            | `supabase-meta`              | `supabase/postgres-meta:v0.96.8` | Schema introspection for Studio                  |
+| `functions`       | `supabase-edge-functions`    | `supabase/edge-runtime:v1.74.3`  | Edge functions from `volumes/functions`          |
+| `studio`          | `supabase-studio`            | `supabase/studio:2026.08.03-…`   | Admin dashboard — **do not expose publicly**     |
+| `powersync`       | —                            | `journeyapps/powersync-service:1.23.3` | Sync service for the TFM app               |
+| `mongo`           | —                            | `mongo:7.0.39`                   | PowerSync bucket storage (replica set `rs0`)     |
+| `mongo-rs-init`   | —                            | `mongo:7.0.39`                   | One-shot replica-set initialisation              |
+
+All images are pinned **by digest** in `docker-compose.yaml`. Version numbers above are the tag
+half of that pin; the digest is authoritative. See
+[`.todo/upgrade-2026-08-pg15-services-envoy.md`](../.todo/upgrade-2026-08-pg15-services-envoy.md)
+for why Postgres stays on 15, why imgproxy stays on 3.x, and how the Envoy cutover works.
 
 ### Published ports
 
 | Port                | Service    | Exposure                                                    |
 | ------------------- | ---------- | ----------------------------------------------------------- |
 | `${KONG_HTTP_PORT}` (8000) | Kong | Behind the reverse proxy — the only port that needs the public internet |
-| `${KONG_HTTPS_PORT}` (8443) | Kong | Optional, if Kong terminates TLS itself                   |
+| `${KONG_HTTPS_PORT}` (8443) | Kong | Optional, if Kong terminates TLS itself. Envoy has no HTTPS listener — confirm nothing dials this before retiring it |
+| `8001`              | Envoy      | **Bound to `127.0.0.1` only.** Test target during the gateway migration; becomes `${KONG_HTTP_PORT}` at cutover |
 | `${PS_PORT}` (8181) | PowerSync  | Behind the reverse proxy (`/sync/`)                          |
 | `${POSTGRES_PORT}`  | Postgres   | Firewall to admin/VPN networks only                          |
 | `${STUDIO_PORT}`    | Studio     | Localhost / VPN only                                         |

@@ -1,0 +1,4 @@
+Vendored from supabase/supabase docker/volumes/api/envoy
+Commit: 9777f051d6ee59e4ae105648a72c17628a72a1e1 (2026-07-07)
+Date:   2026-08-07
+See ../../../.todo/upgrade-2026-08-pg15-services-envoy.md
