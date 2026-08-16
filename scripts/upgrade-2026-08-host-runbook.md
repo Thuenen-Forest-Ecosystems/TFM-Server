@@ -16,12 +16,48 @@ A6 ✅ · A7 ✅ · **Envoy sidecar deployed and validated on loopback `:8001`**
 test: table paths identical to Kong; `/rest/v1/` root is service-role-only by design — see
 Phase C note). Key fingerprints `.env` = Envoy = Kong verified identical.
 
-**Next action: schedule the Phase B maintenance window** — see
-[Scheduling the window](#scheduling-the-window). The A4 dump is copied off-host and verified
-(2654 TOC entries), so the sequencing precondition for Phase B is met. Host is ARMED: new
-pins on disk — no `up -d` on any other service until B2 backups exist (`restart` is safe).
+> ## ✅ EXECUTED 2026-08-16 — Phase B complete, stack serving on PG 15.14
+>
+> Downtime **13:56 → 14:19 UTC, ~23 min** (estimate was 25–35). B1–B7 done, Phase C
+> partially done, **B8 skipped** (r-plumber / r-derived-listener not needed at present),
+> **B9 not yet run**. Two unforeseen failures at B3 — both fixed in-window, both recorded in
+> [Phase B execution record](#phase-b-execution-record-2026-08-16). **Read that section
+> before any rollback: the data dir uid changed and rollback now needs a chown.**
 
-Four findings from A2b–A7 that change how the window runs — read all four before Phase B:
+**Original next action (superseded): schedule the window.** All technical unknowns closed —
+see [Decisions](#decisions-taken-2026-08-16) and [Scheduling the window](#scheduling-the-window).
+The A4 dump is copied off-host and verified (2654 TOC entries), so the sequencing
+precondition for Phase B is met. Host is ARMED: new pins on disk — no `up -d` on any other
+service until B2 backups exist (`restart` is safe).
+
+### Decisions taken 2026-08-16
+
+Chosen on the "safest verified option" rule. Each is backed by a rehearsal, not a judgement
+call — the evidence is in the linked sections.
+
+| # | Decision | Rationale |
+| --- | --- | --- |
+| D1 | **Do not touch any extension** — no `ALTER EXTENSION`, no drop/recreate | None can be updated in place anyway; all four verified working mismatched ([B3b](#b3b-extension-version-drift--resolved-2026-08-16-do-nothing)) |
+| D2 | **Defer the collation `REINDEX` to B9**, run `CONCURRENTLY` after writers resume | Ordering verified identical across all 68 indexed text columns (1,193,502 values); no BRIN indexes, so the 15.13/15.14 advisories don't apply |
+| D3 | **Drop `ANALYZE` from B3** | Minor bump preserves `pg_statistic`; release notes 15.7–15.14 carry no other post-upgrade action |
+| D4 | **Lift the reverse proxy after the write-path Phase C items only** | Keeps a lossless rollback across the checks most likely to fail, at ~35–45 min downtime instead of ~55–70 |
+| D5 | **Keep B2's `cp -a`** rather than a hot pre-seed or `pg_basebackup` | Measured 452 MB/s makes it a 3–5 min step; not worth added complexity. (`pg_basebackup` is refused anyway — finding 5) |
+
+Still requiring a human, and not decidable here: **when** the window runs, who is at the
+terminal for B2's interactive `sudo` password, and who watches the 1–2 week Envoy soak.
+
+**Undocumented safety net found 2026-08-16:** the `tfm-server-backup` container is running a
+working nightly job — `db_<ts>.dump` + `storage_<ts>.tar.gz` at 02:00, retention 7 daily /
+4 weekly / 3 monthly, latest `20260816_020000` clean. It reports `unhealthy`, but that is a
+broken healthcheck, not a broken backup. Its dumps carry the same circular-FK caveat as A4,
+so it is a safety net, **not** a rollback path. Worth fixing the healthcheck separately.
+
+**Status 2026-08-16: PRE-WINDOW REHEARSAL DONE — zero downtime, prod never restarted.**
+Two throwaway containers (15.6 and 15.14, fresh PGDATA, fully isolated) settled B3's open
+questions empirically. **The collation branch is resolved and no longer gates the window
+length**, but two new blockers appeared — findings 5–8.
+
+Findings that change how the window runs — read all eight before Phase B:
 
 | # | Finding | Where | Blocking? |
 | --- | --- | --- | --- |
@@ -29,6 +65,54 @@ Four findings from A2b–A7 that change how the window runs — read all four be
 | 2 | **`sudo` needs a password** — B2 cannot run unattended, and `du` on the data dir under-reports instead of failing | B2 | No, but plan for it |
 | 3 | **`PGRST_DB_MAX_ROWS=1000` is new** — silent REST truncation; verified safe for current traffic | A6 | No |
 | 4 | **A4 dump needs `--disable-triggers`** to restore (circular FKs); B2 snapshot is the real rollback | Rollback | No |
+| 5 | **Collation version WILL move `2.39` → `2.40`** — the branch the runbook feared. But sort order is **verified byte-identical**, so the REINDEX is mechanical and can run *after* the window, `CONCURRENTLY` | B3 | No — de-risked |
+| 6 | **No extension in the new image can be updated in place** — `pg_graphql`/`pg_jsonschema` ship no upgrade path, `pg_net`/`supabase_vault` are blocked by `pgaudit`. All four verified to work mismatched | B3b | No — **decided: do nothing** |
+| 7 | **New image adds `supabase_vault` to `shared_preload_libraries`**; prod's list lacks it | B3 | No |
+| 8 | **B2 is much cheaper than budgeted** — disk measured at 452 MB/s, so the 25 GB copy is ~3–5 min, not 5–15 | B2 | No — saves time |
+
+### Rehearsal method (2026-08-16, repeatable, no prod impact)
+
+`pg_basebackup` against prod is **refused** — `no pg_hba.conf entry for replication
+connection`. Prod's `pg_hba.conf` allows the `replication` pseudo-database only over
+`local`/`127.0.0.1`, not from the docker bridge. (Logical replication is unaffected:
+PowerSync's slots connect to a real database name and match the normal `host all all`
+entry.) So there is **no zero-downtime physical copy of prod** without editing `pg_hba.conf`
+— worth knowing if a copy is ever wanted for another purpose.
+
+**It was not needed.** Prod's data is not required to rehearse either question. Both were
+answered with throwaway containers, prod only ever `SELECT`ed from:
+
+```bash
+PIN='supabase/postgres@sha256:9e80ce14ed9cfb753f24486a5eb46b9e5fd541cb279f235cb6a0305c6cf485d6'
+
+# (a) COLLATION — sort the same corpus under each glibc and diff
+docker run -d --name pg156ref -e POSTGRES_PASSWORD=x -e POSTGRES_DB=postgres supabase/postgres:15.6.1.146
+docker run -d --name pg1514   -e POSTGRES_PASSWORD=x -e POSTGRES_DB=postgres "$PIN"
+
+# (b) EXTENSIONS — reproduce "old catalog, new library" by upgrading a volume in place.
+#     A fresh 15.6 init already reproduces prod exactly: pg_graphql 1.5.7,
+#     supabase_vault 0.2.8, and all nine event triggers.
+docker volume create pgmig-data
+docker run --rm -v pgmig-data:/d alpine sh -c 'chown 105:106 /d && chmod 700 /d'
+docker run -d --name pgmig -v pgmig-data:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=x -e POSTGRES_DB=postgres supabase/postgres:15.6.1.146
+#   ... CREATE EXTENSION pg_net VERSION '0.13.0';
+#   ... CREATE EXTENSION pg_jsonschema SCHEMA extensions VERSION '0.3.1';
+docker stop pgmig && docker rm pgmig
+docker run -d --name pgmig -v pgmig-data:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=x -e POSTGRES_DB=postgres "$PIN"        # <-- the actual upgrade
+
+docker rm -f pg156ref pg1514 pgmig; docker volume rm pgmig-data
+```
+
+Scripts kept at `scratchpad/collation-full.sh` (68-column sweep) — regenerate rather than
+trust, they reference session paths.
+
+**Base image changed Ubuntu 20.04 → Alpine 3.23**, but PostgreSQL itself is a Nix build
+linked against its own glibc in both images (that is why prod records `2.39` while the
+Ubuntu base carries glibc 2.31 — the base libc is irrelevant). Verified present in the new
+image: `/etc/postgresql/postgresql.conf` and `pg_hba.conf`, i.e. the `config_file=` argument
+in `docker-compose.yaml` still resolves. All 15 installed extensions exist in the new image.
 
 ---
 
@@ -319,42 +403,99 @@ bandwidth.
 Anchor data point: **the A4 dump of this database took 12 minutes** (19:57–20:09 UTC,
 2026-08-14, while serving).
 
-| Step | Estimate | Notes |
+| Step | Original | Revised 2026-08-16 | Why it changed |
+| --- | --- | --- | --- |
+| B1 stop writers | ~2 min | ~2 min | |
+| **B2 snapshot 25 GB** | 5–15 min | **3–5 min** | disk measured at 452 MB/s; still needs an interactive `sudo` password |
+| B3 Postgres | 10–20 min | **3–6 min** | REINDEX deferred out of the window; `ANALYZE` dropped |
+| B4 Mongo | ~2 min | ~2 min | |
+| B5 services, one at a time | 15–20 min | **8–12 min** | images already pulled at A7; gate on `ps`, drop the fixed `sleep`s |
+| B6 PowerSync | ~5 min | ~5 min | |
+| B7 full `up -d` | ~2 min | ~2 min | |
+| **Stack down, subtotal** | | **~25–35 min** | |
+| **Phase C smoke (12 items)** | 30–45 min | 30–45 min | manual; see below for how much of it must gate traffic |
+
+**Stack-down time is ~25–35 min.** Book 2 h — the slack is for Phase C, not for surprises;
+B3b's extension work is now zero steps.
+
+`sda` reports rotational but is a *Virtual Disk*; measured 2 GB write with `fdatasync` at
+**452 MB/s**, so it is SSD-backed and B2's old wide range was pessimism.
+
+**On dropping `ANALYZE` (D3):** 15.6 → 15.14 is a minor bump — no `pg_upgrade`, no catalog
+change, `pg_statistic` survives in place. Release notes 15.7–15.14 were checked: the only
+post-upgrade advisories are the two BRIN reindex notes in 15.13/15.14, and this cluster has
+no BRIN indexes. Nothing else in the range requires action.
+
+### How much of Phase C has to gate traffic
+
+The B2 snapshot is a lossless rollback **only while nothing writes**, so resuming traffic
+early trades rollback safety for downtime. Three positions:
+
+| Resume point | Stack-down | Rollback |
 | --- | --- | --- |
-| B1 stop writers | ~2 min | |
-| **B2 snapshot 29 GB** | **5–15 min** | disk-bound; needs an interactive `sudo` password |
-| B3 Postgres + `ANALYZE` | 10–20 min | **+30–60 min if REINDEX is required — see below** |
-| B4 Mongo | ~2 min | |
-| B5 services, one at a time | 15–20 min | storage's 57 migrations land here |
-| B6 PowerSync | ~5 min | |
-| B7 full `up -d` | ~2 min | |
-| **Phase C smoke (12 items)** | **30–45 min** | manual, and it gates B8 |
+| After all of Phase C | ~55–70 min | fully lossless |
+| **After the write-path items only** (C2 mail, C3 REST write + RLS, C6 storage upload, C8 PowerSync round-trip — ~10 min) | **~35–45 min** | lossless across the checks most likely to fail |
+| At B7 | ~25–35 min | **lossy** — any rollback discards writes since |
 
-**Realistic total 1.5–2.5 h. Book 3.5–4 h.**
+The middle row is the recommendation. The remaining Phase C items (PostGIS, Studio,
+realtime, row-cap probe, Envoy shadow) are read-only or zero-traffic and run fine with users
+live. B8 (TFM-R-Server) is a *writer* and can stay held until all of Phase C passes
+regardless — holding it costs nothing user-facing.
 
-`sda` reports rotational, but it is a *Virtual Disk* — that flag is unreliable on a VM, so
-B2's range is deliberately wide. Measure real throughput once to tighten it.
+### The collation branch — ANSWERED 2026-08-16, and it is the good outcome
 
-### The one thing that can blow the estimate
+This was "the one thing that can blow the estimate". It is now measured, not guessed.
 
-Everything above is predictable except **B3's collation branch**. If the new image ships a
-different glibc, `datcollversion` moves off `2.39` and `REINDEX DATABASE` becomes mandatory
-on 7.5 GB — the longest single operation in the window, and not optional, because the
-failure mode is silently wrong query results rather than an error.
+**The version does move.** The new image's glibc reports `2.40` where prod recorded `2.39`:
 
-It is binary and unknowable until the container starts, so either book the wider slot or
-settle it in advance:
+| | 15.6.1.146 (prod) | 15.14.1.159 (target) |
+| --- | --- | --- |
+| `en_US` libc `collversion` | `2.39` | **`2.40`** |
+| `initdb` default provider | libc | **ICU** (`153.121`) — only affects *newly created* clusters; the existing PGDATA stays libc |
+
+So PG **will** log a collation version mismatch at B3, and `REINDEX` is formally required.
+
+**But the ordering does not change.** Sorted under both versions, byte-for-byte identical:
+
+| Corpus | Values | Result |
+| --- | --- | --- |
+| **Every indexed text/varchar column in the cluster — all 68, distinct values** | **1,193,502** | **identical** |
+| `inventory_archive.plot.intkey` (A3 canary) | 783,532 | identical |
+| `inventory_archive.tree.intkey` (A3 canary) | 1,722,099 | identical |
+| Real German text — municipality (de+en), tree species, forest office, FFH | 32,428 | identical |
+| Synthetic stress: umlauts, `ß`/`ss`, hyphen/underscore/space/period permutations, case | 775 | identical |
+
+The first row is the important one: the check is not a sample any more. Every column that
+actually *has* an index — the only place a stale collation can produce a wrong answer — was
+enumerated from `pg_index` and its distinct values compared. The rest is where a glibc
+change would show if it were going to: umlauts, `ß`, and the punctuation-heavy keys A3 picked
+because 783,136 of 783,532 plot rows contain punctuation.
+
+**Release notes 15.7 → 15.14 checked** (this was the last open item). Two reindex advisories
+exist, both BRIN-only: 15.13 (BRIN bloom) and 15.14 (BRIN `numeric_minmax_multi_ops`).
+**This cluster has no BRIN indexes** — `postgres` is 628 btree + 2 hash, `_supabase` is 260
+btree. Both advisories are moot. No other release in the range advises reindexing.
+
+**Consequence for the window: the REINDEX comes out of it.** Because ordering is unchanged,
+a stale index cannot return wrong results here — the reindex is bookkeeping, not a
+correctness fix. Run it after writers resume, without blocking anything:
 
 ```bash
-# throwaway container on a COPY of the data — answers the question without touching prod
-docker run --rm -e POSTGRES_PASSWORD=x \
-  supabase/postgres:15.14.1.159 \
-  postgres -c 'shared_buffers=128MB' &
-# then: SELECT datname, datcollversion FROM pg_database;   -- 2.39 => no REINDEX needed
+# AFTER B8, not in the window. Verified to work on 15.14.
+docker compose exec -T db sh -c 'psql -U postgres -d "$PGDATABASE" -c \
+  "REINDEX DATABASE CONCURRENTLY \"$PGDATABASE\";"'
+docker compose exec -T db sh -c 'psql -U postgres -d "$PGDATABASE" -c \
+  "ALTER DATABASE \"$PGDATABASE\" REFRESH COLLATION VERSION;"'
+# repeat for _supabase
 ```
 
-This pairs naturally with the `pg_restore --disable-triggers` rehearsal noted in
-[Rollback](#rollback) — both want a scratch PG 15.14 container, so do them together.
+Do **not** run `REFRESH COLLATION VERSION` before the reindex — that just hides the warning.
+Until both run, every connection logs the mismatch; noisy, harmless.
+
+> **⚠️ Caveat on the evidence.** This tested the two canary columns plus ~33k German text
+> values, not every text column in the cluster. It is strong evidence that glibc 2.39→2.40
+> did not touch `en_US.UTF-8`, not a proof over all data. The deferral is a judgement call:
+> if you want certainty inside the window instead, budget the 30–60 min and reindex there.
 
 ### Timing
 
@@ -405,23 +546,20 @@ writers run until B8 — so this one snapshot covers rollback for the entire win
 docker compose up -d db
 docker compose logs -f db
 # wait for: "database system is ready to accept connections"
-# WATCH FOR: "collation version mismatch" — this is the silent-wrong-results failure mode
+# EXPECT: "collation version mismatch" (2.39 -> 2.40). Verified benign 2026-08-16 — see B9.
 ```
 
-If a collation mismatch is logged, before anything else:
+**Expect the collation mismatch — it is not a surprise any more.** `datcollversion` moves
+`2.39` → `2.40`. Do **not** reindex here; ordering is verified unchanged, so it goes after
+B8 (see [the collation branch](#the-collation-branch--answered-2026-08-16-and-it-is-the-good-outcome)).
 
-```bash
-docker compose exec -T db sh -c 'psql -U postgres -d "$PGDATABASE" -c "REINDEX DATABASE \"$PGDATABASE\";"'
-docker compose exec -T db sh -c 'psql -U postgres -d "$PGDATABASE" -c "ALTER DATABASE \"$PGDATABASE\" REFRESH COLLATION VERSION;"'
-```
-
-Then extensions + stats, and the byte-for-byte collation check:
+Extensions. `postgis` is **3.3.2 in both images**, so the two `UPDATE`s below are no-ops —
+harmless, keep them as assertions. `ANALYZE` is dropped (minor bump preserves statistics):
 
 ```bash
 docker compose exec -T db sh -c 'psql -U postgres -d "$PGDATABASE"' <<'SQL'
 ALTER EXTENSION postgis UPDATE;
 ALTER EXTENSION postgis_topology UPDATE;
-ANALYZE;
 SQL
 
 # same queries as A3:
@@ -449,7 +587,56 @@ docker compose exec -T db sh -c 'psql -U postgres -d "$PGDATABASE" -c \
   "SELECT datname, datcollversion FROM pg_database;"'
 ```
 
-**STOP** if the diff is non-empty and B3's REINDEX did not resolve it.
+**STOP** if the diff is non-empty. Both canaries were verified identical under glibc 2.40
+before the window (2026-08-16), so a mismatch here means something *other* than the expected
+collation bump — investigate, do not reindex past it.
+
+### B3b. Extension version drift — RESOLVED 2026-08-16: DO NOTHING
+
+The new image ships newer builds of four installed extensions. **Decision: leave all four
+alone.** Verified by rehearsal — this is both the safest option and, as it turns out, the
+only one that works.
+
+| Extension | Prod | New image | `ALTER EXTENSION … UPDATE` | Works mismatched? |
+| --- | --- | --- | --- | --- |
+| `postgis` / `postgis_topology` | 3.3.2 | 3.3.2 | n/a — unchanged | n/a |
+| `pg_net` | 0.13.0 | 0.20.4 | ❌ `pgaudit stack is not empty` | ✅ |
+| `supabase_vault` | 0.2.8 | 0.3.1 | ❌ `pgaudit stack is not empty` | ✅ |
+| `pg_graphql` | 1.5.7 | 1.6.1 | ❌ `no update path from 1.5.7 to 1.6.1` | ✅ |
+| `pg_jsonschema` | 0.3.1 | 0.3.3 | ❌ `no update path from 0.3.1 to 0.3.3` | ✅ |
+
+**No extension in this image can be updated in place.** The two with shipped upgrade paths
+(`pg_net`, `supabase_vault`) are blocked by `pgaudit`, which is in
+`shared_preload_libraries` on prod. `SET pgaudit.log TO 'none'` does **not** work around it.
+So `ALTER EXTENSION … UPDATE` is off the table for all four — do not put it in the window.
+
+**Running mismatched is verified safe.** Rehearsed by installing all four at prod's exact
+versions in a 15.6 container, then starting 15.14 against that same volume — reproducing
+"old catalog, new library" without touching prod:
+
+| Check | Result |
+| --- | --- |
+| Server starts on the 15.6-initialised PGDATA | ✅ ready in ~4 s |
+| `CREATE` / `ALTER` / `DROP TABLE` (fires both `graphql_watch_*` event triggers) | ✅ no error |
+| `graphql.resolve('{ __typename }')` | ✅ `{"data": {"__typename": "Query"}}` |
+| `json_matches_schema` via a plpgsql wrapper, mirroring `public.validate_json_properties_by_schema` | ✅ `t` |
+| `pg_net` background worker + `net.http_get` | ✅ worker alive, request queued |
+| `supabase_vault` `create_secret` → `decrypted_secrets` round-trip | ✅ |
+
+> **Why the earlier `DROP … CASCADE` plan was dropped.** `graphql.increment_schema_version()`
+> turned out to be **plpgsql, not a C function**, so the "changed C symbol breaks every DDL"
+> fear was unfounded — DDL works fine. And dropping `pg_graphql` would cascade away the
+> `graphql_watch_ddl` / `graphql_watch_drop` event triggers, with `issue_pg_graphql_access`
+> and `issue_graphql_placeholder` still referencing the `graphql` schema. Doing nothing
+> avoids all of that.
+
+Note for later: `pg_jsonschema` lives in the `extensions` schema and is used by
+`public.validate_json_properties_by_schema` (plpgsql, so the dependency is **opaque** —
+`DROP EXTENSION` would succeed silently and break it at runtime). If these extensions are
+ever genuinely upgraded, that has to be done deliberately, not as a side effect.
+
+**Also observed:** the new image adds `supabase_vault` to `shared_preload_libraries`
+(prod's list lacks it). Harmless, but it is a config delta worth knowing about.
 
 ### B4. Mongo 7.0.39
 
@@ -509,6 +696,131 @@ docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | tee ~/upgr
 cd /home/sadmin/TFM-R-Server && docker compose up -d
 # re-enable reverse proxy if it was in maintenance
 ```
+
+### B9. Deferred collation reindex — after B8, no downtime
+
+Not part of the window. Ordering was verified unchanged, so this is bookkeeping; it runs
+`CONCURRENTLY` against live traffic. Until it completes, every connection logs a collation
+version mismatch — noisy, harmless.
+
+```bash
+# do NOT `source .env` — same reason as Phase C
+PGDB=$(grep '^POSTGRES_DB=' .env | cut -d'=' -f2-)
+for DB in "$PGDB" _supabase; do
+  echo "--- $DB ---"
+  docker compose exec -T db psql -U postgres -d "$DB" \
+    -c "REINDEX DATABASE CONCURRENTLY \"$DB\";"
+  docker compose exec -T db psql -U postgres -d "$DB" \
+    -c "ALTER DATABASE \"$DB\" REFRESH COLLATION VERSION;"
+done
+```
+
+`REINDEX DATABASE CONCURRENTLY` skips system catalogs by design; that is fine here, because
+catalog text columns are `name`-typed and use `C` collation, which no glibc change affects.
+
+---
+
+## Phase B execution record 2026-08-16
+
+Timeline (UTC): B1 13:55 · **stack down 13:56:29** · B2 copy 13:57–14:07 · B3 first start
+14:08 (**failed**) · fixes 14:12–14:14 · db healthy **14:14:09** · B4 14:15 · B5 14:15–14:18 ·
+kong healthy **14:18:49** · B7 14:19:45. **User-facing downtime ~23 min.**
+
+### Two failures at B3 — neither was reachable by a fresh-PGDATA rehearsal
+
+Both come from the Ubuntu 20.04 → Alpine 3.23 base change, and both bite only because prod
+carries a **persisted `db-config` volume** from Dec 2024. A rehearsal on fresh PGDATA creates
+that volume fresh and correct, which is exactly why it missed them.
+
+**1. Missing `conf.d` → `FATAL: configuration file … contains errors`, restart loop.**
+The new `postgresql.conf` adds a line the 15.6 one lacks:
+
+```
+include_dir = '/etc/postgresql-custom/conf.d'      # line 769, NEW in 15.14
+```
+
+PostgreSQL treats a missing `include_dir` as fatal. Fix:
+
+```bash
+docker run --rm -v tfm-server_db-config:/c alpine sh -c \
+  'mkdir -p /c/conf.d && chown 100:101 /c/conf.d && chmod 755 /c/conf.d'
+```
+
+> **Diagnosis trap that cost ~10 min:** `docker-compose.yaml` passes `-c
+> log_min_messages=fatal`, which **suppresses the `LOG:` line naming the bad setting**. The
+> container only ever prints `contains errors`. To see the real message, re-run the same
+> config outside compose with logging on:
+> ```bash
+> docker run --rm --user 100:101 \
+>   -v /home/sadmin/TFM-Server/volumes/db/data:/var/lib/postgresql/data:ro \
+>   -v tfm-server_db-config:/etc/postgresql-custom:ro \
+>   --entrypoint postgres <PINNED_IMAGE> \
+>   -c config_file=/etc/postgresql/postgresql.conf -c log_min_messages=warning \
+>   -D /var/lib/postgresql/data
+> ```
+
+**2. `postgres` uid changed 105 → 100 → `FATAL: invalid secret key`.**
+
+| | 15.6.1.146 | 15.14.1.159 |
+| --- | --- | --- |
+| `postgres` uid:gid | **105:106** | **100:101** |
+
+The entrypoint auto-chowns **PGDATA**, but **not** the `db-config` volume — so
+`pgsodium_root.key` (mode `0600`, owned by 105) became unreadable:
+`cat: can't open '/etc/postgresql-custom/pgsodium_root.key': Permission denied`. Fix:
+
+```bash
+docker run --rm -v tfm-server_db-config:/c alpine chown -R 100:101 /c
+```
+
+Key md5 verified **identical before and after** (`ca50741a75afe11676dbc3596fd42299`) — it was
+chowned, never regenerated, so existing vault secrets still decrypt.
+
+### ⚠️ Rollback now requires a chown
+
+`volumes/db/data` is now **uid 100**; the B2 snapshot
+`volumes/db/data.preupgrade-20260816_135657` is **uid 105**. 15.6 expects 105. So the
+rollback in [Rollback](#rollback) needs one extra step after swapping the directories:
+
+```bash
+docker run --rm -v /home/sadmin/TFM-Server/volumes/db:/d alpine chown -R 105:106 /d/data
+docker run --rm -v tfm-server_db-config:/c alpine chown -R 105:106 /c
+```
+
+**Rollback is no longer lossless** — writes have been landing since ~14:19 (no reverse-proxy
+maintenance was used). The snapshot is a point-in-time restore from 13:56.
+
+### Other deviations
+
+- **B2 took ~10 min, not 3–5.** Real file-copy throughput was **~42 MB/s**, not the 452 MB/s
+  measured by sequential `dd`. 8047 files across 25 GB. Use ~42 MB/s for future estimates.
+- **PowerSync created a NEW slot** (`powersync_17_bfad` → `powersync_18_58a7`) and ran a full
+  server-side re-replication, contrary to B6's "expect the pre-existing slot". Consistent with
+  the `lookup_bark_condition` sync-rules change opening a new generation. **Confirmed
+  harmless: clients reconnect without a full re-sync.**
+- **Studio reached healthy**, clearing the 5-month-old unhealthy state as predicted.
+- `docker compose stop powersync` must be run from `/home/sadmin/TFM-Server` — running it
+  after a `cd` into TFM-R-Server silently fails with `no such service`.
+
+### Phase C results
+
+| Check | Result |
+| --- | --- |
+| All services healthy | ✅ |
+| **Collation canaries byte-identical** (`ee46a9fa…`, `46c54909…`) | ✅ |
+| 15 extensions intact at original versions (D1) | ✅ |
+| Storage migrations | ✅ 62 applied, latest `vector-bucket-type` |
+| REST read — `records` (public profile) + `plot` (default) | ✅ 200 |
+| **Kong vs Envoy agree on both table paths** | ✅ |
+| Row cap active (`0-999/*`) | ✅ |
+| PostGIS 3.3, GoTrue v2.195.0, storage 404 objects / 2 buckets | ✅ |
+| Auth container HARICA cert count | ✅ 5 — finding 1's fix confirmed live |
+| **C2 send a real email** | ❌ not run — cert bundle correct, but mail path unproven |
+| **C3 REST write / C6 storage upload / C11 realtime subscribe** | ❌ not run — would write production data |
+
+> `/rest/v1/records` returns **404 without `Accept-Profile: public`** — `PGRST_DB_SCHEMAS`
+> lists `inventory_archive` first, so that is the default profile. Not a regression; the
+> Phase C wording below is misleading on this point.
 
 ---
 
