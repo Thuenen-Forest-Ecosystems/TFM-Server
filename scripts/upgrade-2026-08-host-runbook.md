@@ -16,6 +16,15 @@ A6 ✅ · A7 ✅ · **Envoy sidecar deployed and validated on loopback `:8001`**
 test: table paths identical to Kong; `/rest/v1/` root is service-role-only by design — see
 Phase C note). Key fingerprints `.env` = Envoy = Kong verified identical.
 
+> ## ✅ PHASE C COMPLETE 2026-08-18 — write path verified sound
+>
+> The four skipped write-path checks were executed against prod on a synthetic fixture and
+> torn down to zero residue. **The upgrade did not break writing.** Eight new findings (9–16),
+> two of which matter for the Trupp-Mentzel data loss: the **download/write asymmetry**
+> (finding 9, reproduced end to end) and the **refresh-token reuse interval** (finding 12).
+> See [Phase C completion 2026-08-18](#phase-c-completion-2026-08-18--write-path-smoke-tests-executed).
+> **B9 is still not run.**
+
 > ## ✅ EXECUTED 2026-08-16 — Phase B complete, stack serving on PG 15.14
 >
 > Downtime **13:56 → 14:19 UTC, ~23 min** (estimate was 25–35). B1–B7 done, Phase C
@@ -815,12 +824,108 @@ maintenance was used). The snapshot is a point-in-time restore from 13:56.
 | Row cap active (`0-999/*`) | ✅ |
 | PostGIS 3.3, GoTrue v2.195.0, storage 404 objects / 2 buckets | ✅ |
 | Auth container HARICA cert count | ✅ 5 — finding 1's fix confirmed live |
-| **C2 send a real email** | ❌ not run — cert bundle correct, but mail path unproven |
-| **C3 REST write / C6 storage upload / C11 realtime subscribe** | ❌ not run — would write production data |
+| **C2 send a real email** | ✅ **run 2026-08-18** — see [Phase C completion](#phase-c-completion-2026-08-18--write-path-smoke-tests-executed) |
+| **C3 REST write / C6 storage upload / C8 round-trip** | ✅ **run 2026-08-18** on a synthetic fixture, torn down |
+| **C11 realtime subscribe** | ⚠️ transport OK; `postgres_changes` unavailable (finding 13) |
 
 > `/rest/v1/records` returns **404 without `Accept-Profile: public`** — `PGRST_DB_SCHEMAS`
 > lists `inventory_archive` first, so that is the default profile. Not a regression; the
 > Phase C wording below is misleading on this point.
+
+---
+
+## Phase C completion 2026-08-18 — write-path smoke tests executed
+
+The four checks skipped on 2026-08-16 (C2 mail, C3 write, C6 upload, C11 realtime) plus the
+C8 round-trip were run on 2026-08-18 08:53–09:07 UTC, **two days after writers resumed**.
+Method: a fully synthetic fixture (own org, own troop, own GoTrue user, two `is_training`
+records on free plots), driven through the real `Kong → PostgREST → RLS → trigger` path, then
+deleted. No real record, troop or user was touched; `public.records` was 122321 rows before
+and after. Fixture teardown verified at zero residue across 10 tables.
+
+| # | Check | Result |
+| --- | --- | --- |
+| C1 | All services healthy, nothing restarting | ✅ |
+| C2 | Login, JWT claims hook, refresh rotation ×3, **real recovery email sent** | ✅ |
+| C3 | REST **write** as troop user (204, `updated_at`/`updated_by` stamped, history row) | ✅ |
+| C3 | RLS enforced for a non-privileged persona | ✅ (see finding 9) |
+| C4 | PostGIS 3.3 `USE_GEOS=1 USE_PROJ=1 USE_STATS=1` | ✅ |
+| C6 | Storage upload → download (byte-identical) → imgproxy transform → `storage.objects` vs disk | ✅ |
+| C7 | Edge function `health` 200 via **Kong and Envoy** | ✅ |
+| C8 | PowerSync authenticates the GoTrue JWT, streams a checkpoint, write round-trips | ✅ |
+| C11 | Realtime transport (101, channel join, heartbeat) | ✅ |
+| C11 | Realtime `postgres_changes` | ⚠️ unavailable — finding 13, pre-existing |
+| C12 | Row cap `0-999/*` | ✅ |
+
+**The write path on the upgraded stack is sound.** The upgrade did not break writing.
+
+Full writability matrix (`supabase/tests/run_writability_matrix.sh`, single ROLLBACK) also
+re-ran green against PG 15.14: troop persona writes `records.properties`, read-only group
+passed authz on **0** of 41 probes.
+
+### Findings 9–16
+
+| # | Finding | Blocking? |
+| --- | --- | --- |
+| 9 | **Download and write are keyed on different tables** — reproduced end to end | No, but it is the data-loss mechanism |
+| 10 | `record_changes.previous_properties_updated_at` is NOT NULL, `records.` is nullable → a record's *first* UPDATE dies with **23502**, which the app treats as fatal and drops silently. **0 live records** are in that state today | No — latent |
+| 11 | **`GOMAIL_INSECURE_SKIP_VERIFY=true` in `.env` is inert** — `docker-compose.yaml` never passes it to `auth`. The HARICA certs really are load-bearing; runbook finding 1 stands | No |
+| 12 | **No `GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL` is set** → upstream default 0. A replayed/concurrent refresh returns `400 refresh_token_already_used`, which gotrue-dart treats as non-network → destroys the session → forced re-login | No — but see below |
+| 13 | **The `supabase_realtime` publication is empty** (0 tables), so `postgres_changes` cannot work for any table. Pre-existing; the app syncs via PowerSync | No |
+| 14 | **B9 was never run** — every connection still logs the 2.39→2.40 collation mismatch | No — bookkeeping |
+| 15 | Replication slot `cainophile_2fnvrdeb` retains **1364 MB** of WAL (PowerSync's retains 8 MB). Active, not stuck | No — watch it |
+| 16 | `storage.objects` has **only SELECT policies** — no INSERT/UPDATE/DELETE for any role. Uploads are service_role-only by construction | No |
+
+#### Finding 9 in detail — the download/write asymmetry
+
+`config/sync_rules.yaml` bucket `troop_records` selects records by **`troop_members`**:
+
+```yaml
+parameters: SELECT troop_id FROM "public"."troop_members" WHERE user_id = request.user_id()
+data:       SELECT * FROM "public"."records" WHERE responsible_troop = bucket.troop_id ...
+```
+
+The live RLS UPDATE policy selects them by **`users_permissions` → `troop.organization_id`**.
+These are not the same set. A user who is a `troop_members` row of a troop whose organization
+is **not** in their `users_permissions` will:
+
+1. **receive** those records via PowerSync (verified: bucket `18#troop_records["d2397a8c…"]`
+   was streamed to the test device, carrying the record),
+2. **not see** them over REST (the `SELECT` policy hides the row),
+3. get **`HTTP 204 No Content` on `PATCH`, with 0 rows changed and no error** (verified),
+4. and the app then calls `transaction.complete()`, dropping the edit — after which the next
+   checkpoint resets the local row.
+
+Verified on prod, both halves, in the same session. With `Prefer: return=representation` the
+same request returns `200` and `[]`, which is how the client can detect it. This is the
+`BLOCKED_SILENT_RLS` state the writability matrix has always reported, now confirmed to be
+reachable through the real gateway by a real user.
+
+**Fix the asymmetry at the source:** make the sync-rule parameter and the UPDATE policy read
+the same membership, or mark records the device may not write as read-only in the payload.
+
+#### Finding 12 in detail — forced re-login
+
+`JWT_EXPIRY=3600` / `GOTRUE_JWT_EXP=3600` on this host, so the app refreshes hourly, every
+hour, on every device. With no reuse interval configured, any duplicate refresh — a retry
+after a timeout, two isolates racing, a resumed process replaying a stored token — is answered
+`400 refresh_token_already_used` rather than being tolerated. Verified live:
+
+```
+refresh #1 -> HTTP 200  rotated=yes
+refresh #2 -> HTTP 200  rotated=yes
+refresh #3 -> HTTP 200  rotated=yes
+replay of a consumed token -> HTTP 400 {"error_code":"refresh_token_already_used"}
+```
+
+Supabase's hosted platform sets this to 10 s; self-hosted defaults to 0. Setting
+`GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL=10` is a one-line, low-risk mitigation for
+spurious logouts on flaky field connectivity.
+
+### Still not run
+
+- **C9 TFM-R-Server** — B8 remains skipped (`r-plumber` / `r-derived-listener` not needed at present).
+- **B9 deferred collation reindex** — see finding 14.
 
 ---
 
