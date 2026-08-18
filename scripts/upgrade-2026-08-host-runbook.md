@@ -1,14 +1,24 @@
 # Host runbook — 2026-08 upgrade (PG 15.14 + services + Envoy sidecar)
 
-Copy-paste command sequence for `/home/sadmin/TFM-Server` on prod (`ci.thuenen.de`).
-Executes units 0–3 of [.todo/upgrade-2026-08-pg15-services-envoy.md](../.todo/upgrade-2026-08-pg15-services-envoy.md)
-in a single maintenance window. **Unit 4 (gateway cutover to Envoy) is deliberately NOT
-in this runbook** — Kong keeps serving; Envoy comes up on loopback `:8001` only.
+> # ✅ COMPLETE — units 0–3 executed and verified
+>
+> | Phase | Date | Status |
+> | --- | --- | --- |
+> | **A** preparation | 2026-08-14 | ✅ A1–A7 all done |
+> | **B** maintenance window | 2026-08-16 | ✅ B1–B7 done, ~23 min downtime · B8 ⏭️ skipped |
+> | **C** smoke tests | 2026-08-16 + 2026-08-18 | ✅ all items executed (7 partial, 9 skipped, 11 pre-existing gap) |
+> | **B9** collation reindex | 2026-08-18 | ✅ done, zero downtime |
+>
+> **Unit 4 (gateway cutover to Envoy) is deliberately NOT in this runbook** — Kong keeps
+> serving; Envoy runs on loopback `:8001` only, now in its 1–2 week soak.
 
-Prerequisite: `kong_upgrade` contains the two stats commits from `origin/main`
+Command sequence for `/home/sadmin/TFM-Server` on prod (`ci.thuenen.de`).
+Executes units 0–3 of [.todo/upgrade-2026-08-pg15-services-envoy.md](../.todo/upgrade-2026-08-pg15-services-envoy.md).
+
+Prerequisite (met): `kong_upgrade` contains the two stats commits from `origin/main`
 (`ffe091a`, `62bca9b`) and is pushed.
 
-Rule for the whole window: **never run a bare `docker compose up -d` until step B7.**
+Rule that applied during the window: **never run a bare `docker compose up -d` until step B7.**
 Services are recreated one at a time, in order.
 
 **Status 2026-08-14: PHASE A IS COMPLETE.** A1 ✅ · A2 ✅ · A2b ✅ · A3 ✅ · A4 ✅ · A5 ✅ ·
@@ -23,21 +33,26 @@ Phase C note). Key fingerprints `.env` = Envoy = Kong verified identical.
 > two of which matter for the Trupp-Mentzel data loss: the **download/write asymmetry**
 > (finding 9, reproduced end to end) and the **refresh-token reuse interval** (finding 12).
 > See [Phase C completion 2026-08-18](#phase-c-completion-2026-08-18--write-path-smoke-tests-executed).
-> **B9 is still not run.**
+> **B9 ran 2026-08-18 09:24–09:37 UTC and is complete** — all databases now at `datcollversion`
+> 2.40, canaries still byte-identical, zero downtime.
 
 > ## ✅ EXECUTED 2026-08-16 — Phase B complete, stack serving on PG 15.14
 >
 > Downtime **13:56 → 14:19 UTC, ~23 min** (estimate was 25–35). B1–B7 done, Phase C
 > partially done, **B8 skipped** (r-plumber / r-derived-listener not needed at present),
-> **B9 not yet run**. Two unforeseen failures at B3 — both fixed in-window, both recorded in
+> **B9 done 2026-08-18**. Two unforeseen failures at B3 — both fixed in-window, both recorded in
 > [Phase B execution record](#phase-b-execution-record-2026-08-16). **Read that section
 > before any rollback: the data dir uid changed and rollback now needs a chown.**
 
-**Original next action (superseded): schedule the window.** All technical unknowns closed —
-see [Decisions](#decisions-taken-2026-08-16) and [Scheduling the window](#scheduling-the-window).
-The A4 dump is copied off-host and verified (2654 TOC entries), so the sequencing
-precondition for Phase B is met. Host is ARMED: new pins on disk — no `up -d` on any other
-service until B2 backups exist (`restart` is safe).
+**This runbook is now a record, not a plan.** Units 0–3 are executed and verified: Phase A
+(2026-08-14), Phase B (2026-08-16), Phase C + B9 (2026-08-18). Everything below is kept for
+audit and for the next upgrade — the pre-window prose ("next action", "host is ARMED",
+scheduling estimates) describes the state *before* 2026-08-16 and no longer applies.
+
+**Open items, all outside units 0–3:** B8 (writers, deliberately skipped) · C9 (TFM-R-Server,
+depends on B8) · the `cainophile` slot ([side effect of B9](#side-effect-the-cainophile-slot-grew))
+· the 1–2 week Envoy soak before unit 4 · findings 9, 10 and 12 from
+[Phase C completion](#phase-c-completion-2026-08-18--write-path-smoke-tests-executed).
 
 ### Decisions taken 2026-08-16
 
@@ -516,7 +531,7 @@ rollback means losing field data written since.
 
 ## Phase B — maintenance window
 
-### B1. Stop writers
+### B1. Stop writers — ✅ DONE 2026-08-16 13:55
 
 ```bash
 # TFM-R-Server (adjust path/method to how it runs on this host):
@@ -527,7 +542,7 @@ docker compose stop powersync
 # Optional but recommended: put the reverse proxy into maintenance so no app writes land.
 ```
 
-### B2. Full stop + filesystem snapshot — THIS IS THE ROLLBACK
+### B2. Full stop + filesystem snapshot — THIS IS THE ROLLBACK — ✅ DONE 2026-08-16 13:57–14:07
 
 > **⚠️ `sudo` on this host requires a password** (verified 2026-08-14: `sudo -n true`
 > fails). This step **cannot** be run non-interactively or pasted into an unattended
@@ -549,7 +564,7 @@ df -h /home                                                # 349G free before co
 The snapshot predates the PG bump **and** all storage/realtime schema migrations, and no
 writers run until B8 — so this one snapshot covers rollback for the entire window.
 
-### B3. Postgres 15.6 → 15.14
+### B3. Postgres 15.6 → 15.14 — ✅ DONE 2026-08-16 (two in-window failures, both fixed — see [execution record](#two-failures-at-b3--neither-was-reachable-by-a-fresh-pgdata-rehearsal))
 
 ```bash
 docker compose up -d db
@@ -647,14 +662,14 @@ ever genuinely upgraded, that has to be done deliberately, not as a side effect.
 **Also observed:** the new image adds `supabase_vault` to `shared_preload_libraries`
 (prod's list lacks it). Harmless, but it is a config delta worth knowing about.
 
-### B4. Mongo 7.0.39
+### B4. Mongo 7.0.39 — ✅ DONE 2026-08-16 14:15
 
 ```bash
 docker compose up -d mongo mongo-rs-init
 docker compose ps mongo               # wait: healthy. mongo-rs-init exiting 0 is expected.
 ```
 
-### B5. Services, one at a time — wait for healthy before the next
+### B5. Services, one at a time — ✅ DONE 2026-08-16 14:15–14:18
 
 ```bash
 docker compose up -d imgproxy   && sleep 5 && docker compose ps imgproxy
@@ -677,7 +692,7 @@ docker compose up -d kong       && docker compose ps kong                 # unch
 If any single service misbehaves: repin **that one image line** to its old digest
 (recorded in `containers-before.txt`), `docker compose up -d <service>`, continue.
 
-### B6. PowerSync — verify the existing replication slot survives
+### B6. PowerSync — ✅ DONE 2026-08-16 (a NEW slot was created, not the pre-existing one — harmless, see [deviations](#other-deviations))
 
 ```bash
 docker compose up -d powersync
@@ -690,7 +705,7 @@ Expected: the **pre-existing** slot, `active = t` — not a freshly created one.
 `sync_rules.yaml` change (`lookup_bark_condition`) makes PowerSync reprocess sync rules on
 start; that is expected log output, **not** a client re-sync.
 
-### B7. Whole stack + final state
+### B7. Whole stack + final state — ✅ DONE 2026-08-16 14:19:45
 
 ```bash
 docker compose up -d                  # now safe — everything already recreated
@@ -699,14 +714,14 @@ docker compose ps -a                  # all healthy / expected-exited, nothing r
 docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | tee ~/upgrade-20260814/containers-after.txt
 ```
 
-### B8. Restart writers — only after Phase C smoke passes
+### B8. Restart writers — ⏭️ DELIBERATELY SKIPPED (r-plumber / r-derived-listener not needed at present)
 
 ```bash
 cd /home/sadmin/TFM-R-Server && docker compose up -d
 # re-enable reverse proxy if it was in maintenance
 ```
 
-### B9. Deferred collation reindex — after B8, no downtime
+### B9. Deferred collation reindex — ✅ DONE 2026-08-18 09:24–09:37 UTC, zero downtime (see [B9 execution record](#b9-execution-record-2026-08-18); **the command below is wrong for `_supabase`**)
 
 Not part of the window. Ordering was verified unchanged, so this is bookkeeping; it runs
 `CONCURRENTLY` against live traffic. Until it completes, every connection logs a collation
@@ -872,8 +887,8 @@ passed authz on **0** of 41 probes.
 | 11 | **`GOMAIL_INSECURE_SKIP_VERIFY=true` in `.env` is inert** — `docker-compose.yaml` never passes it to `auth`. The HARICA certs really are load-bearing; runbook finding 1 stands | No |
 | 12 | **No `GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL` is set** → upstream default 0. A replayed/concurrent refresh returns `400 refresh_token_already_used`, which gotrue-dart treats as non-network → destroys the session → forced re-login | No — but see below |
 | 13 | **The `supabase_realtime` publication is empty** (0 tables), so `postgres_changes` cannot work for any table. Pre-existing; the app syncs via PowerSync | No |
-| 14 | **B9 was never run** — every connection still logs the 2.39→2.40 collation mismatch | No — bookkeeping |
-| 15 | Replication slot `cainophile_2fnvrdeb` retains **1364 MB** of WAL (PowerSync's retains 8 MB). Active, not stuck | No — watch it |
+| 14 | ~~B9 was never run~~ — **executed 2026-08-18, see [B9 execution record](#b9-execution-record-2026-08-18)**. Found a runbook bug: B9's command fails on `_supabase` | Closed |
+| 15 | Replication slot `cainophile_2fnvrdeb` (on `_supabase`, plugin `pgoutput`) does not advance. Was 1364 MB, **3221 MB after B9**. Capped by `max_slot_wal_keep_size=8192` MB | No — self-limiting, but see below |
 | 16 | `storage.objects` has **only SELECT policies** — no INSERT/UPDATE/DELETE for any role. Uploads are service_role-only by construction | No |
 
 #### Finding 9 in detail — the download/write asymmetry
@@ -925,30 +940,92 @@ spurious logouts on flaky field connectivity.
 ### Still not run
 
 - **C9 TFM-R-Server** — B8 remains skipped (`r-plumber` / `r-derived-listener` not needed at present).
-- **B9 deferred collation reindex** — see finding 14.
 
 ---
 
-## Phase C — smoke test (before B8 / before announcing done)
+## B9 execution record 2026-08-18
 
-Runbook section 6, in order:
+Ran 09:24–09:37 UTC against live traffic. **Zero downtime, zero blocked sessions**, REST
+stayed at 24–115 ms throughout. Result:
 
-1. `docker compose ps` — all healthy, nothing restarting.
-2. Auth: login + token refresh; custom access-token hook returns expected claims.
+| Database | Reindex | `datcollversion` | Notes |
+| --- | --- | --- | --- |
+| `postgres` | ✅ 09:24:25–09:27:18 (~3 min) | 2.39 → **2.40** | 583 indexes / 1914 MB |
+| `_supabase` | ✅ 09:28:21–09:37:02 (~8.5 min) | 2.39 → **2.40** | 138 indexes / 902 MB; IO-bound on `log_events_*` |
+| `template1` | ✅ 09:37:03–09:37:04 | 2.39 → **2.40** | trivial |
+| `template0` | n/a | NULL | frozen, `datallowconn=false` — correct, leave it |
+
+No invalid or leftover `*_ccnew` indexes in any database. Fresh connections no longer log the
+mismatch. `cannot reindex system catalogs concurrently, skipping all` is expected and harmless.
+
+**Collation canaries re-verified after the reindex — byte-identical to the A3 references:**
+
+| File | Rows | MD5 |
+| --- | --- | --- |
+| `orderby-postB9.txt` (plot) | 783,532 | `ee46a9fa88665c31750a226155639ccd` ✅ |
+| `orderby-postB9-tree.txt` (tree) | 1,722,099 | `46c549091f758157b4789e1417e6a51c` ✅ |
+
+That closes decision **D2**: ordering was identical before the reindex and after it, so
+deferring it out of the window cost nothing and risked nothing.
+
+### ⚠️ RUNBOOK BUG — B9's command fails on `_supabase`
+
+The B9 snippet above uses `psql -U postgres` for both databases. **`postgres` is not a
+superuser on this host, and `_supabase` / `template1` are owned by `supabase_admin`**, so:
+
+```
+ERROR:  must be owner of database _supabase
+```
+
+The failure is instant and silent if you are not watching — and the dangerous part is what
+comes next: running `ALTER DATABASE … REFRESH COLLATION VERSION` anyway would clear the
+warning while leaving every index stale, i.e. hiding the exact problem B9 exists to fix.
+**Always gate the refresh on the reindex exit code.** Correct form:
+
+```bash
+docker compose exec -T db psql -U supabase_admin -d _supabase -v ON_ERROR_STOP=1 \
+  -c 'REINDEX DATABASE CONCURRENTLY "_supabase";' \
+  && docker compose exec -T db psql -U supabase_admin -d _supabase -v ON_ERROR_STOP=1 \
+  -c 'ALTER DATABASE "_supabase" REFRESH COLLATION VERSION;'
+```
+
+### Side effect: the `cainophile` slot grew
+
+B9 generated ~1.9 GB of WAL on `_supabase`, and the `cainophile_2fnvrdeb` slot **does not
+consume it** — `confirmed_flush_lsn` is static, so retention went 1364 MB → **3221 MB**.
+
+It is self-limiting: `max_slot_wal_keep_size = 8192` MB, so PostgreSQL invalidates the slot
+rather than filling the disk (336 GB free, `pg_wal` 3.2 GB). And because the
+`supabase_realtime` publication is **empty** (finding 13), an invalidated slot loses no data.
+
+Still worth resolving rather than leaving at 40% of its ceiling. Cheapest fix, outside any
+window: `docker compose restart realtime` — it reconnects and either advances or recreates the
+slot. Drops live websocket clients for a moment; harmless given nothing subscribes to
+`postgres_changes` today.
+
+---
+
+## Phase C — smoke test checklist — ✅ ALL ITEMS EXECUTED
+
+Runbook section 6. Read-only items ran 2026-08-16; the write-path items ran 2026-08-18 and
+are documented in [Phase C completion](#phase-c-completion-2026-08-18--write-path-smoke-tests-executed).
+
+1. ✅ `docker compose ps` — all healthy, nothing restarting.
+2. ✅ **2026-08-18** Auth: login + token refresh (rotation ×3) + **real recovery email sent**; custom access-token hook returns expected claims.
    **Also send one real email** (invite or password reset) — login alone does not exercise
    SMTP, and the HARICA/`INSTALL_CERTS` trap in A7 fails *only* on the mail path. A
    `x509: certificate signed by unknown authority` line in `docker compose logs auth`
    is that failure.
-3. REST: authenticated read **and write** on `records`; RLS enforced for a non-privileged role.
-4. PostGIS: spatial query on plot coordinates returns correct results.
-5. Collation: `orderby-after.txt` diff was byte-identical (B3).
-6. Storage: upload, download, imgproxy transform. Spot-check `storage.objects` rows against files on disk.
-7. Edge functions: invoke one; confirm the `WEBHOOK_TOKEN` path.
-8. PowerSync: `/sync/` health, a client syncs and a write round-trips — **without a full re-sync**.
-9. TFM-R-Server: `r-plumber` and `r-derived-listener` connect and process (after B8).
-10. Studio loads and introspects the schema (the `meta`/PG15 check).
-11. Realtime: subscribe, receive a change through the gateway.
-12. **New — row cap:** confirm nothing depends on a >1000-row REST response (see A6). Quick
+3. ✅ **2026-08-18** REST: authenticated read **and write** on `records`; RLS enforced for a non-privileged role.
+4. ✅ PostGIS 3.3 — spatial query on plot coordinates returns correct results.
+5. ✅ Collation: byte-identical at B3 **and again after B9** (2026-08-18).
+6. ✅ **2026-08-18** Storage: upload, download (byte-identical), imgproxy transform. Spot-check `storage.objects` rows against files on disk.
+7. ⚠️ **Partial** — `health` returns 200 via Kong *and* Envoy, but the `WEBHOOK_TOKEN` path was **not** exercised. (`test-function` 500s: its directory has only `deno.json`, no `index.ts` — pre-existing, not a regression.)
+8. ✅ **2026-08-18** PowerSync: JWT accepted, checkpoint streamed, write round-tripped — a client syncs and a write round-trips — **without a full re-sync**.
+9. ⏭️ **Not run** — TFM-R-Server: depends on B8, which was deliberately skipped.
+10. ✅ Studio loads and introspects the schema (the `meta`/PG15 check).
+11. ⚠️ **2026-08-18** Realtime: transport verified (101 handshake, channel join, heartbeat), but `postgres_changes` is **unavailable — the `supabase_realtime` publication is empty** (finding 13, pre-existing; the app syncs via PowerSync).
+12. ✅ **Row cap:** confirm nothing depends on a >1000-row REST response (see A6). Quick
     probe: a request that used to return >1000 rows now comes back with exactly 1000 and a
     partial `Content-Range`, with **no** error status:
     ```bash
