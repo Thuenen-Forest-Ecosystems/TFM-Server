@@ -105,6 +105,29 @@ services:
           allow:
             - admin
             - anon
+      # Blockt Schreibzugriffe auf records* ohne Nutzer-Session (Authorization
+      # traegt den anon-Key selbst). Hintergrund: Vorfall 2026-08-16 - nach dem
+      # GoTrue-Token-Bruch leerte die App ihre Upload-Queue als anon; jedes
+      # PATCH traf 0 Zeilen und bekam 204 = stiller Datenverlust. Die 401-
+      # Antwort hier hat KEIN code-Feld im Body - postgrest-dart setzt dann
+      # code='401', was der App-Connector als wiederholbar einstuft: die Queue
+      # bleibt stehen, bis sich der Nutzer neu anmeldet (belegt durch
+      # TFM-app/test/upload_error_classification_test.dart). Der Body darf
+      # deshalb NIE ein code-Feld mit Postgres-Fehlercode (42501 etc.) tragen.
+      - name: pre-function
+        config:
+          access:
+            - |
+              local m = kong.request.get_method()
+              if m == 'POST' or m == 'PATCH' or m == 'PUT' or m == 'DELETE' then
+                local p = kong.request.get_path()
+                if p:sub(1, 16) == '/rest/v1/records' then
+                  local auth = kong.request.get_header('authorization')
+                  if auth == nil or auth == 'Bearer $SUPABASE_ANON_KEY' then
+                    return kong.response.exit(401, { message = 'Anmeldung erforderlich - Schreibzugriff ohne Nutzer-Session ist blockiert' })
+                  end
+                end
+              end
 
   ## Secure GraphQL routes
   - name: graphql-v1
