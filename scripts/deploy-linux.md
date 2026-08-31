@@ -652,6 +652,169 @@ schema, and check whether the release also changes `config/sync_rules.yaml`
 docker compose logs -f --tail=100 <service>
 ```
 
+### Repairing the migration history
+
+`supabase db push` only works while `supabase_migrations.schema_migrations` — the
+ledger — agrees with `supabase/migrations/`. Two things break that agreement:
+
+- **Deleted migration files.** Commit `5eafd03` ("clean migrations") removed files whose
+  versions are still recorded. `db push` then finds local files older than the last
+  recorded version and refuses to run.
+- **Schema changes made in the Studio SQL console.** They exist in the database and in no
+  file, so the repo stops describing the deployed schema.
+
+`scripts/repair-migration-history.sh` fixes the first and diagnoses the second.
+
+```bash
+./scripts/repair-migration-history.sh                 # report only, local stack
+./scripts/repair-migration-history.sh --apply         # write the ledger
+./scripts/repair-migration-history.sh --db-url "$DB_URL" --allow-remote --apply
+```
+
+The ledger is bookkeeping: rewriting it touches no schema and no data. What *can* destroy
+data is getting the baseline wrong — a migration left out of the ledger runs again on the
+next push, and 13 of them carry `INSERT`/`UPDATE`/`DELETE`, one a `DROP TABLE … CASCADE`.
+
+So the script does not guess. It runs
+
+```bash
+supabase db diff --from migrations --to "$DB_URL" --schema public,lookup,inventory_archive,derived
+```
+
+which builds a shadow database from the files and compares it against the target, and it
+only writes the ledger when nothing structural differs. Otherwise it saves the diff to
+`tmp/migration-repair/` and exits non-zero without touching anything.
+
+::: warning Use `--from`/`--to`, not the bare `--db-url` form
+`supabase db diff --db-url …` selects a different diff engine and a different pairing.
+On CLI 2.111.0 it reported `drop schema if exists "lookup"` against a database that
+demonstrably has 65 `lookup` tables. The `--from migrations --to <url>` form is the one
+that produces a trustworthy diff.
+:::
+
+`GRANT`/`REVOKE`/`ALTER DEFAULT PRIVILEGES` differences are reported but do not block:
+privileges drift on any database that was ever restored from a dump, and they cannot cause
+a migration to re-run. Pass `--strict` to treat them as blocking too.
+
+The script never applies SQL to the target — applying migrations stays `scripts/deploy.sh`
+or `supabase db push`. With `--apply` it backs the ledger up to
+`tmp/migration-repair/ledger-<stamp>.sql` first, and verifies with
+`supabase db push --dry-run` afterwards.
+
+**Preventing the drift from coming back.** Baselining is a repair, not a fix. As long as
+the Studio SQL console can run DDL with the `postgres` role, the ledger will drift again.
+In increasing order of effort: revoke DDL rights from the role Studio connects as (it stays
+usable for reading), add a `ddl_command_end` event trigger that logs every DDL with role and
+timestamp, and run the `db diff` above as a nightly check that alerts on non-empty output.
+
+### Bringing production back onto the workflow
+
+Production cannot be reset, and the 47 files no longer reproduce it — that is the whole
+problem, so reconciling them statement by statement means auditing roughly a thousand
+differences and getting every one of them right. The cheaper and safer route is to stop
+pretending the old files describe production and **make production itself the baseline**.
+
+Three rules carry the whole procedure:
+
+1. **No migration is ever executed against production.** The only write to production at
+   the end is the ledger — `DELETE` and `INSERT` on
+   `supabase_migrations.schema_migrations`. No DDL, no `INSERT` into an application table,
+   nothing that a `DROP TABLE … CASCADE` in an old migration could ride in on. That is what
+   makes this safe without a reset.
+2. **Production is only ever read** until that last step. Everything is rehearsed on a copy
+   restored from a dump.
+3. **The `db diff` output is a description, not a deploy artifact.** It contains `DROP`
+   statements for live-only objects. Never pipe it into production.
+
+#### 1. Dump and restore a rehearsal copy
+
+```bash
+pg_dump "$PROD_URL" -Fc -f prod-$(date +%F).dump
+```
+
+Restore it on the disposable VM from the appendix. That copy — *staging* — is where
+everything below is tried until it works.
+
+#### 2. Clear the ledger on staging and empty the migrations directory
+
+`supabase db pull` refuses to run while the ledger disagrees with the files:
+
+```
+LegacyDbPullMigrationConflictError: The remote database's migration history does not
+match local files in supabase/migrations directory.
+```
+
+That is the chicken-and-egg of this whole situation, and the way out is to take the old
+bookkeeping out of the picture entirely. On **staging only**:
+
+```bash
+git mv supabase/migrations/*.sql supabase/migrations-archive/   # git keeps them either way
+psql "$STAGING_URL" -c 'truncate supabase_migrations.schema_migrations;'
+```
+
+Zero files, zero ledger rows, and a schema that is byte-for-byte production.
+
+#### 3. Pull the baseline
+
+```bash
+supabase db pull --db-url "$STAGING_URL" --schema public,lookup,inventory_archive,derived
+```
+
+With an empty migrations directory the shadow database is empty, so the diff against
+staging is the entire schema: one file that describes production as it actually is, Studio
+changes included.
+
+#### 4. Verify the baseline actually reproduces production
+
+```bash
+./scripts/repair-migration-history.sh --db-url "$STAGING_URL" --allow-remote
+```
+
+The script applies the migrations directory to a fresh shadow database and diffs it against
+staging. "no structural drift" means the baseline reproduces production. Anything else is a
+gap — `db pull` covers schema objects, but publications, extensions, event triggers and
+roles live outside the named schemas and are easy to miss. The `powersync` publication is
+the one that matters here: without it a fresh install replicates nothing. Add what is
+missing to the baseline file by hand and re-run until the diff is clean.
+
+This loop is the entire safety mechanism. Do not shorten it.
+
+#### 5. Repair the ledger on staging, then on production
+
+```bash
+./scripts/repair-migration-history.sh --db-url "$STAGING_URL" --allow-remote --apply
+```
+
+Once that ends with a clean `db push --dry-run`, run the identical command against
+production. The migrations directory now holds one file, so the script marks the 14 stale
+production entries `reverted` and the baseline `applied`. No DDL runs. The previous ledger
+is dumped to `tmp/migration-repair/` first.
+
+#### 6. Resume the normal workflow
+
+Migrations written after the baseline are ordinary migrations again:
+
+```bash
+supabase db push --db-url "$PROD_URL" --dry-run   # always first
+supabase db push --db-url "$PROD_URL"
+```
+
+`20260825000000_workflow_code.sql` is the first one that goes this way. Give it a timestamp
+later than the baseline so it sorts after it.
+
+#### The alternative, and what this costs
+
+Keeping the 47 files and appending a catch-up migration is possible: repair the ledger with
+the commands the CLI prints in the error above, then `db pull` writes the drift as one new
+migration on top. It preserves the granular history, at the price of a catch-up file that
+creates objects the earlier files just created and drops objects they just defined, and it
+only works if all 47 still apply cleanly to an empty database.
+
+The baseline route drops that replayability from `supabase/migrations/` — it lives in git
+history instead — and in exchange the directory starts describing the deployed schema
+again, which it does not do today. `scripts/deploy-smoke-test.sh` then asserts one large
+baseline file instead of 47 small ones; the assertions themselves do not change.
+
 ### Troubleshooting
 
 | Symptom | Cause / fix |
