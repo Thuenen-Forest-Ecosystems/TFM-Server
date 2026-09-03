@@ -121,18 +121,44 @@ if [ "$DO_MIGRATE" -eq 1 ]; then
             die "supabase db push failed — check 'supabase migration list --db-url ...'"
         fi
     else
-        warn "supabase CLI not installed — falling back to psql (NO history tracking)"
-        warn "the loop is not re-runnable: it will fail on an already-migrated database"
+        warn "supabase CLI not installed — falling back to psql"
+
+        # Keep the same ledger the CLI keeps. A deployment that applies
+        # migrations without recording them leaves the database with no history
+        # at all, and every snapshot restored from it starts out claiming that
+        # nothing has ever been applied — which is what makes `supabase
+        # migration up` on a restored snapshot try to replay a year of
+        # migrations against a schema that already contains them.
+        psql_q "create schema if not exists supabase_migrations;
+                create table if not exists supabase_migrations.schema_migrations (
+                    version text primary key, statements text[], name text);" >/dev/null
+
         count=0
+        skipped=0
         for f in supabase/migrations/*.sql; do
+            # 20260903000000_view_records_details_ci2027.sql
+            #  -> version 20260903000000, name view_records_details_ci2027
+            version="$(basename "$f" | cut -d_ -f1)"
+            name="$(basename "$f" .sql | cut -d_ -f2-)"
+
+            # Recorded already: skip, so the loop is re-runnable.
+            if [ "$(psql_q "select count(*) from supabase_migrations.schema_migrations
+                            where version = '$version';")" = "1" ]; then
+                skipped=$((skipped+1))
+                continue
+            fi
+
             if psql_f "$f" >/dev/null 2>"$RUN_TMP/migrate.err"; then
+                psql_q "insert into supabase_migrations.schema_migrations (version, name)
+                        values ('$version', '$name')
+                        on conflict (version) do nothing;" >/dev/null
                 count=$((count+1))
             else
                 sed 's/^/      /' "$RUN_TMP/migrate.err"
                 die "migration failed: $f"
             fi
         done
-        ok "$count migrations applied"
+        ok "$count migrations applied, $skipped already recorded (history tracked)"
     fi
 fi
 
