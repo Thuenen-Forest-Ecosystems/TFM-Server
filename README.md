@@ -157,8 +157,47 @@ restore brings production's owners straight back.
 
 ##### Procedure
 
-The same five steps every time a snapshot is restored. Steps 1–2 only decide;
-nothing is written until step 3.
+```bash
+./scripts/reconcile-local-snapshot.sh            # report: what is missing, what is not
+./scripts/reconcile-local-snapshot.sh --apply    # apply it and repair the ledger
+```
+
+That is the whole workflow for a restored snapshot, and it is safe to re-run —
+a second run on a reconciled database reports nothing to do. It grants
+`supabase_admin` to `postgres` if needed, classifies every unrecorded migration
+against the live schema, applies the ones that never ran, and records all of
+them in the ledger.
+
+It applies nothing without `--apply`, and even then refuses two things: a file
+that is missing objects *and* carries `DROP TABLE`/`TRUNCATE`/`DELETE` (reported
+as REVIEW — `20260206000000` opens with `DROP TABLE public.records_messages
+CASCADE`), and a view whose dependents the same migration does not rebuild.
+
+###### On production, use `--baseline-only`
+
+`--apply` is refused on any target that is not loopback, and that is deliberate.
+Production's schema is the source of truth these snapshots come from; what it
+lacks is a ledger that admits what is already deployed. That is a different job
+from repairing a developer's copy:
+
+```bash
+# on the server, where there is no host psql client
+./scripts/reconcile-local-snapshot.sh --container supabase-db                  # report
+./scripts/reconcile-local-snapshot.sh --container supabase-db --baseline-only  # record
+```
+
+`--baseline-only` writes no schema at all — it classifies, and then records. It
+also refuses to run while any file is still missing objects, because recording
+one that never ran is the single outcome from which nothing recovers: the
+content never lands and the ledger says it did. If the report shows such files,
+deploying them is a release — `scripts/deploy.sh`, with the review that implies.
+
+Once production carries its own history, a snapshot restored from it needs none
+of this: `supabase migration up --local` simply works.
+
+The rest of this section is what the script does and how to do it by hand when
+it stops on something it will not decide alone. Steps 1–2 only decide; nothing
+is written until step 3.
 
 **0. Grant `supabase_admin` to `postgres`** — once per Postgres volume, as
 above. Without it every `CREATE OR REPLACE` on a production-owned object fails
@@ -325,12 +364,24 @@ those the snapshot already had. Seven had never run:
 | Migration | What was missing |
 | --- | --- |
 | `20260603000001` | `update_updated_at_column()`; `handle_updated_at` on `records` still ran `extensions.moddatetime` |
-| `20260605120000` | `organization_admin_sync_selections` |
 | `20260617000000` | all four `records`/`record_changes` → `inventory_archive` foreign keys |
 | `20260618000000` | function present, still carrying the `OFFSET total_processed` bug |
 | `20260625000000` | `guard_records_properties_admin` function and trigger |
 | `20260702000000` | 12 of the 13 `v_stats_*` views; the 13th had an older shape |
 | `20260706120000` | `handle_updated_at` on `schemas` |
+
+Plus three whose objects existed but were the wrong version of themselves —
+`20260610000000`, `20260610120000` and `20260616000000` — which a
+presence-only probe reports as fine. `set_trees_to_deprecated` still wrote the
+`local_updated_at = now()` that `20260610120000` exists to remove.
+
+`20260605120000` looked like an eighth, and is the trap worth remembering: its
+`organization_admin_sync_selections` table is genuinely absent, but
+`20260709120000` **drops** it as an abandoned mechanism. Applying the older file
+resurrects what the newer one deleted. The same hazard applies to re-running any
+superseded file — replaying `20260610000000` puts the `OFFSET total_processed`
+bug back into `add_plot_ids_to_records`, which `20260618000000` had removed, so
+the later file has to run again after it.
 
 `20260224000000` had applied only its four `inventory_archive` constraints — the
 other four are exactly the ones `20260617000000` replaces with `ON DELETE
@@ -342,6 +393,14 @@ along. `v_stats_troop_completed_latest` had to be dropped before
 
 Nothing was reloaded and no data was touched — 122,321 records and 17,316
 messages before and after.
+
+Two older files remain unreconciled and are deliberately left alone:
+`20250115140818` (`records.is_to_be_recorded_by_troop`, which production carries
+as `is_to_be_recorded`) and `20250214150400` (the `::extensions.geography` casts
+in `create_linestring_from_edges` / `update_circle_geometry`). Both are recorded
+in the ledger the snapshot arrived with, both predate everything above, and
+re-running a 2025 migration against production data is a decision, not a
+cleanup. `./scripts/reconcile-local-snapshot.sh` reports them and leaves them.
 
 ## Sync Service
 

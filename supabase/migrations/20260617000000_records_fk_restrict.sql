@@ -17,6 +17,12 @@
 --   records_plot_id_fkey, records_cluster_id_fkey,
 --   record_changes_plot_id_fkey, record_changes_cluster_id_fkey
 --     → 20260224000000_fix_cascade_constraints.sql
+--
+-- NOTE (2026-09-03): the account above is what happened, but 20260224000000 has
+-- since been amended to create these four RESTRICT directly, so that a database
+-- applying both files can never sit in the CASCADE state in between. This file
+-- is unchanged and still authoritative — it is simply a no-op on top of the
+-- amended one.
 -- ============================================================================
 
 -- records -> plot
