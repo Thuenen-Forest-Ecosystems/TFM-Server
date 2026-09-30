@@ -403,14 +403,32 @@ class Database:
         "cannot change data type of view column",
     )
 
-    def view_shape_differs(self, statement: str) -> bool:
+    def view_shape_differs(self, statement: str, view: str) -> bool:
+        # The errors above only fire on an INCOMPATIBLE change. APPENDING a
+        # column is legal, so a stale view that merely lacks the migration's
+        # new column replays without complaint. That is how 20260929000000 was
+        # baselined as applied on production (2026-09-30) while its
+        # last_survey_troop column had never been created: the file was then
+        # recorded, `db push` skipped it forever, and nothing said a word.
+        # So compare the column list either side of the replay too. The
+        # ROLLBACK keeps this read-only, exactly as before.
+        cols = ("select coalesce(string_agg(attname, ',' order by attnum), '') "
+                f"from pg_attribute where attrelid = '{view}'::regclass "
+                "and attnum > 0 and not attisdropped")
         out = subprocess.run(
-            self.psql_argv + ["--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1"],
-            input=f"BEGIN;\n{statement};\nROLLBACK;\n",
+            self.psql_argv + ["--no-psqlrc", "-At", "-q", "-v", "ON_ERROR_STOP=1"],
+            input=f"{cols};\nBEGIN;\n{statement};\n{cols};\nROLLBACK;\n",
             capture_output=True, text=True,
         )
-        err = out.stderr.lower()
-        return any(e in err for e in self.SHAPE_ERRORS)
+        if out.returncode != 0:
+            # Replay refused. Only a shape error proves the view is stale; any
+            # other failure means the statement leans on something else in its
+            # own migration, which the object probe already reports.
+            return any(e in out.stderr.lower() for e in self.SHAPE_ERRORS)
+        shape = [l for l in out.stdout.splitlines() if l.strip()]
+        # Anything other than the two expected rows: say nothing rather than
+        # guess. A false "stale" here would send db push at production.
+        return len(shape) == 2 and shape[0] != shape[1]
 
     def ledger(self):
         exists = self._rows(
@@ -490,7 +508,7 @@ def classify(migs, db, ignore_ledger=False):
                 if m.func_bodies[key] not in db.functions.get(probe, []):
                     stale.append(f"function {probe} (body differs)")
             elif kind == "view" and key in m.view_stmts:
-                if db.view_shape_differs(m.view_stmts[key]):
+                if db.view_shape_differs(m.view_stmts[key], probe):
                     stale.append(f"view {probe} (different shape)")
 
         if m.declares and probeable == 0:
