@@ -74,6 +74,9 @@ DECLARE
     v_plot_no     int;
     v_bestand     uuid;
     v_training    uuid;
+    v_training_cluster int;
+    v_training_plot    int;
+    v_new_cluster_no   int;
     v_real        uuid;
     v_tree        uuid;
     v_ti_read_ok  boolean := false;
@@ -104,7 +107,8 @@ BEGIN
     END IF;
 
     -- Schulungstrakt-Ecke aus ci2027 (kann fehlen -- dann entfaellt die Probe)
-    SELECT p.id INTO v_training
+    SELECT p.id, p.cluster_name, p.plot_name
+    INTO v_training, v_training_cluster, v_training_plot
     FROM inventory_archive.plot p
     JOIN inventory_archive.cluster c ON c.id = p.cluster_id
     WHERE p.interval_name = 'ci2027' AND c.is_training
@@ -162,15 +166,33 @@ BEGIN
             (SELECT code FROM lookup.lookup_state ORDER BY code LIMIT 1))
     RETURNING id INTO v_real;
 
-    INSERT INTO inventory_archive.plot_coordinates (plot_id, cartesian_x, cartesian_y)
-    VALUES (v_real, 0, 0);
+    -- Die Ecke hat i. d. R. schon eine Koordinate (aus bwi2022) -- dann bleibt sie.
+    INSERT INTO inventory_archive.plot_coordinates (cluster_name, plot_name, cartesian_x, cartesian_y)
+    VALUES (v_cluster_no, v_plot_no, 0, 0)
+    ON CONFLICT (cluster_name, plot_name) DO NOTHING;
 
-    INSERT INTO inventory_archive.tree (plot_id, tree_number, azimuth)
-    VALUES (v_real, 1, 0)
+    -- Eine Ecke, an der nur die gesperrte ci2027-Aufnahme haengt (neuer Trakt):
+    -- ihre Koordinate muss mitgesperrt sein (20261014000000).
+    SELECT max(cluster_name) + 1 INTO v_new_cluster_no FROM inventory_archive.cluster;
+    INSERT INTO inventory_archive.cluster (cluster_name, is_training)
+    VALUES (v_new_cluster_no, false);
+    INSERT INTO inventory_archive.plot
+        (interval_name, cluster_id, cluster_name, plot_name, federal_state)
+    VALUES ('ci2027',
+            (SELECT id FROM inventory_archive.cluster WHERE cluster_name = v_new_cluster_no),
+            v_new_cluster_no, 1,
+            (SELECT code FROM lookup.lookup_state ORDER BY code LIMIT 1));
+    INSERT INTO inventory_archive.plot_coordinates (cluster_name, plot_name, cartesian_x, cartesian_y)
+    VALUES (v_new_cluster_no, 1, 0, 0);
+
+    -- distance ist Pflicht, sobald die Ecke eine Koordinate hat (update_tree_location)
+    INSERT INTO inventory_archive.tree (plot_id, tree_number, azimuth, distance)
+    VALUES (v_real, 1, 0, 100)
     RETURNING id INTO v_tree;
 
     INSERT INTO inventory_archive.tree_coordinates (tree_id, tree_location)
-    VALUES (v_tree, extensions.ST_SetSRID(extensions.ST_MakePoint(10.0, 52.0), 4326));
+    VALUES (v_tree, extensions.ST_SetSRID(extensions.ST_MakePoint(10.0, 52.0), 4326))
+    ON CONFLICT (tree_id) DO NOTHING;  -- legt i. d. R. schon der Trigger an
 
     -- ci2027 muss gesperrt sein, sonst testet der Rest nichts
     INSERT INTO inventory_archive.interval_release (interval_name, published_at, note)
@@ -207,13 +229,17 @@ BEGIN
                     (2, 'plot / Schulungstrakt ci2027',      'training',
                         format('SELECT count(*) FROM inventory_archive.plot WHERE id = %L', v_training)),
                     (3, 'plot_coord / Schulungstrakt',       'training_geom',
-                        format('SELECT count(*) FROM inventory_archive.plot_coordinates WHERE plot_id = %L', v_training)),
+                        format('SELECT count(*) FROM inventory_archive.plot_coordinates WHERE cluster_name = %L AND plot_name = %L',
+                               v_training_cluster, v_training_plot)),
                     (4, 'plot / echte ci2027-Aufnahme',      'gesperrt',
                         format('SELECT count(*) FROM inventory_archive.plot WHERE id = %L', v_real)),
                     (5, 'tree / echte ci2027-Aufnahme',      'gesperrt',
                         format('SELECT count(*) FROM inventory_archive.tree WHERE plot_id = %L', v_real)),
                     (6, 'tree_coord / echte ci2027-Aufnahme','gesperrt_geom',
-                        format('SELECT count(*) FROM inventory_archive.tree_coordinates WHERE tree_id = %L', v_tree))
+                        format('SELECT count(*) FROM inventory_archive.tree_coordinates WHERE tree_id = %L', v_tree)),
+                    (7, 'plot_coord / Ecke nur ci2027',      'gesperrt_geom',
+                        format('SELECT count(*) FROM inventory_archive.plot_coordinates WHERE cluster_name = %L AND plot_name = 1',
+                               v_new_cluster_no))
                 ) AS o(nr, label, art, sql)
             LOOP
                 v_ord := v_ord + 1;
