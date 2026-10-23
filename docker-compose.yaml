@@ -520,6 +520,14 @@ services:
       - -c
       - max_connections=500
       - -c
+      # Image-Default 128MB; records allein hat 1,3 GB, nach einer Migration
+      # lief view_records_details fast nur noch von Platte (57014, Issue #272).
+      # Host hat 23 GB RAM (seit RAM-Upgrade); Mongo/PowerSync belegt davon
+      # bis 7 GB (services/mongo.yaml), die uebrigen Dienste ~2,5 GB.
+      - shared_buffers=4GB
+      - -c
+      - effective_cache_size=10GB
+      - -c
       - tcp_keepalives_idle=60
       - -c
       - tcp_keepalives_interval=10
