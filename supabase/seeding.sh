@@ -37,21 +37,76 @@ add_on_conflict_clause() {
     ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
-# Only released inventories go into the seeds: the inventory_archive tables are
-# dumped as role "authenticated", so the RESTRICTIVE release_gate policies
-# (embargoed_plots() & co., driven by inventory_archive.interval_release) filter
-# the rows exactly as they do for logged-in non-admin users.
-# interval_release is read from THIS database — sync it from production first.
-echo "Release state used for this seed (local interval_release):"
-docker exec -u postgres supabase_db_supabase psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -X -c "
+PSQL="docker exec -i -u postgres supabase_db_supabase psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -X -v ON_ERROR_STOP=1"
+
+# Only released inventories and no training data go into the seeds.
+# - released: plot not in inventory_archive.embargoed_plots(), the function behind the
+#   release_gate policies (driven by inventory_archive.interval_release). interval_release
+#   is read from THIS database — mirror it from production first.
+# - training: cluster.is_training. The release gate lets training clusters through
+#   (exempt_training), so they are excluded here explicitly.
+# pg_dump cannot filter rows, so the filtered rows are copied into the scratch schema
+# seed_export, dumped from there and renamed back to inventory_archive in the INSERTs.
+echo "Seed content per interval (local interval_release):"
+$PSQL -c "
     SELECT p.interval_name,
            r.published_at,
-           count(*) FILTER (WHERE e.plot_id IS NULL) AS plots_seeded,
-           count(e.plot_id)                          AS plots_embargoed
+           count(*) FILTER (WHERE e.plot_id IS NULL AND NOT c.is_training) AS plots_seeded,
+           count(e.plot_id) FILTER (WHERE NOT c.is_training)              AS plots_embargoed,
+           count(*) FILTER (WHERE c.is_training)                          AS plots_training
     FROM inventory_archive.plot p
+    JOIN inventory_archive.cluster c ON c.id = p.cluster_id
     LEFT JOIN inventory_archive.interval_release r ON r.interval_name = p.interval_name
     LEFT JOIN inventory_archive.embargoed_plots() e ON e.plot_id = p.id
     GROUP BY 1, 2 ORDER BY 1" || { echo "release check failed, aborting" >&2; exit 1; }
+
+# WHERE clause selecting the seeded rows of an inventory_archive table (alias t)
+seed_filter() {
+    local plots="t.plot_id IN (SELECT id FROM seed_export.seed_plot_ids)"
+    case "$1" in
+        cluster)          echo "NOT t.is_training" ;;
+        cluster_move)     echo "t.cluster_id IN (SELECT id FROM inventory_archive.cluster WHERE NOT is_training)" ;;
+        plot)             echo "t.id IN (SELECT id FROM seed_export.seed_plot_ids)" ;;
+        plot_coordinates) echo "EXISTS (SELECT 1 FROM inventory_archive.plot p JOIN seed_export.seed_plot_ids s ON s.id = p.id
+                                        WHERE p.cluster_name = t.cluster_name AND p.plot_name = t.plot_name)" ;;
+        tree_coordinates) echo "t.tree_id IN (SELECT x.id FROM inventory_archive.tree x WHERE x.plot_id IN (SELECT id FROM seed_export.seed_plot_ids))" ;;
+        edges_coordinates) echo "t.edge_id IN (SELECT x.id FROM inventory_archive.edges x WHERE x.plot_id IN (SELECT id FROM seed_export.seed_plot_ids))" ;;
+        subplots_relative_position_coordinates)
+                          echo "t.subplots_relative_position_id IN (SELECT x.id FROM inventory_archive.subplots_relative_position x
+                                                                   WHERE x.plot_id IN (SELECT id FROM seed_export.seed_plot_ids))" ;;
+        *)                echo "$plots" ;;
+    esac
+}
+
+# dump_filtered <table> <target dir>
+dump_filtered() {
+    local table=$1 dir=$2
+    $PSQL -q -c "CREATE TABLE seed_export.$table AS
+                 SELECT t.* FROM inventory_archive.$table t WHERE $(seed_filter $table)" \
+        || { echo "filtering $table failed, aborting" >&2; exit 1; }
+    docker exec -u postgres supabase_db_supabase pg_dump \
+        -h 127.0.0.1 \
+        -p 5432 \
+        -U postgres \
+        -d postgres \
+        --table seed_export.$table \
+        --inserts \
+        --data-only \
+        | sed "s/^INSERT INTO seed_export\./INSERT INTO inventory_archive./" \
+        > $dir/$table.sql
+    clean_sql_file $dir/$table.sql
+    echo "$table: $(grep -c '^INSERT' $dir/$table.sql) rows"
+}
+
+$PSQL -q -c "DROP SCHEMA IF EXISTS seed_export CASCADE; CREATE SCHEMA seed_export;
+             CREATE TABLE seed_export.seed_plot_ids AS
+             SELECT p.id FROM inventory_archive.plot p
+             JOIN inventory_archive.cluster c ON c.id = p.cluster_id
+             WHERE NOT c.is_training
+               AND p.id NOT IN (SELECT plot_id FROM inventory_archive.embargoed_plots());
+             CREATE UNIQUE INDEX ON seed_export.seed_plot_ids (id);" \
+    || { echo "creating seed_export failed, aborting" >&2; exit 1; }
+trap '$PSQL -q -c "DROP SCHEMA IF EXISTS seed_export CASCADE"' EXIT
 
 # Remove all sql files in folder
 rm -f seeds/public/*.sql
@@ -78,37 +133,11 @@ add_on_conflict_clause seeds/public/lookup.sql "code"
 
 
 for table in cluster cluster_move plot deadwood edges regeneration structure_lt4m structure_gt4m tree subplots_relative_position
-    do docker exec -u postgres supabase_db_supabase pg_dump \
-        -h 127.0.0.1 \
-        -p 5432 \
-        -U postgres \
-        -d postgres \
-        -n inventory_archive \
-        --role=authenticated \
-        --table inventory_archive.$table \
-        --inserts \
-        --data-only \
-        --enable-row-security \
-        > seeds/public/$table.sql
-    clean_sql_file seeds/public/$table.sql
-
+    do dump_filtered $table seeds/public
 done;
 
 for table in plot_coordinates notes position tree_coordinates edges_coordinates subplots_relative_position_coordinates plot_support_points
-    do docker exec -u postgres supabase_db_supabase pg_dump \
-        -h 127.0.0.1 \
-        -p 5432 \
-        -U postgres \
-        -d postgres \
-        -n inventory_archive \
-        --role=authenticated \
-        --table inventory_archive.$table \
-        --inserts \
-        --data-only \
-        --enable-row-security \
-        > seeds/intern/$table.sql
-    clean_sql_file seeds/intern/$table.sql
-
+    do dump_filtered $table seeds/intern
 done;
 
 
