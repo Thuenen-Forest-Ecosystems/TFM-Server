@@ -1,6 +1,6 @@
 -- ============================================================================
--- FIX: previous_properties->'tree' nimmt wieder Baeume aus allen frueheren
--- Inventuren (neueste Zeile je tree_number), nicht nur aus dem bwi2022-Plot
+-- FIX: previous_properties->'tree' nimmt wieder Baeume frueherer Inventuren
+-- (neueste Zeile je tree_number), nicht nur aus dem bwi2022-Plot
 -- ============================================================================
 -- records.properties->'tree' wird von fill_properties pro Ecke und tree_number
 -- aus der NEUESTEN Archivzeile ueber alle Intervalle gebaut. Baeume, die 2022
@@ -16,19 +16,23 @@
 --
 -- Neu:
 --   * Baumauswahl wie fill_properties: je tree_number die neueste Zeile ueber
---     alle Intervalle der Ecke -> gleiche ids wie in properties, _deprecated-
+--     die Intervalle der Ecke -> gleiche ids wie in properties, _deprecated-
 --     Abgleich bleibt gueltig. "Neueste" = Inventurjahr aus interval_name,
 --     nicht acquisition_date: 250 Archiv-Plots mit Baeumen haben kein Datum
 --     (fill_properties sortiert sie per DESC NULLS FIRST als neueste ein).
---   * ci2027 bleibt draussen (das sind die Ergebnisse der laufenden Inventur,
---     20261018000000), ausser die Ecke hat nur ci2027 (neue Trakte).
+--   * Vorerst nur bwi2012, ci2017, bwi2022 -- genau der Stand vom 2026-06-23
+--     (bwi1987/bwi2002/ci2008 kamen erst im Oktober ins Archiv; ob sie dazu-
+--     kommen, wird separat entschieden). ci2027 bleibt draussen (Ergebnisse
+--     der laufenden Inventur, 20261018000000), ausser die Ecke hat nur ci2027.
 --   * Jede Baumzeile bekommt acquisition_date und interval_name (wie properties).
 --   * BHD-Ergaenzung aus 20261102100000 bleibt: Status 4/5/9/12 ohne dbh ->
 --     dbh der letzten frueheren Messung mit Wert (ohne ci2027), ebenfalls
 --     nach Inventurjahr sortiert.
 -- Alles andere (Plotwahl, Kanten, Totholz, ...) unveraendert.
 --
--- Neuaufbau danach: SELECT public.fill_previous_properties(NULL, 200, true);
+-- Neuaufbau danach: Zeitstempel selbst auf NULL setzen (p_force=true ueber alles
+-- scheitert an der Waise f46dce0a-72f5-42a1-8e1c-bf258a2558f5, records_plot_id_fkey),
+-- dann SELECT public.fill_previous_properties(NULL, 200, false);
 -- ============================================================================
 
 -- ============================================================================
@@ -107,9 +111,9 @@ SET -- previous_properties: inline equivalent of plot_nested_json, but with the
                             ),
                             '[]'::json
                         ) AS subplots_relative_position,
-                        -- tree: je tree_number die neueste Zeile ueber alle
-                        -- Intervalle der Ecke (wie fill_properties), ohne ci2027
-                        -- ausser bei reinen ci2027-Ecken; bei Status 4/5/9/12
+                        -- tree: je tree_number die neueste Zeile aus bwi2012,
+                        -- ci2017, bwi2022 (wie fill_properties zum Fuellzeitpunkt),
+                        -- ci2027 nur bei reinen ci2027-Ecken; bei Status 4/5/9/12
                         -- ohne BHD wird dbh aus der letzten frueheren Messung
                         -- mit Wert ergaenzt (ohne ci2027).
                         COALESCE(
@@ -161,8 +165,11 @@ SET -- previous_properties: inline equivalent of plot_nested_json, but with the
                                         WHERE pl.cluster_name = p.cluster_name
                                             AND pl.plot_name = p.plot_name
                                             AND (
-                                                pl.interval_name <> 'ci2027'
-                                                OR p.interval_name = 'ci2027'
+                                                pl.interval_name IN ('bwi2012', 'ci2017', 'bwi2022')
+                                                OR (
+                                                    p.interval_name = 'ci2027'
+                                                    AND pl.interval_name = 'ci2027'
+                                                )
                                             )
                                     ) x
                                 WHERE x.rn = 1
