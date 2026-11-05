@@ -2,6 +2,7 @@
 .env.local
 .env.bak-*
 .vscode
+.user-backups
 
 tmp/
 
