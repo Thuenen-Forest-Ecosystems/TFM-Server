@@ -63,3 +63,5 @@ backups
 # Python bytecode from scripts/
 __pycache__/
 *.pyc
+
+scripts/oneoff

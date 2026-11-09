@@ -1,5 +1,5 @@
 -- ============================================================================
--- Test: guard_records_app_only_columns (20261106000000)        DRY RUN
+-- Test: guard_records_app_only_columns (20261106000000 + 20261109000000) DRY RUN
 -- ============================================================================
 -- Installs the migration inside one transaction (if not yet present), runs
 -- every case in its own subtransaction and ROLLs BACK at the end — nothing
@@ -26,6 +26,9 @@ SELECT to_regprocedure('public.guard_records_app_only_columns()') IS NULL AS nee
 \echo '(migration not installed — installing inside the test transaction)'
 \ir ../migrations/20261106000000_guard_records_app_only_columns.sql
 \endif
+-- latest function body (CREATE OR REPLACE, idempotent) — tests always run
+-- against the current allow-list, also where it is not deployed yet
+\ir ../migrations/20261109000000_guard_records_allow_tfm_web.sql
 
 SELECT set_config('t.troop_user',   :'troop_user',   true),
        set_config('t.troop_record', :'troop_record', true),
@@ -111,6 +114,14 @@ SELECT pg_temp.run_case('enforce','troop', NULL, 'plausibility_errors',   'plaus
 SELECT pg_temp.run_case('enforce','troop', NULL, 'schema_id_validated_by','schema_id_validated_by = gen_random_uuid()', 'BLOCK');
 SELECT pg_temp.run_case('enforce','troop', 'supabase-flutter/2.10.3', 'App-Speichern komplett',
     'properties = properties || ''{"_guard_test":1}''::jsonb, schema_id_validated_by = schema_id, local_updated_at = now(), completed_at_troop = now(), validation_errors = ''[]'', plausibility_errors = ''[]''', 'OK');
+-- ── enforce: web admin (TFM-Documentation) ─────────────────────────────────
+SELECT pg_temp.run_case('enforce','root',  'tfm-web/1.0.0', 'Web: Abschließen (FinishDialog)', 'completed_at_troop = now()', 'OK');
+SELECT pg_temp.run_case('enforce','root',  'tfm-web/1.0.0', 'Web: zurück ins Feld',  'completed_at_troop = NULL, responsible_troop = responsible_troop', 'OK');
+SELECT pg_temp.run_case('enforce','root',  'tfm-web/1.0.0', 'Web: Version wiederherstellen',
+    $$properties = properties || '{"_guard_test":1}'::jsonb, validation_errors = '[]', plausibility_errors = '[]'$$, 'OK');
+SELECT pg_temp.run_case('enforce','troop', 'supabase-js-web/2.50.4', 'completed_at_troop (alte Web-Version)', 'completed_at_troop = now()', 'BLOCK');
+SELECT pg_temp.run_case('enforce','troop', 'supabase-js-node/2.50.4', 'properties (JS-Skript)', $$properties = properties || '{"_guard_test":1}'::jsonb$$, 'BLOCK');
+SELECT pg_temp.run_case('enforce','troop', 'xtfm-web/1.0.0', 'properties (Präfix nicht am Anfang)', $$properties = properties || '{"_guard_test":1}'::jsonb$$, 'BLOCK');
 -- ── enforce: columns that must stay writable via the API ───────────────────
 SELECT pg_temp.run_case('enforce','troop', NULL, 'note',                  'note = ''API-Test''', 'OK');
 SELECT pg_temp.run_case('enforce','troop', NULL, 'is_to_be_recorded',     'is_to_be_recorded = NOT coalesce(is_to_be_recorded, false)', 'OK');
@@ -129,6 +140,7 @@ SELECT pg_temp.run_case('enforce','anon',  NULL, 'properties',            $$prop
 -- ── log mode: never blocks, records who wrote ─────────────────────────────
 SELECT pg_temp.run_case('log','troop', NULL, 'properties',                $$properties = properties || '{"_guard_test":1}'::jsonb$$, 'OK+LOG1');
 SELECT pg_temp.run_case('log','troop', 'supabase-flutter/2.10.3', 'properties',                $$properties = properties || '{"_guard_test":1}'::jsonb$$, 'OK+LOG1');
+SELECT pg_temp.run_case('log','root', 'tfm-web/1.0.0', 'properties', $$properties = properties || '{"_guard_test":1}'::jsonb$$, 'OK+LOG1');
 SELECT pg_temp.run_case('log','troop', NULL, 'note',                      'note = ''API-Test''', 'OK+LOG0');
 
 \o
