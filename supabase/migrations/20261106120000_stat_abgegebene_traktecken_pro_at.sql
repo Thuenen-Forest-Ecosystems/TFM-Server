@@ -40,6 +40,9 @@ AS $BODY$
 /*Beispiele*/
 --select public.stat_abgegebene_traktecken_pro_at('3889fc5b-503f-495b-8f06-60c3e06cd8ae'); = LIL ST
 --select public.stat_abgegebene_traktecken_pro_at('460faca2-d7ae-499c-a972-09701d42de76'); = KT-Thünen Bayern
+--select * from public.stat_abgegebene_traktecken_pro_at('cee0b61d-4e42-4ef0-b910-bc2388632a49'); = Thünen Los 4 Bayern Ost
+
+--
 
 /*Spalten der Ergebnistabelle*/
 --Landesinventurleitung (lil)
@@ -65,49 +68,32 @@ select --responsible_state,               --uuid
        plot_name,                       --Trakteckennummer smallint       
        troop_name,                      --Trupp text
        kt,                              --Kontrolltrupp? boolean
-       max(completed_at_troop) completed_as_troop_latest, --Abgabedatum 
+       completed_at_survey_troop as abgabedatum, --Abgabedatum 
        foreststatus27 as wald2027,      --Waldentscheid2027
        begehbar27 as begehbar2027      --Begehbarkeit2027
        --responsible_administration,      --
        --responsible_provider,            --
        --responsible_troop                --uuid des Trupps
   from ( select r1.responsible_state, o1.name as lil, r1.cluster_id, r1.cluster_name, r1.plot_name, r1.responsible_administration, r1.responsible_provider, r1.responsible_troop, t1.name as troop_name, t1.is_control_troop as kt, 
-                r1.completed_at_troop, 
+                r1.completed_at_survey_troop, 
                 CAST(r1.properties ->> 'forest_status' as integer) as foreststatus27, 
                 CAST(r1.properties ->> 'accessibility' as integer) as begehbar27 
-           from public.records as r1 
+           from public.view_records_details as r1 
            join public.troop as t1 
-             on r1.responsible_troop = t1.id 
+             on r1.last_survey_troop = t1.id 
            join public.organizations as o1 
              on r1.responsible_state = o1.id 
            where cluster_name < 1000000000 and (cluster_name not between 9999900 and 10000000) 
-             and completed_at_troop is not null 
-             and (
-               r1.responsible_administration::text = user_id 
-               or r1.responsible_state::text = user_id 
-               or r1.responsible_provider::text = user_id 
-               or r1.responsible_troop::text = user_id
-             )
-         union 
-         select c2.responsible_state, o2.name as lil, c2.cluster_id, c2.cluster_name, c2.plot_name, c2.responsible_administration, c2.responsible_provider, c2.responsible_troop, t2.name as troop_name, t2.is_control_troop as kt, 
-                c2.completed_at_troop, 
-                CAST(c2.properties ->> 'forest_status' as integer) as foreststatus27, 
-                CAST(c2.properties ->> 'accessibility' as integer) as begehbar27 
-          from public.record_changes as c2 
-          join public.troop as t2 
-            on c2.responsible_troop = t2.id 
-          join public.organizations as o2 
-            on c2.responsible_state = o2.id 
-          where cluster_name < 1000000000 and (cluster_name not between 9999900 and 10000000) 
-            and completed_at_troop is not null 
-            and (
-              c2.responsible_administration::text = user_id 
-              or c2.responsible_state::text = user_id 
-              or c2.responsible_provider::text = user_id 
-              or c2.responsible_troop::text = user_id
-            )
+             and last_survey_troop is not null and completed_at_survey_troop is not null 
+             and (   r1.responsible_administration::text = user_id 
+                  or r1.responsible_state::text = user_id 
+                  or r1.responsible_provider::text = user_id 
+                  or r1.last_survey_troop::text = user_id
+                  or r1.last_control_troop::text = user_id
+                 )
        ) as t 
-  group by responsible_state, lil, cluster_id, cluster_name, plot_name, responsible_administration, responsible_provider, responsible_troop, troop_name, kt, foreststatus27, begehbar27 order by lil, troop_name, cluster_name, plot_name;
+  --group by responsible_state, lil, cluster_id, cluster_name, plot_name, responsible_administration, responsible_provider, responsible_troop, troop_name, kt, foreststatus27, begehbar27 
+  order by lil, troop_name, cluster_name, plot_name;
 $BODY$;
 
 COMMENT ON FUNCTION public.stat_abgegebene_traktecken_pro_at(text) IS
@@ -116,3 +102,4 @@ COMMENT ON FUNCTION public.stat_abgegebene_traktecken_pro_at(text) IS
 GRANT EXECUTE ON FUNCTION public.stat_abgegebene_traktecken_pro_at(text) TO anon, authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';
+
