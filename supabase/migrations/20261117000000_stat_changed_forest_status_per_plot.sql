@@ -3,13 +3,14 @@
 -- ============================================================================
 -- Angelegt am 2026-11-17 durch Thomas Riedel.
 -- Prozedur liefert Überblick zu den Traktecken auf denen sich der
--- Waldentscheid gegenüber der Vorgängerinventur geändert hat
+-- Waldentscheid  und/oder die Begehbarkeit gegenüber der Vorgängerinventur 
+-- geändert hat
 -- Genutzt in TFM-Documentation:
 --   components/statistics/PlotStatistics/
 -- ============================================================================
 
 SET search_path TO public, extensions;
-
+--drop function public.stat_changed_forest_status_per_plot(text);
 CREATE OR REPLACE FUNCTION public.stat_changed_forest_status_per_plot(
     user_id text
 )
@@ -25,7 +26,9 @@ RETURNS TABLE (
     Wald_Vorgänger text,
     Wald_Vorgänger_text text,
     Begehbarkeit2027 text,
-    Begehbarkeit_Vorgänger text
+    Begehbarkeit2027_text text,
+    Begehbarkeit_Vorgänger text,
+    Begehbarkeit_Vorgänger_text text
 )
 LANGUAGE sql
 STABLE
@@ -84,8 +87,8 @@ select --r.id,
        completed_at_survey_troop,
        properties ->>'forest_status' as wald2027, a.name_de as wald2027_text,
        previous_properties ->>'forest_status' as wald_vorgaenger, b.name_de as wald_vorgaenger_text,
-       properties ->>'accessibility' as begehbar2027,
-       previous_properties ->>'accessibility' as begehbar_vorgaenger
+       properties ->>'accessibility' as begehbar2027, c.name_de as begehbar2027_text,
+       previous_properties ->>'accessibility' as begehbar_vorgaenger, d.name_de as begehbar_vorgaenger_text
   from public.view_records_details as r
   join public.troop as t
     on r.last_survey_troop = t.id
@@ -95,6 +98,11 @@ select --r.id,
     on r.properties ->>'forest_status' = a.code::text
   join lookup.lookup_forest_status as b
     on r.previous_properties ->>'forest_status' = b.code::text
+
+  join lookup.lookup_accessibility as c
+    on r.properties ->>'accessibility' = c.code::text
+  join lookup.lookup_accessibility as d
+    on r.previous_properties ->>'accessibility' = d.code::text
   where cluster_name < 1000000000 and (cluster_name not between 9999900 and 10000000) 
   and last_survey_troop is not null and completed_at_survey_troop is not null 
   and (   r.responsible_administration::text = user_id 
@@ -103,12 +111,13 @@ select --r.id,
        or r.last_survey_troop::text = user_id
        or r.last_control_troop::text = user_id
       )
-    and properties ->>'forest_status' <> previous_properties ->>'forest_status'
+  and ( properties ->>'forest_status' <> previous_properties ->>'forest_status'
+       or properties ->>'accessibility' <> previous_properties ->>'accessibility')
   order by o.name, r.cluster_name, r.plot_name
 $BODY$;
 
 COMMENT ON FUNCTION public.stat_changed_forest_status_per_plot(text) IS
-    'Statistik zu geänderten Waldentscheiden nach Traktecken (Thomas Riedel, 2026-11-17). TFM-Documentation: components/statistics/PlotStatistics/...';
+    'Statistik zu geänderten Waldentscheiden und Begehbarkeiten gegenüber der Vorinventur nach Traktecken (Thomas Riedel, 2026-11-17). TFM-Documentation: components/statistics/PlotStatistics/...';
 
 GRANT EXECUTE ON FUNCTION public.stat_changed_forest_status_per_plot(text) TO anon, authenticated, service_role;
 
