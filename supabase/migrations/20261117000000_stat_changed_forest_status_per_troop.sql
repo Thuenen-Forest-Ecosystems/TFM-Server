@@ -91,6 +91,8 @@ SELECT lil, troop_name, kt, sum(forest_status_change) as aenderung_waldentscheid
                  or r.last_survey_troop::text = user_id
                  or r.last_control_troop::text = user_id
                 ) 
+            and ( properties ->>'forest_status' <> previous_properties ->>'forest_status'
+                 or properties ->>'accessibility' <> previous_properties ->>'accessibility')
         ) as z
 group by lil, troop_name, kt
 order by lil, troop_name, kt
