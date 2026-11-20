@@ -18,6 +18,8 @@ RETURNS TABLE (
     landesinventurleitung text,
     cluster_name integer,
     plot_name smallint,
+    waldstatus2027 integer, 
+    begehbarkeit2027 integer,
     troop_name text,
     kt boolean,
     abgabedatum_at timestamp with time zone,
@@ -54,7 +56,7 @@ AS $BODY$
 --Bezieht sich auf public.view_records_details: responsible_administration, responsible_state, responsible_provider oder last_survey_troop und completed_at_survey_troop.
 
 /*Beispiele*/
---select public.stat_overview_pk_per_plot('3889fc5b-503f-495b-8f06-60c3e06cd8ae'); = LIL ST
+--select * from public.stat_overview_pk_per_plot('3889fc5b-503f-495b-8f06-60c3e06cd8ae'); = LIL ST
 --select public.stat_overview_pk_per_plot('460faca2-d7ae-499c-a972-09701d42de76'); = KT-Thünen Bayern
 --select * from public.stat_overview_pk_per_plot('d4f08574-24f4-4c29-801a-f1d9bf9d38e0'); = LIL NW
 --select * from public.stat_overview_pk_per_plot('460faca2-d7ae-499c-a972-09701d42de76'); = KT-Thünen Bayern
@@ -64,6 +66,10 @@ AS $BODY$
 
 /*Spalten der Ergebnistabelle*/
 --Landesinventurleitung (lil)
+--cluster_name
+--plot_name
+--waldstatus2027
+--begehbarkeit2027
 --Trupp (troop_name)
 --PK_0,
 --PK_1,
@@ -91,7 +97,7 @@ AS $BODY$
 /*Inhalt*/
 --4. Baumstatistiken
 --4.3 Auftretende PKs pro Plot
-select lil, cluster_name, plot_name, troop_name, kt, completed_at_survey_troop as abgabedatum,
+select lil, cluster_name, plot_name, waldstatus2027, begehbarkeit2027, troop_name, kt, completed_at_survey_troop as abgabedatum,
        sum(case when tree_status = 0 then 1 else 0 end) as PK_0,
        sum(case when tree_status = 1 then 1 else 0 end) as PK_1,
        sum(case when tree_status = 4 then 1 else 0 end) as PK_4,
@@ -116,7 +122,8 @@ select lil, cluster_name, plot_name, troop_name, kt, completed_at_survey_troop a
                cast(t.name as text) as troop_name,
                t.is_control_troop as kt, 
                r.completed_at_survey_troop,
-               r.properties -> 'tree' as tree,
+               (r.properties ->> 'forest_status')::integer as waldstatus2027,
+               (r.properties ->> 'accessibility')::integer as begehbarkeit2027,
                (t27.elem ->> 'tree_status')::integer as tree_status,
                (t27.elem ->> 'deadwood_used')::boolean as deadwood_used
           from public.view_records_details r
@@ -140,7 +147,7 @@ select lil, cluster_name, plot_name, troop_name, kt, completed_at_survey_troop a
                   or r.last_control_troop::text = user_id
                  )
       ) as a
- group by lil, cluster_name, plot_name, troop_name, kt, completed_at_survey_troop
+ group by lil, cluster_name, plot_name, waldstatus2027, begehbarkeit2027, troop_name, kt, completed_at_survey_troop
  order by lil, cluster_name, plot_name;
 $BODY$;
 
