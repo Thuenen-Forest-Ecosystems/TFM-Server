@@ -1,9 +1,11 @@
 -- ============================================================================
--- PENDING — not a migration yet. To deploy, copy to
---   supabase/migrations/<YYYYMMDDHHMMSS>_guard_records_app_only_enforce.sql
--- with the current timestamp, commit, `supabase db push`.
--- Kept out of migrations/ on purpose: `db push` applies every pending file.
--- ============================================================================
+-- Evidence (prod write_log 2026-11-06 .. 2026-11-23, 91,364 rows, log mode):
+--   supabase-flutter/2.10.3  90,737 writes, 48 users
+--   tfm-web/1.0.0               467 writes, 10 users (only completed_at_troop)
+--   supabase-js-web/2.50.4      121 writes, 6 users; the last one was a stale
+--                              browser tab on 2026-11-10 13:27, none since
+-- The check below, replayed against that export, passes.
+--
 -- Switch guard_records_app_only_columns from 'log' to 'enforce'.
 -- After that, authenticated clients whose X-Client-Info starts neither with
 -- `supabase-flutter/` (app) nor with `tfm-web/` (web admin) get 42501 when
@@ -32,7 +34,10 @@ DECLARE
 BEGIN
     SELECT min(logged_at) INTO first_web
     FROM records_guard.write_log
-    WHERE client_info LIKE 'tfm-web/%';
+    WHERE client_info LIKE 'tfm-web/%'
+      -- the HTTP guard test writes tfm-web rows itself; only real users prove
+      -- that the deployed web admin sends the header
+      AND user_id IS DISTINCT FROM 'b7a83082-dcc2-4dff-85cd-529363a7be8b';
 
     IF first_web IS NULL THEN
         RAISE EXCEPTION 'enforce abgebrochen: noch kein Schreibzugriff mit tfm-web/* im Log'
