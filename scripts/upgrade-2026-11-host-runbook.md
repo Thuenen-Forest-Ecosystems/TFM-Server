@@ -67,16 +67,24 @@ Findings that became steps below:
   from before the upgrade kept working against PostgREST and PowerSync. `437-renumber-trees.sql`
   committed (24 plots), `gateway-diff.sh` 62/0, guard test passed through Kong and Envoy, the
   final `up -d --dry-run` showed nothing to recreate.
-- **A full PowerSync re-snapshot took about 35 minutes** in that run (Docker Desktop, 24 GB). That
-  is the price of the "PowerSync alone" rollback. With too little memory MongoDB gets killed and
-  the snapshot restarts from zero each time — prod has the memory, the Mac at 12 GB did not.
+- **A full PowerSync re-snapshot of the prod data takes about one minute** when the machine has
+  the memory (51 s locally with 24 GB for Docker). With too little memory (12 GB) MongoDB gets
+  killed and the snapshot restarts from zero each time — the 35 minutes seen at first were that.
 - **The auth image is built locally and keeps its tag.** After `docker compose build auth` the tag
   `tfm-server-auth` points at v2.197.0 whatever commit is checked out. S2 therefore tags the old
   image, and the rollback retags it.
-- **Rollback drill:** swapping the data directory, restoring the config volume and replacing the
-  MongoDB volume took 20 s in total. Starting the OLD versions on the restored state was not
-  rehearsed (the drill's `git checkout` was blocked by a local file edit — hence the
-  `git status` gates below).
+- **Whole-window rollback, drilled end to end** from a true baseline (PG 15.14, gotrue v2.195.0,
+  storage 62 migrations, PowerSync 1.23.3 with a finished snapshot) after an upgrade up to S8b:
+  the commands took 71 s; afterwards the old versions ran, record count and auth/storage
+  migration counts were the pre-upgrade ones, the #437 renumbering was gone, PowerSync 1.23.3
+  continued on its old slot with the same checkpoint and no re-snapshot, a session from before
+  the upgrade kept working and refreshed, the guard test passed through Kong.
+- **Stop Postgres with a long grace period.** In that drill the snapshot had been taken after a
+  plain `docker compose stop`: Docker waits 10 s and then kills the process, which is too short
+  for a shutdown checkpoint with 4 GB of shared buffers right after heavy writes. The snapshot was
+  a crash-state copy; the restored database needed 2 min 20 s of crash recovery, and
+  `docker compose up -d` gave up on the dependants meanwhile. Hence `stop -t 600 db` with an
+  exit-code check in S1, and "db first, wait, then the rest" in the rollback.
 
 ## State on prod before the window (checked 2026-11-25)
 
@@ -159,7 +167,9 @@ Gate: the last entry in `records_guard.write_log` is from Friday (no client is s
 
 ```bash
 docker compose stop powersync
-docker compose stop                      # everything; from here the API is down
+docker compose stop api-gw kong auth rest realtime storage imgproxy meta functions studio mongo   # API is down from here
+docker compose stop -t 600 db            # give the shutdown checkpoint time; 10 s default = SIGKILL
+docker inspect supabase-db --format 'exit={{.State.ExitCode}}'   # must be 0; 137 = killed, see below
 docker ps --format '{{.Names}}' | grep -E 'supabase|tfm-server' || echo "all stopped"
 
 # Postgres data directory (no sudo needed: root inside the helper container). ~10 min.
@@ -174,7 +184,9 @@ cp -p .env .env.bak-preupgrade-$TS
 docker tag tfm-server-auth tfm-server-auth:pre$TS      # the build in S6 moves the plain tag
 ```
 
-Gate: both `du` sizes of the data directory match; the Mongo copy is about 9 GB.
+Gate: db exit code 0; both `du` sizes of the data directory match; the Mongo copy is about 9 GB.
+If the exit code is 137, start db once more (`docker compose start db`, wait for `pg_isready`),
+stop it again with `-t 600`, and only then take the snapshot.
 
 ### S3 — code and maintenance mode
 
@@ -350,8 +362,8 @@ Gate: all services healthy, `supabase-kong` Exited and left in place, record cou
 | --- | --- | --- |
 | Gateway | `scripts/gateway-switch.sh kong` | ~2 s, up to a minute of 503 from Apache; works on Monday too |
 | meta, studio, rest, functions, imgproxy, mongo | old `image:` line, `docker compose up -d --no-deps <svc>` | seconds |
-| PowerSync alone (not after Monday morning without need: ~35 min+ without sync) | stop it; `docker exec tfm-server-mongo-1 mongosh --quiet --eval 'db.getSiblingDB("powersync").dropDatabase()'`; drop every inactive `powersync_*` slot (`select pg_drop_replication_slot(slot_name) from pg_replication_slots where not active and slot_name like 'powersync_%'`), otherwise it pins up to 8 GB of WAL; old image line; start | full re-replication (about 35 min in the rehearsal); every device re-downloads; pending uploads are kept (they go through PostgREST) |
-| Whole window, before S10 | below | ~20 min, lossless, no client re-sync |
+| PowerSync alone | stop it; `docker exec tfm-server-mongo-1 mongosh --quiet --eval 'db.getSiblingDB("powersync").dropDatabase()'`; drop every inactive `powersync_*` slot (`select pg_drop_replication_slot(slot_name) from pg_replication_slots where not active and slot_name like 'powersync_%'`), otherwise it pins up to 8 GB of WAL; old image line; start | full re-replication (about a minute in the rehearsal, more on the slower prod disk); every device re-downloads; pending uploads are kept (they go through PostgREST) |
+| Whole window, before S10 | below | a few minutes (drilled: 71 s of commands), lossless, no client re-sync |
 | Postgres, auth, realtime, storage after S10 | fix forward only: the snapshot lacks the writes made since, and storage 1.68.9 must not run on the migrated schema | — |
 
 Whole-window rollback (before S10 only):
@@ -369,6 +381,8 @@ docker volume rm tfm-server_mongo_storage && docker volume create tfm-server_mon
 docker run --rm -v tfm-server_mongo_storage_pre$TS:/s:ro -v tfm-server_mongo_storage:/d alpine \
   sh -c 'cp -a /s/. /d/ && du -sm /d'
 docker tag tfm-server-auth:pre$TS tfm-server-auth:latest
+docker compose up -d --no-deps db
+until docker exec supabase-db pg_isready -U postgres -q; do sleep 5; done   # minutes if it has to recover
 docker compose up -d
 docker compose exec -T auth auth version             # v2.195.0
 docker exec supabase-db psql -U postgres -d postgres -Atc "select version(); select count(*) from public.records;
