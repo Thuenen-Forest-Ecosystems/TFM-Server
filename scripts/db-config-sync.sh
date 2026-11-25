@@ -14,7 +14,8 @@
 # What --apply copies from the image (taken from the `db` service of docker-compose.yaml):
 #   conf.d/*  supautils.conf  extension-custom-scripts/*
 # It never touches pgsodium_root.key or any other file, and it deletes nothing. If conf.d in the
-# volume is a symlink it stops and tells you; replace the symlink by hand first.
+# volume is a symlink (a volume created by an image that linked it into /etc/postgresql), the
+# link is renamed to conf.d.old-symlink-<timestamp> and a real directory takes its place.
 #
 # Run it with the db container STOPPED, right before the first start of the new image.
 # ============================================================================
@@ -37,13 +38,16 @@ docker run --rm -e MODE="$MODE" -v "$VOLUME":/vol --entrypoint sh "$IMAGE" -c '
     S=/etc/postgresql-custom
     echo "--- volume now"; ls -ln /vol
     if [ -L /vol/conf.d ]; then
-        echo "STOP: /vol/conf.d is a symlink -> $(readlink /vol/conf.d). Replace it by a real directory first."
-        exit 3
+        echo "--- conf.d in the volume is a symlink -> $(readlink /vol/conf.d) (left by the old image)"
+        if [ "$MODE" = apply ]; then
+            mv /vol/conf.d "/vol/conf.d.old-symlink-$(date +%Y%m%d%H%M%S)"
+            echo "    renamed it aside; a real conf.d directory is created below"
+        fi
     fi
     echo "--- key before: $(md5sum /vol/pgsodium_root.key 2>/dev/null | cut -c1-12)"
     echo "--- supautils.conf differs: $(cmp -s /vol/supautils.conf $S/supautils.conf && echo no || echo yes)"
     echo "--- conf.d in image:  $(ls $S/conf.d | tr "\n" " ")"
-    echo "--- conf.d in volume: $(ls /vol/conf.d 2>/dev/null | tr "\n" " ")"
+    echo "--- conf.d in volume: $([ -L /vol/conf.d ] && echo "(symlink)" || ls /vol/conf.d 2>/dev/null | tr "\n" " ")"
     echo "--- custom scripts only in image: $(for d in $(ls $S/extension-custom-scripts); do [ -e /vol/extension-custom-scripts/$d ] || printf "%s " $d; done)"
     [ "$MODE" = apply ] || { echo "report only; rerun with --apply"; exit 0; }
     mkdir -p /vol/conf.d

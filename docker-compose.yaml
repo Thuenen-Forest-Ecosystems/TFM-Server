@@ -427,6 +427,8 @@ services:
     container_name: supabase-imgproxy
     networks:
       - supabase-net
+    # Without this imgproxy stays down after a Docker or host restart (seen on prod, 2026-11).
+    restart: unless-stopped
     # v4.x since 2026-11: upstream Supabase (3334709) pins v4.0.21 with this same environment block.
     image: darthsim/imgproxy:v4.0.21@sha256:69ae09dbc3349944564cb2f66cf35f80a4a9a78fda73d06061a337849520ab1f
     healthcheck:

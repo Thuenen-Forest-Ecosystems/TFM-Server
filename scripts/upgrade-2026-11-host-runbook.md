@@ -60,8 +60,23 @@ Findings that became steps below:
   `scripts/db-config-sync.sh --apply`.
 - **Kong and recreated backends.** Kong answered 502 after a backend was recreated (stale DNS).
   Kong is therefore started last in S6; if it answers 502, `docker restart supabase-kong`.
-- **Not rehearsed with real data:** PowerSync 1.28.3 on the 9.3 GB MongoDB storage. Fallback in
-  the rollback table.
+- **Second local run with last night's prod dump (2026-11-25, 122,321 records, runbook followed
+  step by step):** PowerSync 1.28.3 ran two storage migrations on the real bucket data in seconds,
+  kept its slot, did not re-snapshot, and served the same buckets and operation counts as before.
+  A refresh token issued on prod under gotrue v2.195 refreshed under v2.197; an access token
+  from before the upgrade kept working against PostgREST and PowerSync. `437-renumber-trees.sql`
+  committed (24 plots), `gateway-diff.sh` 62/0, guard test passed through Kong and Envoy, the
+  final `up -d --dry-run` showed nothing to recreate.
+- **A full PowerSync re-snapshot took about 35 minutes** in that run (Docker Desktop, 24 GB). That
+  is the price of the "PowerSync alone" rollback. With too little memory MongoDB gets killed and
+  the snapshot restarts from zero each time — prod has the memory, the Mac at 12 GB did not.
+- **The auth image is built locally and keeps its tag.** After `docker compose build auth` the tag
+  `tfm-server-auth` points at v2.197.0 whatever commit is checked out. S2 therefore tags the old
+  image, and the rollback retags it.
+- **Rollback drill:** swapping the data directory, restoring the config volume and replacing the
+  MongoDB volume took 20 s in total. Starting the OLD versions on the restored state was not
+  rehearsed (the drill's `git checkout` was blocked by a local file edit — hence the
+  `git status` gates below).
 
 ## State on prod before the window (checked 2026-11-25)
 
@@ -156,6 +171,7 @@ docker volume create tfm-server_db-config_pre$TS && docker run --rm \
 docker volume create tfm-server_mongo_storage_pre$TS && docker run --rm \
   -v tfm-server_mongo_storage:/s:ro -v tfm-server_mongo_storage_pre$TS:/d alpine sh -c 'cp -a /s/. /d/ && du -sm /d'
 cp -p .env .env.bak-preupgrade-$TS
+docker tag tfm-server-auth tfm-server-auth:pre$TS      # the build in S6 moves the plain tag
 ```
 
 Gate: both `du` sizes of the data directory match; the Mongo copy is about 9 GB.
@@ -163,6 +179,7 @@ Gate: both `du` sizes of the data directory match; the Mongo copy is about 9 GB.
 ### S3 — code and maintenance mode
 
 ```bash
+git status --short            # must print nothing, otherwise the checkout can refuse
 git fetch origin && git checkout upgrade-2026-11 && git log --oneline -1
 printf '\n# gateway mode, see scripts/gateway-switch.sh\nCOMPOSE_PROFILES=gw-kong\n' >> .env
 # maintenance: the gateway listens on loopback only until S10
@@ -214,6 +231,7 @@ docker compose build auth                          # INSTALL_CERTS=true comes fr
 for s in imgproxy meta studio rest auth realtime functions storage; do
   docker compose up -d --no-deps $s; sleep 15; docker compose ps $s
 done
+docker compose exec -T auth auth version           # v2.197.0 — proves the rebuilt image is running
 docker compose logs --since 10m auth | grep -iE 'migrat|error|fatal' | tail
 docker compose logs --since 10m storage realtime | grep -iE 'migrat|error|fatal' | tail
 docker compose up -d --no-deps kong && docker compose up -d --no-deps api-gw
@@ -246,7 +264,9 @@ with basic auth. Gate: all green. **A failure here means whole-window rollback �
 
 ```bash
 docker compose up -d --no-deps powersync
-docker compose logs -f powersync      # "Running migrations up" → "Successfully activated storage" → replication
+docker compose logs -f powersync      # "Running migrations up" → two "Executing … (up)" lines
+                                      # → "Successfully activated storage: mongodb." → replication
+docker compose logs --since 5m powersync | grep -c 'Replicating \\"public'   # 0 = no re-snapshot
 docker exec supabase-db psql -U postgres -d postgres -Atc \
   "select slot_name, active, wal_status, pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) from pg_replication_slots"
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8181/probes/liveness
@@ -330,22 +350,32 @@ Gate: all services healthy, `supabase-kong` Exited and left in place, record cou
 | --- | --- | --- |
 | Gateway | `scripts/gateway-switch.sh kong` | ~2 s, up to a minute of 503 from Apache; works on Monday too |
 | meta, studio, rest, functions, imgproxy, mongo | old `image:` line, `docker compose up -d --no-deps <svc>` | seconds |
-| PowerSync alone | stop it; `docker exec tfm-server-mongo-1 mongosh --quiet --eval 'db.getSiblingDB("powersync").dropDatabase()'`; drop every inactive `powersync_*` slot (`select pg_drop_replication_slot(slot_name) from pg_replication_slots where not active and slot_name like 'powersync_%'`), otherwise it pins up to 8 GB of WAL; old image line; start | full re-replication; every device re-downloads; pending uploads are kept (they go through PostgREST) |
+| PowerSync alone (not after Monday morning without need: ~35 min+ without sync) | stop it; `docker exec tfm-server-mongo-1 mongosh --quiet --eval 'db.getSiblingDB("powersync").dropDatabase()'`; drop every inactive `powersync_*` slot (`select pg_drop_replication_slot(slot_name) from pg_replication_slots where not active and slot_name like 'powersync_%'`), otherwise it pins up to 8 GB of WAL; old image line; start | full re-replication (about 35 min in the rehearsal); every device re-downloads; pending uploads are kept (they go through PostgREST) |
 | Whole window, before S10 | below | ~20 min, lossless, no client re-sync |
 | Postgres, auth, realtime, storage after S10 | fix forward only: the snapshot lacks the writes made since, and storage 1.68.9 must not run on the migrated schema | — |
 
 Whole-window rollback (before S10 only):
 
 ```bash
-docker compose down                                  # containers only; no -v
-git checkout "$(cat ~/upgrade-20261128-git-before.txt)"
-cp -p .env.bak-preupgrade-20261128 .env
+TS=20261128
+docker compose --profile gw-kong down                # containers only; no -v. The profile makes it include Kong.
+git status --short                                   # must print nothing
+git checkout "$(cat ~/upgrade-$TS-git-before.txt)"
+cp -p .env.bak-preupgrade-$TS .env
 docker run --rm -v /home/sadmin/TFM-Server/volumes/db:/v alpine \
-  sh -c 'mv /v/data /v/data.failed-20261128 && mv /v/data.preupgrade-20261128 /v/data'
-docker run --rm -v tfm-server_db-config_pre20261128:/s:ro -v tfm-server_db-config:/d alpine sh -c 'cp -a /s/. /d/'
-# restore the MongoDB volume the same way, into an emptied tfm-server_mongo_storage
+  sh -c "mv /v/data /v/data.failed-$TS && mv /v/data.preupgrade-$TS /v/data && ls /v"
+docker run --rm -v tfm-server_db-config_pre$TS:/s:ro -v tfm-server_db-config:/d alpine sh -c 'cp -a /s/. /d/'
+docker volume rm tfm-server_mongo_storage && docker volume create tfm-server_mongo_storage
+docker run --rm -v tfm-server_mongo_storage_pre$TS:/s:ro -v tfm-server_mongo_storage:/d alpine \
+  sh -c 'cp -a /s/. /d/ && du -sm /d'
+docker tag tfm-server-auth:pre$TS tfm-server-auth:latest
 docker compose up -d
+docker compose exec -T auth auth version             # v2.195.0
+docker exec supabase-db psql -U postgres -d postgres -Atc "select version(); select count(*) from public.records;
+  select slot_name, active from pg_replication_slots"
 ```
+
+The PostgreSQL snapshot and the MongoDB copy are a pair (same slot position): restore both or neither.
 
 The copied config volume restores the old `supautils.conf`; the files added to `conf.d` stay and
 are harmless for 15.14 (the old image ships the same five files). The uid of postgres is 100:101 in
