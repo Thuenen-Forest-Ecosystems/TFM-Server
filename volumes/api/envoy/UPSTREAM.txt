@@ -1,4 +1,12 @@
 Vendored from supabase/supabase docker/volumes/api/envoy
-Commit: 9777f051d6ee59e4ae105648a72c17628a72a1e1 (2026-07-07)
-Date:   2026-08-07
-See ../../../.todo/upgrade-2026-08-pg15-services-envoy.md
+Commit: 3334709 (2026-11-20)
+Date:   2026-11-25
+Previous: 9777f051d6ee59e4ae105648a72c17628a72a1e1 (2026-07-07), vendored 2026-08-07 without local edits.
+
+Local deltas in lds.template.yaml (search for "TFM:"); re-apply after every re-vendor:
+  1. Lua filter blocking writes to /rest/v1/records* without a user session (first Lua filter).
+  2. Route rest-v1-openapi-protected removed: /rest/v1/ root readable with the anon key.
+  3. Gateway CORS kept on the functions-v1-all route.
+  4. Access log extended by response flags, duration and X-Client-Info.
+cds.yaml, envoy.yaml and docker-entrypoint.sh are unmodified.
+See scripts/upgrade-2026-11-host-runbook.md

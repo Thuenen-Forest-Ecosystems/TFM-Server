@@ -37,26 +37,27 @@ services:
       - supabase-net
 
   # ====== ENVOY API GATEWAY ======
-  # Stage 1: runs alongside Kong on loopback and carries NO traffic. Cutover happens by repointing
-  # the reverse proxy from :8000 to :8001, at which point `kong` gets `profiles: [disabled]`.
+  # Exactly one gateway owns host port ${KONG_HTTP_PORT} and the network alias `kong`
+  # (studio, functions and TFM-R-Server r-plumber call http://kong:8000). Which one is decided by
+  # three keys in .env; scripts/gateway-switch.sh sets them and switches the containers:
   #
-  # Deviations from upstream docker-compose.envoy.yml, all deliberate:
-  #   1. supabase-net, not `default` — every Supabase service here is on the custom network.
-  #   2. alias `envoy` only. The `kong` alias is added at cutover; two containers sharing one
-  #      Docker network alias makes DNS round-robin between them, intermittently.
-  #   3. published on 127.0.0.1:8001 — a second public entrance running config nobody has
-  #      validated yet is the one way this stage could make things worse. Loopback is not optional.
-  #   4. no `functions.depends_on: !override` — functions keeps depending on Kong until cutover.
+  #   Kong live  (rollback): COMPOSE_PROFILES=gw-kong, GW_ENVOY_PUBLISH and GW_ENVOY_EXTRA_ALIAS unset
+  #                          -> Envoy is a shadow on 127.0.0.1:8001 with zero traffic.
+  #   Envoy live           : COMPOSE_PROFILES=  GW_ENVOY_PUBLISH=${KONG_HTTP_PORT}  GW_ENVOY_EXTRA_ALIAS=kong
+  #                          -> the kong service is outside the active profiles and stays stopped.
   #
-  # Config is vendored in volumes/api/envoy/ (see UPSTREAM.txt for the pinned commit) and is
-  # tracked in git, so it deploys to the host with a normal `git pull`.
-  # See .todo/upgrade-2026-08-pg15-services-envoy.md
+  # Never run both with the alias `kong`: two containers sharing one Docker network alias makes
+  # DNS round-robin between them, intermittently. Never change the keys by hand without
+  # recreating api-gw (alias and port must change together) - use the script.
+  #
+  # Config is vendored in volumes/api/envoy/ (UPSTREAM.txt lists the pinned commit and the local
+  # deltas). See scripts/upgrade-2026-11-host-runbook.md
   api-gw:
     container_name: supabase-envoy
-    image: envoyproxy/envoy:v1.39.0@sha256:d59f7f5fa10cff6d5892b6c5e7df5c9297ddfb2c3683e33fbfb82da24de4fa66
+    image: envoyproxy/envoy:v1.39.6@sha256:1fde8efee875e4e4f6a39a90fe49d9338e1caacce5762034ef9fb4bbb9ad6aed
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8001:8000/tcp" # cutover: ${KONG_HTTP_PORT}:8000/tcp
+      - "${GW_ENVOY_PUBLISH:-127.0.0.1:8001}:8000/tcp"
     volumes:
       - ./volumes/api/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
       - ./volumes/api/envoy/cds.yaml:/etc/envoy/cds.yaml:ro
@@ -64,7 +65,8 @@ services:
       - ./volumes/api/envoy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
     depends_on:
       studio:
-        condition: service_healthy
+        # started, not healthy: the public API must not wait on Studio's healthcheck.
+        condition: service_started
     environment:
       ANON_KEY: ${ANON_KEY}
       SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
@@ -74,6 +76,8 @@ services:
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
       ANON_KEY_ASYMMETRIC: ${ANON_KEY_ASYMMETRIC:-}
       SERVICE_ROLE_KEY_ASYMMETRIC: ${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+      # Substituted into the Studio CORS allow-list by docker-entrypoint.sh.
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
     entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
@@ -86,7 +90,8 @@ services:
     networks:
       supabase-net:
         aliases:
-          - envoy # cutover adds: - kong
+          - envoy
+          - ${GW_ENVOY_EXTRA_ALIAS:-envoy-standby}
 
   # ====== SUPABASE ======
   studio:
@@ -98,7 +103,7 @@ services:
     volumes:
       - ./supabase:/supabase
       - ./supabase/seed.sql:/docker-entrypoint-initdb.d/seed.sql
-    image: supabase/studio:2026.08.03-sha-022b374@sha256:606aca9fdaa753b60968d5c304e2ada83869b76c9043684e63d5885aca9550e8
+    image: supabase/studio:2026.11.02-sha-a05e7ec@sha256:727a7f37b15f4c76c44e0d765e6be231d8d71c67f2933b2df8c6cbcc9b04c5d0
     restart: unless-stopped
     # Required by the Envoy gateway (api-gw depends on studio being healthy).
     healthcheck:
@@ -136,12 +141,12 @@ services:
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
 
-  # Legacy gateway. Still serves all traffic; Envoy (`api-gw`) runs alongside it on loopback
-  # carrying none. Deliberately NOT upgraded to kong/kong:3.9.3 — Envoy replaces it at cutover,
-  # and this block plus volumes/api/kong.yml is the rollback.
-  # See .todo/upgrade-2026-08-pg15-services-envoy.md
+  # Legacy gateway, kept as the rollback for Envoy (`api-gw`). Only part of the project while
+  # COMPOSE_PROFILES contains gw-kong; see the Envoy block above and scripts/gateway-switch.sh.
+  # Deliberately NOT upgraded: Kong 2.8.1 embeds nginx 1.19.9 and is end of life.
   kong:
     container_name: supabase-kong
+    profiles: ["gw-kong"]
     networks:
       - supabase-net
     image: kong:2.8.1
@@ -276,7 +281,7 @@ services:
     container_name: supabase-rest
     networks:
       - supabase-net
-    image: postgrest/postgrest:v14.16@sha256:bea1c76a856fa39d1e542d25911cf95d02fe2bf971992d033044ff209f1504b8
+    image: postgrest/postgrest:v14.18@sha256:c7cd7e265a85b05248abf53f4473fcec7e327c282d0bd0cf60f1551996d09fcf
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -312,7 +317,7 @@ services:
     container_name: realtime-dev.supabase-realtime
     networks:
       - supabase-net
-    image: supabase/realtime:v2.124.0@sha256:7cced80c83b23ea0d344620ac2eabd50a0d1dd14634ee24574db768be50b0b32
+    image: supabase/realtime:v2.148.3@sha256:25cf375b9b7cb71d90cdf6e04a1a30996e39a8df866ebd0525bba1d959edc8d6
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -349,19 +354,28 @@ services:
       METRICS_JWT_SECRET: ${JWT_SECRET}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       ERL_AFLAGS: -proto_dist inet_tcp
-      DNS_NODES: "''"
+      # Upstream (3334709): single node. The entrypoint generates an ephemeral Erlang cookie when
+      # RELEASE_COOKIE is unset; gen_rpc binds to loopback; no cluster peer discovery.
+      RELEASE_COOKIE: ${RELEASE_COOKIE:-}
+      GEN_RPC_SOCKET_IP: 127.0.0.1
+      CLUSTER_STRATEGIES: ""
       RLIMIT_NOFILE: "10000"
       APP_NAME: realtime
       SEED_SELF_HOST: "true"
       RUN_JANITOR: "true"
       DISABLE_HEALTHCHECK_LOGGING: "true"
+    volumes:
+      - ./volumes/realtime/docker-entrypoint.sh:/docker-entrypoint.sh:ro,z
+    # Overriding entrypoint clears the image's default command, so restore it.
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+    command: ["/app/bin/server"]
 
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
   storage:
     container_name: supabase-storage
     networks:
       - supabase-net
-    image: supabase/storage-api:v1.68.9@sha256:8394f685338ecb1a07d79c35de48913b23449bab0a15c1caa4df7326c2f72f17
+    image: supabase/storage-api:v1.89.12@sha256:8526956cb462e9f7d392e9848ec77133b2769982ed614e9753cc687e8e4339a6
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -413,8 +427,8 @@ services:
     container_name: supabase-imgproxy
     networks:
       - supabase-net
-    # v4.x is a full rewrite and is not yet used by upstream Supabase — staying on the 3.x line.
-    image: darthsim/imgproxy:v3.30.1@sha256:3b709e4a0e5e8e0e959b556b7031229202b4b8e7e7d955c517ea7abed68ee34d
+    # v4.x since 2026-11: upstream Supabase (3334709) pins v4.0.21 with this same environment block.
+    image: darthsim/imgproxy:v4.0.21@sha256:69ae09dbc3349944564cb2f66cf35f80a4a9a78fda73d06061a337849520ab1f
     healthcheck:
       test: ["CMD", "imgproxy", "health"]
       timeout: 5s
@@ -434,7 +448,7 @@ services:
     container_name: supabase-meta
     networks:
       - supabase-net
-    image: supabase/postgres-meta:v0.96.8@sha256:6ef6296e5129615ddb877c85e0af659cf6ee10668afce2b09f606a8b5c8b12e2
+    image: supabase/postgres-meta:v0.100.1@sha256:fb86956e979d155e44db9ab3a410177de84030472f71ef9119969c2cd50cc025
     depends_on:
       db:
         # Disable this if you are using an external Postgres database
@@ -455,7 +469,7 @@ services:
     container_name: supabase-edge-functions
     networks:
       - supabase-net
-    image: supabase/edge-runtime:v1.74.3@sha256:c52405002a890ca9fcf77978671c57f3a988e03174afb277f84ac65bc917013c
+    image: supabase/edge-runtime:v1.77.9@sha256:6b850a2ccf0bf50ecac9accff8098095cd191c389c2a53c59b857aa0f53a8343
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/9000'"]
@@ -488,10 +502,11 @@ services:
     networks:
       - supabase-net
     # Deliberately staying on PostgreSQL 15 (upstream compose is authored against 17).
-    # PG15 is supported until 2027-11; this is the latest 15.x, closing 15.7-15.14 CVEs as a
-    # drop-in minor bump on the existing PGDATA. Do not let a future upstream merge undo this.
+    # PG15 is supported until 2027-11; 15.20 closes the 15.15-15.20 CVEs as a drop-in minor bump
+    # on the existing PGDATA. Move to 17 is a separate window (early 2027). Do not let a future
+    # upstream merge undo this.
     # See .todo/upgrade-2026-08-pg15-services-envoy.md
-    image: supabase/postgres:15.14.1.159@sha256:9e80ce14ed9cfb753f24486a5eb46b9e5fd541cb279f235cb6a0305c6cf485d6
+    image: supabase/postgres:15.20.0.002@sha256:0651b79dca6403224ebfdf2a51768220a132a46e0bee049f6f2de001e8773645
     healthcheck:
       test: pg_isready -U postgres -h localhost
       interval: 5s
